@@ -690,3 +690,9 @@ std::shared_ptr<parquet::FileMetaData> ReadMetadata(const unsigned char *index_d
 
     return ReadMetadata(*p_data_header, &index_data[sizeof(DataHeader)], index_data_length - sizeof(DataHeader), row_groups, column_indices, column_names);
 }
+
+
+void ReadColumnChunk(void* metadata, const char *parquet_path)
+{
+      std::cerr << " ReadColumnChunk parquet_path: " << parquet_path << std::endl;
+}
