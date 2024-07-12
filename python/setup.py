@@ -57,8 +57,8 @@ print ("VCPKG_ROOT=", vcpkg_installed)
 print ("include_dirs=", include_dirs)
 print ("library_dirs=", library_dirs)
 
-extra_compile_args = []
-extra_link_args = []
+extra_compile_args = ["-g"]
+extra_link_args = ["-g"]
 debug = False,
 
 if os.getenv('DEBUG', '') == 'ON':

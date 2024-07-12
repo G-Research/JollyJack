@@ -15,4 +15,4 @@ std::shared_ptr<parquet::FileMetaData> ReadMetadata(const unsigned char *index_d
                                                     const std::vector<uint32_t> &column_indices,
                                                     const std::vector<std::string> &column_names);
 
-void ReadColumnChunk(void* metadata, const char *parquet_path);
+void ReadColumnChunk(const parquet::FileMetaData& file_metadata, const char *parquet_path);

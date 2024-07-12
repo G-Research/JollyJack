@@ -48,7 +48,7 @@ cpdef read_metadata(index_file_path = None, row_groups = [], column_indices = []
     m.init(c_metadata)
     return m
 
-cpdef void read_column_chunk(metadata, parquet_path, np_array, row_idx, column_idx):
+cpdef void read_column_chunk(FileMetaData metadata, parquet_path, np_array, row_idx, column_idx):
     cdef string encoded_path = parquet_path.encode('utf8') if parquet_path is not None else "".encode('utf8')
-    cpalletjack.ReadColumnChunk(deref(metadata._metadata), encoded_path.c_str())
+    cpalletjack.ReadColumnChunk(deref(metadata.sp_metadata), encoded_path.c_str())
     return
