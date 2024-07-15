@@ -13,7 +13,7 @@ from libcpp.vector cimport vector
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 
-cpdef void read_column_chunk(FileMetaData metadata, parquet_path, cnp.ndarray[cnp.float64_t, ndim=2] np_array, row_idx, column_idx):
+cpdef void read_column_chunk(FileMetaData metadata, parquet_path, cnp.ndarray[cnp.float64_t, ndim=2] np_array, row_idx, column_idx, row_group_idx):
     cdef string encoded_path = parquet_path.encode('utf8') if parquet_path is not None else "".encode('utf8')
 
     # Ensure the input is a 2D array
@@ -30,6 +30,6 @@ cpdef void read_column_chunk(FileMetaData metadata, parquet_path, cnp.ndarray[cn
     # Get the pointer to the specified element
     cdef double* ptr = <double*> np_array.data
     
-    cpalletjack.ReadColumnChunk(deref(metadata.sp_metadata), encoded_path.c_str(), &ptr[column_idx * np_array.shape[0] + row_idx], row_idx, column_idx)
+    cpalletjack.ReadColumnChunk(deref(metadata.sp_metadata), encoded_path.c_str(), &ptr[column_idx * np_array.shape[0] + row_idx], row_group_idx, column_idx)
 
     return

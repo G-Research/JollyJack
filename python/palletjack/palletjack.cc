@@ -32,14 +32,22 @@ void ReadColumnChunk(const parquet::FileMetaData& file_metadata, const char *par
 
     auto arrowReaderProperties = parquet::default_arrow_reader_properties();
     arrowReaderProperties.set_pre_buffer(true);
-    const std::string filename = "";
     parquet::arrow::FileReaderBuilder fileReaderBuilder;
     auto readerProperties = parquet::default_reader_properties();
     fileReaderBuilder.properties(arrowReaderProperties);
-    fileReaderBuilder.OpenFile(filename, false, readerProperties);
+    fileReaderBuilder.OpenFile(parquet_path, false, readerProperties);
     auto reader = fileReaderBuilder.Build();
     auto row_reader = reader->get()->RowGroup(row_group);
     auto column_reader = row_reader.get()->Column(column);
     auto float_reader = (parquet::TypedColumnReader<parquet::FloatType>*)(column_reader.get());
-    
+    auto row_group_metadata = file_metadata.RowGroup(row_group);
+    auto num_rows = row_group_metadata->num_rows();
+    /*
+    int16_t* def_levels = nullptr;
+    int16_t* rep_levels = nullptr;
+    int64_t values_read = 0;
+    auto read_levels = float_reader->ReadBatch(num_rows, def_levels, rep_levels, (float*)data, &values_read);
+    values_read = values_read;
+    */
+   {}
 }
