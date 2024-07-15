@@ -68,7 +68,7 @@ if os.getenv('DEBUG', '') == 'ON':
 
 # Define your extension
 extensions = [
-    Extension( "palletjack.palletjack_cython", ["palletjack/palletjack_cython.pyx", "palletjack/palletjack.cc", "palletjack/parquet_types_palletjack.cpp"],
+    Extension( "palletjack.palletjack_cython", ["palletjack/palletjack_cython.pyx", "palletjack/palletjack.cc"],
         include_dirs = include_dirs,  
         library_dirs = library_dirs,
         libraries=["arrow", "parquet", "thriftmd" if sys.platform.startswith('win') else "thrift"], 

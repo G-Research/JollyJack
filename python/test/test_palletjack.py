@@ -44,7 +44,12 @@ class TestPalletJack(unittest.TestCase):
             # Create an array of zeros with shape (10, 10)
             np_array = np.zeros((n_rows, n_columns), dtype=float, order='F')
             print (dir(pj))
-            pj.read_column_chunk(pr.metadata, path, np_array, 0, 1)
+
+            pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = np_array, row_idx = 0, column_idx = 1)
+            np_array[0, 2] = 2.24        
+            v = np_array[0, 1]           
+            print (v)        
+            print (np_array)
 
 if __name__ == '__main__':
     unittest.main()
