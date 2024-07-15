@@ -21,7 +21,7 @@ def get_table():
     data = np.random.rand(n_rows, n_columns)
 
     # Convert the NumPy array to a list of PyArrow Arrays, one for each column
-    pa_arrays = [pa.array(int(x) for x in data[:, i]) for i in range(n_columns)]
+    pa_arrays = [pa.array(data[:, i]) for i in range(n_columns)]
 
     # Optionally, create column names
     column_names = [f'column_{i}' for i in range(n_columns)]
@@ -35,20 +35,22 @@ class TestPalletJack(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table()
-
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
             pr = pq.ParquetReader()
             pr.open(path)
-            data_org = pr.read_all(use_threads=False)
+            expected_data = pr.read_all(use_threads=False)
             # Create an array of zeros with shape (10, 10)
             np_array = np.zeros((n_rows, n_columns), dtype=float, order='F')
-            print (dir(pj))
-            pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = np_array, row_idx = 0, column_idx = 1, row_group_idx = 0)
-            np_array[0, 2] = 2.24
-            v = np_array[0, 1]
-            print (v)
+
+            for c in range(n_columns):
+                for rg in range(n_row_groups):
+                    pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = np_array, row_idx = chunk_size * rg, column_idx = c, row_group_idx = rg)
+
+            print (expected_data)
+            print ()
             print (np_array)
+            # self.assertEqual(np_array.all(), expected_data)
 
 if __name__ == '__main__':
     unittest.main()
