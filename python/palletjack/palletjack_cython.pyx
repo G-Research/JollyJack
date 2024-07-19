@@ -21,7 +21,7 @@ cpdef void read_column_chunk(FileMetaData metadata, parquet_path, cnp.ndarray[cn
 
     # Ensure that the subarray is C-contiguous
     if not np_array.flags['F_CONTIGUOUS']:
-        raise ValueError("np_array must be C-contiguous")
+        raise ValueError("np_array must be F-contiguous")
 
     # Ensure the row and column indices are within the array bounds
     assert 0 <= row_idx < np_array.shape[0]
