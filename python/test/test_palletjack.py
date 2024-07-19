@@ -8,10 +8,11 @@ import numpy as np
 import itertools as it
 import pyarrow.fs as fs
 import os
+from numpy.lib.stride_tricks import as_strided
 
-chunk_size = 10
-n_row_groups = 5
-n_columns = 7
+chunk_size = 3
+n_row_groups = 2
+n_columns = 5
 n_rows = n_row_groups * chunk_size
 current_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -41,11 +42,37 @@ class TestPalletJack(unittest.TestCase):
             pr.open(path)
             expected_data = pr.read_all(use_threads=False)
             # Create an array of zeros with shape (10, 10)
-            np_array = np.zeros((n_rows, n_columns), dtype=float, order='F')
+            np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
 
-            for c in range(n_columns):
-                for rg in range(n_row_groups):
-                    pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = np_array, row_idx = chunk_size * rg, column_idx = c, row_group_idx = rg)
+            # Display the original array
+            print("Original array (Fortran order):")
+            print(np_array)
+
+            # Create a view of a subset of rows (e.g., rows 1 and 2)
+            subset_view = np_array[1:4, :]
+
+            # Display the view of the subset of rows
+            print("\nSubset view of rows 1 and 2:")
+            print(subset_view)
+
+            # Verify if it's a view (changes in the view should affect the original array)
+            subset_view[0, 0] = 99
+            subset_view[2, 4] = 101
+            
+            print("\nModified subset view:")
+            print(subset_view)
+
+            print("\nOriginal array after modification:")
+            print(np_array)
+
+            pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = subset_view, row_idx = 0, column_idx = 1, row_group_idx = 13)
+            pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = subset_view, row_idx = 0, column_idx = 2, row_group_idx = 13)
+            pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = np_array, row_idx = 0, column_idx = 1, row_group_idx = 13)
+            pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = np_array, row_idx = 0, column_idx = 2, row_group_idx = 13)
+
+            # for c in range(n_columns):
+            #     for rg in range(n_row_groups):                
+            #         pj.read_column_chunk(metadata = pr.metadata, parquet_path = path, np_array = subset_view, row_idx = 0, column_idx = c, row_group_idx = rg)
 
             print (expected_data)
             print ()
