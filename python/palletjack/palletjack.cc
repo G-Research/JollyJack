@@ -45,3 +45,9 @@ void ReadColumnChunk(const parquet::FileMetaData &file_metadata, const char *par
 
   num_rows = num_rows;
 }
+
+void ReadColumns(const char *parquet_path, std::shared_ptr<parquet::FileMetaData> file_metadata, void* data, size_t stride_size, int row_group, 
+                                                    const std::vector<uint32_t> &column_indices)
+{
+  
+}
