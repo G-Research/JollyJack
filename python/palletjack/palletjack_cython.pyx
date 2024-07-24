@@ -44,18 +44,18 @@ cpdef void read_into_numpy_f32(parquet_path, FileMetaData metadata, cnp.ndarray[
     cdef uint32_t crow_group_idx = row_group_idx
     cdef vector[uint32_t] ccolumn_indices = column_indices
     cdef uint32_t cstride_size = np_array.strides[1]
+    cdef void* cdata = np_array.data
+
+    print (np_array.strides[0])
+    print (np_array.strides[1])
 
     # Ensure the input is a 2D array
     assert np_array.ndim == 2
-
-    # Ensure that the subarray is C-contiguous
-    # if not np_array.flags['F_CONTIGUOUS']:
-    #     raise ValueError("np_array must be F-contiguous")
 
     # Ensure the row and column indices are within the array bounds
     assert ccolumn_indices.size() == np_array.shape[1]
     assert np_array.strides[0] == 4 #f32 size
 
-    cpalletjack.ReadColumns(encoded_path.c_str(), metadata.sp_metadata, np_array.data, cstride_size, crow_group_idx, ccolumn_indices)
+    cpalletjack.ReadColumnsF32(encoded_path.c_str(), metadata.sp_metadata, np_array.data, cstride_size, crow_group_idx, ccolumn_indices)
 
     return
