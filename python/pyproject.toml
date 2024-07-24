@@ -21,6 +21,7 @@ classifiers = [
 ]
 dependencies = [
   "pyarrow~=16.0",
+  "pandas",
 ]
 
 [tool.setuptools.packages.find]
