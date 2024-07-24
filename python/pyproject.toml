@@ -2,16 +2,15 @@
 requires = [
   "setuptools>=55.0",
   "Cython>=3",
-  "pyarrow~=16.0",
-  "thrift",
+  "pyarrow~=16.0"
 ]
 
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "palletjack"
-version = "2.2.2"
-description = "Faster parquet metadata reading"
+name = "jollyjack"
+version = "0.1.0"
+description = "Read parquet data directly into numpy array"
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
@@ -24,11 +23,11 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ['palletjack*']
+include = ['jollyjack*']
 
 [tool.setuptools.package-data]
 "*" = ["*.pxd", "*.h", "*.pyx"]
 
 [project.urls]
-Homepage = "https://github.com/G-Research/PalletJack"
-Issues = "https://github.com/G-Research/PalletJack/issues"
+Homepage = "https://github.com/marcin-krystianc/jollyjack"
+Issues = "https://github.com/marcin-krystianc/jollyjack/issues"
