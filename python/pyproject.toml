@@ -3,7 +3,6 @@ requires = [
   "setuptools>=55.0",
   "Cython>=3",
   "pyarrow~=16.0",
-  "pandas",
 ]
 
 build-backend = "setuptools.build_meta"
@@ -21,7 +20,6 @@ classifiers = [
 ]
 dependencies = [
   "pyarrow~=16.0",
-  "pandas",
 ]
 
 [tool.setuptools.packages.find]

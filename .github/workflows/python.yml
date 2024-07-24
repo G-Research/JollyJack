@@ -30,7 +30,7 @@ jobs:
       working-directory: ./python
       shell: bash
       run: |
-        sudo apt-get install -y libthrift-dev libboost-all-dev
+        sudo apt-get install -y libboost-all-dev
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install flake8 pytest cibuildwheel build pytest
@@ -99,18 +99,6 @@ jobs:
         script: |
           core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
           core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-      
-    # Install vcpkg dependencies
-    - name: Install vcpkg build dependencies (macOS)
-      if: runner.os == 'macOS'
-      run: brew install bison
-
-    - name: Install thrift
-      working-directory: ./python
-      run: |
-        vcpkg install --triplet ${{ steps.vcpkg-info.outputs.triplet }} --x-manifest-root . --feature-flags=versions
-      env:
-        VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
 
     - name: Upload vcpkg arrow logs
       if: success() || failure()
