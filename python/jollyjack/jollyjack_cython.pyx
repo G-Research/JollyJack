@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 import numpy as np
 cimport numpy as cnp
 from cython.operator cimport dereference as deref
-from cython.cimports.jollyjack import cpalletjack
+from cython.cimports.jollyjack import cjollyjack
 from libcpp.string cimport string
 from libcpp.memory cimport shared_ptr
 from libcpp.vector cimport vector

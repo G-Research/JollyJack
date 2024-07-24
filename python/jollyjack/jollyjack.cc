@@ -8,7 +8,7 @@
 #include "parquet/arrow/schema.h"
 #include "parquet/column_reader.h"
 
-#include "palletjack.h"
+#include "jollyjack.h"
 
 #include <iostream>
 #include <fstream>
