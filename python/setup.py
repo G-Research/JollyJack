@@ -68,7 +68,7 @@ if os.getenv('DEBUG', '') == 'ON':
 
 # Define your extension
 extensions = [
-    Extension( "palletjack.palletjack_cython", ["palletjack/palletjack_cython.pyx", "palletjack/palletjack.cc"],
+    Extension( "jollyjack.palletjack_cython", ["jollyjack/palletjack_cython.pyx", "jollyjack/palletjack.cc"],
         include_dirs = include_dirs,  
         library_dirs = library_dirs,
         libraries=["arrow", "parquet", "thriftmd" if sys.platform.startswith('win') else "thrift"], 
@@ -90,7 +90,7 @@ else:
 pyarrow.create_library_symlinks()
 
 setup(
-    packages=["palletjack"],
+    packages=["jollyjack"],
     package_dir={"": "."},
     zip_safe=False,
     ext_modules=extensions,
