@@ -86,7 +86,8 @@ std::cerr
     {
       auto float_reader = static_cast<parquet::FloatReader *>(column_reader.get());
       int64_t values_read = 0;
-      auto read_levels = float_reader->ReadBatch(num_rows, nullptr, nullptr, (float *)(data + stride_size * c) , &values_read);
+      char* byte_ptr = (char*)data;
+      auto read_levels = float_reader->ReadBatch(num_rows, nullptr, nullptr, (float *)&byte_ptr[stride_size * c] , &values_read);
       if (values_read != num_rows) {
         auto msg = std::string("Expected to read ") + std::to_string(num_rows) + " values, but read " + std::to_string(values_read) + "!";
         throw std::logic_error(msg);
