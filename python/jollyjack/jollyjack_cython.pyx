@@ -56,6 +56,6 @@ cpdef void read_into_numpy_f32(parquet_path, FileMetaData metadata, cnp.ndarray[
     assert ccolumn_indices.size() == np_array.shape[1]
     assert np_array.strides[0] == 4 #f32 size
 
-    cpalletjack.ReadColumnsF32(encoded_path.c_str(), metadata.sp_metadata, np_array.data, cstride_size, crow_group_idx, ccolumn_indices)
+    cjollyjack.ReadColumnsF32(encoded_path.c_str(), metadata.sp_metadata, np_array.data, cstride_size, crow_group_idx, ccolumn_indices)
 
     return
