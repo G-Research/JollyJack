@@ -156,6 +156,7 @@ jobs:
           
     - name: Test with pytest
       run: |
+        pip install pandas --break-system-packages --only-binary=:all:
         # Keep in mind that if the local and remote versions are the same, the remote version will be installed
         pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
