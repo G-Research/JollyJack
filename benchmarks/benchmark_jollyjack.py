@@ -10,7 +10,7 @@ row_groups = 1
 n_columns = 10_000
 chunk_size = 32_000
 n_rows = row_groups * chunk_size
-work_items = 32
+work_items = 2
 
 all_columns = list(range(n_columns))
 all_row_groups = list(range(row_groups))
