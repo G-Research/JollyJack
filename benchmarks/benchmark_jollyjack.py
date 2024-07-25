@@ -102,10 +102,10 @@ genrate_data(table)
 
 print(f"Reading a single row group using arrow (single-threaded) {measure_reading(1, worker_arrow_row_group):.2f} seconds")
 print(f"Reading a single row group using arrow record batches (single-threaded) {measure_reading(1, worker_arrow_record_batch):.2f} seconds")
-print(f"Reading a single row group using palletjack (single-threaded) {measure_reading(1, worker_jollyjack_row_group):.2f} seconds")
+print(f"Reading a single row group using jollyjack (single-threaded) {measure_reading(1, worker_jollyjack_row_group):.2f} seconds")
 print(".")
 
 print(f"Reading a single row group using arrow (multi-threaded) {measure_reading(8, worker_arrow_row_group):.2f} seconds")
 print(f"Reading a single row group using arrow record batches (multi-threaded) {measure_reading(1, worker_arrow_record_batch):.2f} seconds")
-print(f"Reading a single row group using palletjack (multi-threaded) {measure_reading(8, worker_jollyjack_row_group):.2f} seconds")
+print(f"Reading a single row group using jollyjack (multi-threaded) {measure_reading(8, worker_jollyjack_row_group):.2f} seconds")
 print(".")
