@@ -2,4 +2,5 @@
 
 ## Features
 
-- Reading parquet data from parquet file directly into numpy array
+- Reading parquet data directly into a numpy array
+- Compatible with PalletJack

@@ -3,7 +3,7 @@
 ## Features
 
 - Reading parquet data directly into a numpy array
-- It is compatible with parquet metadata from PalletJack
+- Compatible with PalletJack
 
 ## Known limitations
 
