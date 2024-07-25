@@ -2,7 +2,6 @@ import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
-import pyarrow.fs as fs
 import concurrent.futures
 import time
 import os
@@ -17,8 +16,6 @@ n_reads = 600
 
 all_columns = list(range(n_columns))
 all_row_groups = list(range(row_groups))
-columns_batches = [all_columns[i:i+batch_size] for i in range(0, len(all_columns), batch_size)]
-row_groups_batches = [all_row_groups[i:i+batch_size] for i in range(0, len(all_row_groups), batch_size)]
 
 parquet_path = "my.parquet"
 np_array = np.zeros((chunk_size, n_columns), dtype='f', order='F')
@@ -44,7 +41,17 @@ def worker_arrow_row_group():
         table = table
         combined_array = np.column_stack([c.to_numpy() for c in table.columns])
         combined_array = combined_array
-        
+
+def worker_arrow_record_batch():
+    
+    pq_file = pq.ParquetFile(parquet_path)
+    batch_size = chunk_size # records
+    batches = pq_file.iter_batches(batch_size, use_threads=False, use_pandas_metadata=True) # batches will be a generator    
+
+    for batch in batches:
+        combined_array = np.column_stack([c.to_numpy() for c in batch.columns])
+        combined_array = combined_array
+
 def worker_jollyjack_row_group():
         
     pr = pq.ParquetReader()
@@ -96,9 +103,11 @@ table = get_table()
 genrate_data(table)
 
 print(f"Reading a single row group using arrow (single-threaded) {measure_reading(1, worker_arrow_row_group):.2f} seconds")
+print(f"Reading a single row group using arrow record batches (single-threaded) {measure_reading(1, worker_arrow_record_batch):.2f} seconds")
 print(f"Reading a single row group using palletjack (single-threaded) {measure_reading(1, worker_jollyjack_row_group):.2f} seconds")
 print(".")
 
 print(f"Reading a single row group using arrow (multi-threaded) {measure_reading(8, worker_arrow_row_group):.2f} seconds")
+print(f"Reading a single row group using arrow record batches (multi-threaded) {measure_reading(1, worker_arrow_record_batch):.2f} seconds")
 print(f"Reading a single row group using palletjack (multi-threaded) {measure_reading(8, worker_jollyjack_row_group):.2f} seconds")
 print(".")
