@@ -10,7 +10,9 @@ row_groups = 1
 n_columns = 10_000
 chunk_size = 32_000
 n_rows = row_groups * chunk_size
-work_items = 2
+
+work_items = 24
+n_threads = 8
 
 all_columns = list(range(n_columns))
 all_row_groups = list(range(row_groups))
@@ -100,12 +102,12 @@ def measure_reading(max_workers, worker):
 table = get_table()
 genrate_data(table)
 
-print(f"Reading a single row group using arrow (single-threaded) {measure_reading(1, worker_arrow_row_group):.2f} seconds")
-print(f"Reading a single row group using arrow record batches (single-threaded) {measure_reading(1, worker_arrow_record_batch):.2f} seconds")
-print(f"Reading a single row group using jollyjack (single-threaded) {measure_reading(1, worker_jollyjack_row_group):.2f} seconds")
+print(f"Reading a parquet file using `ParquetReader.read_row_groups` (single-threaded) {measure_reading(1, worker_arrow_row_group):.2f} seconds")
+print(f"Reading a parquet file using `ParquetFile.iter_batches` (single-threaded) {measure_reading(1, worker_arrow_record_batch):.2f} seconds")
+print(f"Reading  a parquet file using `JollyJack.read_into_numpy_f32` (single-threaded) {measure_reading(1, worker_jollyjack_row_group):.2f} seconds")
 print(".")
 
-print(f"Reading a single row group using arrow (multi-threaded) {measure_reading(8, worker_arrow_row_group):.2f} seconds")
-print(f"Reading a single row group using arrow record batches (multi-threaded) {measure_reading(1, worker_arrow_record_batch):.2f} seconds")
-print(f"Reading a single row group using jollyjack (multi-threaded) {measure_reading(8, worker_jollyjack_row_group):.2f} seconds")
+print(f"Reading a parquet file using `ParquetReader.read_row_groups` (multi-threaded) {measure_reading(n_threads, worker_arrow_row_group):.2f} seconds")
+print(f"Reading a parquet file using `ParquetFile.iter_batches` (multi-threaded) {measure_reading(n_threads, worker_arrow_record_batch):.2f} seconds")
+print(f"Reading  a parquet file using `JollyJack.read_into_numpy_f32` (multi-threaded) {measure_reading(n_threads, worker_jollyjack_row_group):.2f} seconds")
 print(".")

@@ -38,16 +38,22 @@ class TestJollyJack(unittest.TestCase):
             # Create an array of zeros with shape (10, 10)
             np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
 
-            print("\nOriginal array before modification:")
+            print("\nEmpty array:")
             print(np_array)
-
-            for rg in range(n_row_groups):
-                row_begin = rg * chunk_size
-                row_end = (rg + 1) * chunk_size
+            row_begin = 0
+            row_end = 0
+            
+            for rg in range(pr.metadata.num_row_groups):
+                row_begin = row_end
+                row_end = row_begin + pr.metadata.row_group(rg).num_rows
                 subset_view = np_array[row_begin:row_end, :] 
-                jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = path, np_array = subset_view, row_group_idx = rg, column_indices = range(n_columns))
+                jj.read_into_numpy_f32(metadata = pr.metadata
+                                       , parquet_path = path
+                                       , np_array = subset_view
+                                       , row_group_idx = rg
+                                       , column_indices = range(pr.metadata.num_columns))
 
-            print("\nOriginal array after modification:")
+            print("\nArray with data read directly into it:")
             print(np_array)
 
             print("\nExpected data:")
