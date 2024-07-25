@@ -11,8 +11,6 @@ n_columns = 10_000
 chunk_size = 32_000
 n_rows = row_groups * chunk_size
 work_items = 32
-batch_size = 40
-n_reads = 600
 
 all_columns = list(range(n_columns))
 all_row_groups = list(range(row_groups))
@@ -36,7 +34,7 @@ def worker_arrow_row_group():
     pr = pq.ParquetReader()
     pr.open(parquet_path)
         
-    for r in range(0, int(row_groups)):
+    for r in range(row_groups):
         table = pr.read_row_groups([r], use_threads=False)
         table = table
         combined_array = np.column_stack([c.to_numpy() for c in table.columns])
@@ -57,7 +55,7 @@ def worker_jollyjack_row_group():
     pr = pq.ParquetReader()
     pr.open(parquet_path)
     
-    for r in range(0, int(row_groups)):
+    for r in range(row_groups):
         jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array, row_group_idx = r, column_indices = all_columns)
 
 def genrate_data(table):
@@ -82,7 +80,7 @@ def measure_reading(max_workers, worker):
     for _ in range(0, 5):
         # Create the pool and warm it up 
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-        dummy_items = [pool.submit(dummy_worker) for i in range(0, len(all_columns), batch_size)]
+        dummy_items = [pool.submit(dummy_worker) for i in range(0, work_items)]
         for dummy_item in dummy_items: 
             dummy_item.result()
 
