@@ -11,7 +11,7 @@ n_columns = 10_000
 chunk_size = 32_000
 n_rows = row_groups * chunk_size
 
-work_items = 24
+work_items = 18
 n_threads = 8
 
 all_columns = list(range(n_columns))
