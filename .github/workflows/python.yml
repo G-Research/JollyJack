@@ -204,7 +204,7 @@ jobs:
         pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
         pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
-        python3 ./benchmarks/benchmark_palletjack_metadata.py
+        python3 ./benchmarks/benchmark_jollyjack.py
 
   publish:
     if: ${{ !github.event.repository.fork && startsWith(github.ref, 'refs/tags/v') }}

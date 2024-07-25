@@ -1,4 +1,4 @@
-import palletjack as pj
+import jollyjack as pj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
