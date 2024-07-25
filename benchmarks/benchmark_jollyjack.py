@@ -21,7 +21,6 @@ columns_batches = [all_columns[i:i+batch_size] for i in range(0, len(all_columns
 row_groups_batches = [all_row_groups[i:i+batch_size] for i in range(0, len(all_row_groups), batch_size)]
 
 parquet_path = "my.parquet"
-index_path = parquet_path + '.index'
 np_array = np.zeros((chunk_size, n_columns), dtype='f', order='F')
 
 def get_table():
@@ -43,6 +42,8 @@ def worker_arrow_row_group():
     for r in range(0, int(row_groups)):
         table = pr.read_row_groups([r], use_threads=False)
         table = table
+        combined_array = np.column_stack([c.to_numpy() for c in table.columns])
+        combined_array = combined_array
         
 def worker_jollyjack_row_group():
         
@@ -60,16 +61,8 @@ def genrate_data(table):
     dt = time.time() - t
     print(f"finished writing parquet file in {dt:.2f} seconds")
 
-    t = time.time()
-    print("Generating metadata index")
-    pj.generate_metadata_index(parquet_path, index_path)
-    dt = time.time() - t
-    print(f"Metadata index generated in {dt:.2f} seconds")
-
     parquet_size = os.stat(parquet_path).st_size
-    index_size = os.stat(index_path).st_size
-    index_size_percentage = 100 * index_size / parquet_size
-    print(f"Parquet size={parquet_size}, index size={index_size}({index_size_percentage:.2f}%)")
+    print(f"Parquet size={parquet_size}")
     print("")
 
 def measure_reading(max_workers, worker):
@@ -101,7 +94,6 @@ def measure_reading(max_workers, worker):
 
 table = get_table()
 genrate_data(table)
-index_data = fs.LocalFileSystem().open_input_stream(index_path).readall()
 
 print(f"Reading a single row group using arrow (single-threaded) {measure_reading(1, worker_arrow_row_group):.2f} seconds")
 print(f"Reading a single row group using palletjack (single-threaded) {measure_reading(1, worker_jollyjack_row_group):.2f} seconds")
