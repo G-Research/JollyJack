@@ -35,7 +35,7 @@ class TestJollyJack(unittest.TestCase):
             pr = pq.ParquetReader()
             pr.open(path)
             expected_data = pr.read_all(use_threads=False)
-            # Create an array of zeros with shape (10, 10)
+            # Create an array of zeros
             np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
 
             print("\nEmpty array:")
