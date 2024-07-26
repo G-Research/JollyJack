@@ -130,8 +130,8 @@ print(f"Reading a parquet file using `ParquetReader.read_all(no numpy)` (multi-t
 print(f"Reading a parquet file using `JollyJack.read_into_numpy_f32` (multi-threaded) {measure_reading(n_threads, worker_jollyjack_row_group):.2f} seconds")
 print(".")
 
-print (f"jollyjack_numpy, shape:{jollyjack_numpy.shape}, total:{np.sum(jollyjack_numpy)}")
-print (f"arrow_numpy, shape:{arrow_numpy.shape}, total:{np.sum(arrow_numpy)}")
+print (f"jollyjack_numpy, shape:{jollyjack_numpy.shape}, strides:{jollyjack_numpy.strides}, total:{np.sum(jollyjack_numpy)}")
+print (f"arrow_numpy, shape:{arrow_numpy.shape}, strides:{arrow_numpy.strides},  total:{np.sum(arrow_numpy)}")
 print (f"np.array_equal(arrow_numpy, jollyjack_numpy):{np.array_equal(arrow_numpy, jollyjack_numpy)}")
 
 np.array_equal(arrow_numpy, jollyjack_numpy)
