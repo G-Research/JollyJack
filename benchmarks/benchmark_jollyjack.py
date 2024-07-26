@@ -11,8 +11,8 @@ n_columns = 5_000
 chunk_size = 32_000
 n_rows = row_groups * chunk_size
 
-n_threads = 4
-work_items = 3 * n_threads
+n_threads = 6
+work_items = n_threads
 
 all_columns = list(range(n_columns))
 all_row_groups = list(range(row_groups))
@@ -93,7 +93,7 @@ def measure_reading(max_workers, worker):
 
     tt = []
     # measure multiple times and take the fastest run
-    for _ in range(0, 5):
+    for _ in range(0, 3):
         # Create the pool and warm it up
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
         dummy_items = [pool.submit(dummy_worker) for i in range(0, work_items)]
