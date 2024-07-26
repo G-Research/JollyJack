@@ -30,7 +30,7 @@ def get_table():
     # Create a PyArrow Table from the Arrays
     return pa.Table.from_arrays(pa_arrays, schema=schema)
 
-def worker_arrow_read_all():
+def worker_arrow_read_all_nonp():
     
     pr = pq.ParquetReader()
     pr.open(parquet_path)
@@ -112,12 +112,12 @@ genrate_data(table)
 
 print(f"Reading a parquet file using `ParquetReader.read_row_groups` (single-threaded) {measure_reading(1, worker_arrow_row_group):.2f} seconds")
 print(f"Reading a parquet file using `ParquetFile.iter_batches` (single-threaded) {measure_reading(1, worker_arrow_record_batch):.2f} seconds")
-print(f"Reading a parquet file using `ParquetReader.read_all` (single-threaded) {measure_reading(1, worker_arrow_read_all):.2f} seconds")
+print(f"Reading a parquet file using `ParquetReader.read_all(no numpy)` (single-threaded) {measure_reading(1, worker_arrow_read_all_nonp):.2f} seconds")
 print(f"Reading a parquet file using `JollyJack.read_into_numpy_f32` (single-threaded) {measure_reading(1, worker_jollyjack_row_group):.2f} seconds")
 print(".")
 
 print(f"Reading a parquet file using `ParquetReader.read_row_groups` (multi-threaded) {measure_reading(n_threads, worker_arrow_row_group):.2f} seconds")
 print(f"Reading a parquet file using `ParquetFile.iter_batches` (multi-threaded) {measure_reading(n_threads, worker_arrow_record_batch):.2f} seconds")
-print(f"Reading a parquet file using `ParquetReader.read_all` (multi-threaded) {measure_reading(n_threads, worker_arrow_read_all):.2f} seconds")
+print(f"Reading a parquet file using `ParquetReader.read_all(no numpy)` (multi-threaded) {measure_reading(n_threads, worker_arrow_read_all_nonp):.2f} seconds")
 print(f"Reading a parquet file using `JollyJack.read_into_numpy_f32` (multi-threaded) {measure_reading(n_threads, worker_jollyjack_row_group):.2f} seconds")
 print(".")
