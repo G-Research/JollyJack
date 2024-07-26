@@ -39,25 +39,27 @@ def worker_arrow_read_all_nonp():
     table = table
         
 def worker_arrow_row_group():
-    
+
     pr = pq.ParquetReader()
     pr.open(parquet_path)
-        
-    for r in range(row_groups):
-        table = pr.read_row_groups([r], use_threads=False)
-        table = table
-        combined_array = np.column_stack([c.to_numpy() for c in table.columns])
-        combined_array = combined_array
+
+    table = pr.read_row_groups(range(row_groups), use_threads=False)
+    table = table
+    combined_array = np.column_stack([c.to_numpy() for c in table.columns])
+    combined_array = combined_array
+
+    print (f"worker_arrow_row_group:{np.sum(combined_array)}")
 
 def worker_arrow_record_batch():
     
     pq_file = pq.ParquetFile(parquet_path)
-    batch_size = chunk_size # records
+    batch_size = n_rows # records
     batches = pq_file.iter_batches(batch_size, use_threads=False, use_pandas_metadata=True) # batches will be a generator    
 
     for batch in batches:
         combined_array = np.column_stack([c.to_numpy() for c in batch.columns])
         combined_array = combined_array
+        print (f"worker_arrow_record_batch:{np.sum(combined_array)}")
 
 def worker_jollyjack_row_group():
         
@@ -66,7 +68,11 @@ def worker_jollyjack_row_group():
     pr.open(parquet_path)
     
     for r in range(row_groups):
-        jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array, row_group_idx = r, column_indices = all_columns)
+        row_begin = r * chunk_size
+        row_end = (r + 1) * chunk_size
+        jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array[row_begin:row_end, :], row_group_idx = r, column_indices = all_columns)
+
+    print (f"worker_jollyjack_row_group:{np.sum(np_array)}")
 
 def genrate_data(table):
 
@@ -88,7 +94,7 @@ def measure_reading(max_workers, worker):
     tt = []
     # measure multiple times and take the fastest run
     for _ in range(0, 5):
-        # Create the pool and warm it up 
+        # Create the pool and warm it up
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
         dummy_items = [pool.submit(dummy_worker) for i in range(0, work_items)]
         for dummy_item in dummy_items: 
