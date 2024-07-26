@@ -18,7 +18,6 @@ all_columns = list(range(n_columns))
 all_row_groups = list(range(row_groups))
 
 parquet_path = "my.parquet"
-np_array = np.zeros((chunk_size, n_columns), dtype='f', order='F')
 
 def get_table():
     # Generate a random 2D array of floats using NumPy
@@ -54,6 +53,7 @@ def worker_arrow_record_batch():
 
 def worker_jollyjack_row_group():
         
+    np_array = np.zeros((chunk_size, n_columns), dtype='f', order='F')
     pr = pq.ParquetReader()
     pr.open(parquet_path)
     
