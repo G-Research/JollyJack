@@ -49,6 +49,7 @@ def worker_arrow_row_group():
     table = table
     combined_array = np.column_stack([c.to_numpy() for c in table.columns])
     combined_array = combined_array
+    global arrow_numpy
     arrow_numpy = combined_array
 
 def worker_arrow_record_batch():
@@ -72,6 +73,7 @@ def worker_jollyjack_row_group():
         row_end = (r + 1) * chunk_size
         jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array[row_begin:row_end, :], row_group_idx = r, column_indices = all_columns)
 
+    global jollyjack_numpy
     jollyjack_numpy = np_array
 
 def genrate_data(table):
