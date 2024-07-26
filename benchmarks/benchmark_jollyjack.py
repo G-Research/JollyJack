@@ -18,6 +18,8 @@ all_columns = list(range(n_columns))
 all_row_groups = list(range(row_groups))
 
 parquet_path = "my.parquet"
+jollyjack_numpy = None
+arrow_numpy = None
 
 def get_table():
     # Generate a random 2D array of floats using NumPy
@@ -47,8 +49,7 @@ def worker_arrow_row_group():
     table = table
     combined_array = np.column_stack([c.to_numpy() for c in table.columns])
     combined_array = combined_array
-
-    print (f"worker_arrow_row_group:{combined_array.shape}, {np.sum(combined_array)}")
+    arrow_numpy = combined_array
 
 def worker_arrow_record_batch():
     
@@ -59,7 +60,6 @@ def worker_arrow_record_batch():
     for batch in batches:
         combined_array = np.column_stack([c.to_numpy() for c in batch.columns])
         combined_array = combined_array
-        print (f"worker_arrow_record_batch:{combined_array.shape}, {np.sum(combined_array)}")
 
 def worker_jollyjack_row_group():
         
@@ -72,7 +72,7 @@ def worker_jollyjack_row_group():
         row_end = (r + 1) * chunk_size
         jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array[row_begin:row_end, :], row_group_idx = r, column_indices = all_columns)
 
-    print (f"worker_jollyjack_row_group:{np_array.shape}, {np.sum(np_array)}")
+    jollyjack_numpy = np_array
 
 def genrate_data(table):
 
@@ -127,3 +127,9 @@ print(f"Reading a parquet file using `ParquetFile.iter_batches` (multi-threaded)
 print(f"Reading a parquet file using `ParquetReader.read_all(no numpy)` (multi-threaded) {measure_reading(n_threads, worker_arrow_read_all_nonp):.2f} seconds")
 print(f"Reading a parquet file using `JollyJack.read_into_numpy_f32` (multi-threaded) {measure_reading(n_threads, worker_jollyjack_row_group):.2f} seconds")
 print(".")
+
+print (f"jollyjack_numpy, shape:{jollyjack_numpy.shape}, total:{np.sum(jollyjack_numpy)}")
+print (f"arrow_numpy, shape:{arrow_numpy.shape}, total:{np.sum(arrow_numpy)}")
+print (f"np.array_equal(arrow_numpy, jollyjack_numpy):{np.array_equal(arrow_numpy, jollyjack_numpy)}")
+
+np.array_equal(arrow_numpy, jollyjack_numpy)
