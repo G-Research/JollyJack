@@ -1,7 +1,7 @@
 [build-system]
 requires = [
   #workaround for https://github.com/pypa/setuptools/issues/4519
-  "setuptools<72",
+  "setuptools>=55",
   "Cython>=3",
   "pyarrow~=16.0",
 ]
