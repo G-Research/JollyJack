@@ -121,7 +121,6 @@ jobs:
     - name: Build wheels
       working-directory: ./python
       run: |
-      shell: bash
           echo "setuptools<72" > constraints.txt
           python3 -m cibuildwheel --output-dir dist
       # to supply options, put them in 'env', like:
@@ -134,7 +133,8 @@ jobs:
         CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28 
         # Disable unsupported builds
         CIBW_SKIP: "pp* *_i686 *-musllinux_* *win32"
-        
+      shell: bash   
+
     - uses: actions/upload-artifact@v4
       with:
         name: dist-${{ matrix.os }}
