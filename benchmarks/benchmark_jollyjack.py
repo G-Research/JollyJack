@@ -35,17 +35,17 @@ def get_table():
 def worker_arrow_read_all_nonp():
     
     pr = pq.ParquetReader()
-    pr.open(parquet_path)
+    pr.open(parquet_path, pre_buffer=True)
         
-    table = pr.read_all(use_threads=False, pre_buffer=True)
+    table = pr.read_all(use_threads=False,)
     table = table
         
 def worker_arrow_row_group():
 
     pr = pq.ParquetReader()
-    pr.open(parquet_path)
+    pr.open(parquet_path, pre_buffer=True)
 
-    table = pr.read_row_groups(range(row_groups), use_threads=False, pre_buffer=True)
+    table = pr.read_row_groups(range(row_groups), use_threads=False)
     table = table
     combined_array = np.column_stack([c.to_numpy() for c in table.columns])
     combined_array = combined_array
@@ -54,9 +54,9 @@ def worker_arrow_row_group():
 
 def worker_arrow_record_batch():
     
-    pq_file = pq.ParquetFile(parquet_path)
+    pq_file = pq.ParquetFile(parquet_path, pre_buffer=True)
     batch_size = n_rows # records
-    batches = pq_file.iter_batches(batch_size, use_threads=False, use_pandas_metadata=True, pre_buffer=True) # batches will be a generator    
+    batches = pq_file.iter_batches(batch_size, use_threads=False, use_pandas_metadata=True) # batches will be a generator    
 
     for batch in batches:
         combined_array = np.column_stack([c.to_numpy() for c in batch.columns])
