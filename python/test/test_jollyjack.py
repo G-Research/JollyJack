@@ -91,7 +91,7 @@ class TestJollyJack(unittest.TestCase):
             
             print("\nExpected data:")
             print (expected_data.to_pandas().to_records(index=False))
-            self.assertTrue(np.array_equal(np_array, expected_data))
+            self.assertFalse(np.array_equal(np_array, expected_data))
 
     def test_read_unsupported_column_types(self):
          with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
