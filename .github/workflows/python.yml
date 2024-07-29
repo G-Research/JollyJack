@@ -120,8 +120,10 @@ jobs:
         
     - name: Build wheels
       working-directory: ./python
-      run: python3 -m cibuildwheel --output-dir dist
-      run: echo "setuptools<72" > constraints.txt
+      run: |
+      shell: bash
+          echo "setuptools<72" > constraints.txt
+          python3 -m cibuildwheel --output-dir dist
       # to supply options, put them in 'env', like:
       env:
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair --exclude libarrow.so.1601 --exclude libparquet.so.1601 -w {dest_dir} {wheel}
