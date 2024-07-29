@@ -113,7 +113,7 @@ jobs:
       if: runner.os == 'linux'
       working-directory: ./python
       run: |
-        python3 -m build --sdist         
+        python3 -m build --sdis --no-isolation    
         
     - name: Build wheels
       working-directory: ./python
