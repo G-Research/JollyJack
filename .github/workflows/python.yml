@@ -45,7 +45,8 @@ jobs:
     - name: Test with pytest
       working-directory: ./python
       run: |
-        pip install --editable . 
+        python3 -m pip install --upgrade 'setuptools<72'
+        python3 -m pip install --editable . 
         pytest
 
   build:
