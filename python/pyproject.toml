@@ -1,6 +1,5 @@
 [build-system]
 requires = [
-  "setuptools<72",
   "Cython>=3",
   "pyarrow~=16.0",
 ]

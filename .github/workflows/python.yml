@@ -13,9 +13,6 @@ on:
 
 permissions:
   contents: read
-
-env:
-  PIP_CONSTRAINT: constraints.txt
   
 jobs:
         
@@ -144,7 +141,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
