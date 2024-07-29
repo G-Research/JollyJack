@@ -15,8 +15,8 @@ from pyarrow._parquet cimport *
 
 cpdef void read_into_numpy_f32(parquet_path, FileMetaData metadata, cnp.ndarray[cnp.float32_t, ndim=2] np_array, row_group_idx, column_indices):
     cdef string encoded_path = parquet_path.encode('utf8') if parquet_path is not None else "".encode('utf8')
-    cdef uint32_t crow_group_idx = row_group_idx
-    cdef vector[uint32_t] ccolumn_indices = column_indices
+    cdef int crow_group_idx = row_group_idx
+    cdef vector[int] ccolumn_indices = column_indices
     cdef uint32_t cstride_size = np_array.strides[1]
     cdef void* cdata = np_array.data
 
