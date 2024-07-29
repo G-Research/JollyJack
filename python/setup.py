@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 import os
 import sys
-from codecs import open
 
-from setuptools import setup, find_packages
+from setuptools import setup
 from distutils.extension import Extension
 from setuptools.command.test import test as TestCommand
 from Cython.Build import cythonize
