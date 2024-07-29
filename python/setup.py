@@ -94,8 +94,6 @@ setup(
     package_dir={"": "."},
     zip_safe=False,
     ext_modules=extensions,
-    setup_requires=['pytest-runner'],
-    tests_require=['pytest'],
     project_urls={
         "Documentation": "https://github.com/G-Research/PalletJack",
         "Source": "https://github.com/G-Research/PalletJack",
