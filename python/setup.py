@@ -96,7 +96,6 @@ setup(
     ext_modules=extensions,
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
-    test_suite = 'test',
     project_urls={
         "Documentation": "https://github.com/G-Research/PalletJack",
         "Source": "https://github.com/G-Research/PalletJack",
