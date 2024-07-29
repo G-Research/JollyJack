@@ -13,7 +13,7 @@ on:
 
 permissions:
   contents: read
-
+  
 jobs:
         
   test:
@@ -31,9 +31,9 @@ jobs:
       shell: bash
       run: |
         sudo apt-get install -y libboost-all-dev
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install flake8 pytest cibuildwheel build pytest
+        python3 -m pip install --upgrade pip
+        python3 -m pip install -r requirements.txt
+        python3 -m pip install flake8 pytest cibuildwheel build pytest
 
     - name: Lint with flake8
       run: |
@@ -44,8 +44,8 @@ jobs:
 
     - name: Test with pytest
       working-directory: ./python
-      run: |
-        pip install --editable . 
+      run:
+        python3 -m pip install --editable .
         pytest
 
   build:
@@ -68,9 +68,9 @@ jobs:
       working-directory: ./python
       shell: bash
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install flake8 pytest cibuildwheel build
+        python3 -m pip install --upgrade pip
+        python3 -m pip install -r requirements.txt
+        python3 -m pip install flake8 pytest cibuildwheel build
 
     # Compute vcpkg triplet and root
     - name: Compute vcpkg triplet and root
@@ -111,11 +111,11 @@ jobs:
       if: runner.os == 'linux'
       working-directory: ./python
       run: |
-        python -m build --sdist         
+        python3 -m build --sdist
         
     - name: Build wheels
       working-directory: ./python
-      run: python -m cibuildwheel --output-dir dist
+      run: python3 -m cibuildwheel --output-dir dist
       # to supply options, put them in 'env', like:
       env:
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair --exclude libarrow.so.1601 --exclude libparquet.so.1601 -w {dest_dir} {wheel}

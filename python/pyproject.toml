@@ -1,6 +1,7 @@
 [build-system]
 requires = [
-  "setuptools>=55.0",
+  #workaround for https://github.com/pypa/setuptools/issues/4519
+  "setuptools<72",
   "Cython>=3",
   "pyarrow~=16.0",
 ]
@@ -9,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jollyjack"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read parquet data directly into numpy array"
 readme = "README.md"
 requires-python = ">=3.9"
