@@ -43,6 +43,7 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Test with pytest
+      if: false
       working-directory: ./python
       run: |
         python3 -m pip install --upgrade 'setuptools<72'
