@@ -8,7 +8,7 @@ import os
 
 row_groups = 1
 n_columns = 5_000
-chunk_size = 32
+chunk_size = 32_000
 n_rows = row_groups * chunk_size
 
 n_threads = 6
