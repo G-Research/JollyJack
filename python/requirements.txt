@@ -2,4 +2,6 @@ setuptools>=55.0
 Cython>=3
 pyarrow~=16.0
 pandas
+palletjack
+
 

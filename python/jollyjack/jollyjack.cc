@@ -23,7 +23,7 @@ void ReadColumnsF32(const char *parquet_path, std::shared_ptr<parquet::FileMetaD
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
 
-  std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::OpenFile(parquet_path, false, reader_properties);
+  std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::OpenFile(parquet_path, false, reader_properties, file_metadata);
   auto row_group_reader = parquet_reader->RowGroup(row_group);
   auto row_group_metadata = file_metadata->RowGroup(row_group);
   auto num_rows = row_group_metadata->num_rows();
