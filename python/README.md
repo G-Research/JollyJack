@@ -70,7 +70,8 @@ for rg in range(pr.metadata.num_row_groups):
                             , parquet_path = path
                             , np_array = subset_view
                             , row_group_idx = rg
-                            , column_indices = range(pr.metadata.num_columns))
+                            , column_indices = range(pr.metadata.num_columns)
+                            , pre_buffer = True)
 
 print(np_array)
 ```
