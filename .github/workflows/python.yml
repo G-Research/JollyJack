@@ -155,15 +155,14 @@ jobs:
         merge-multiple: true
           
     - name: Test with pytest
-      working-directory: ./python
       run: |
         python3 -m pip install pytest
-        python3 -m pip install -r requirements.txt
+        python3 -m pip install -r python/requirements.txt
         # Keep in mind that if the local and remote versions are the same, the remote version will be installed
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
-        pytest
+        pytest ./python
 
   # Virtual job that can be configured as a required check before a PR can be merged.
   # As GitHub considers a check as successful if it is skipped, we need to check its status in
