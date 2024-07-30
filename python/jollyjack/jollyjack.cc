@@ -17,8 +17,8 @@
 
 using arrow::Status;
 
-void ReadColumnsF32(const char *parquet_path, std::shared_ptr<parquet::FileMetaData> file_metadata, void *data, size_t stride_size, int row_group,
-                    const std::vector<int> &column_indices)
+void ReadColumnsF32(const char *parquet_path, std::shared_ptr<parquet::FileMetaData> file_metadata, void *data, size_t stride_size
+  , int row_group, const std::vector<int> &column_indices, bool pre_buffer)
 {
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
@@ -29,8 +29,11 @@ void ReadColumnsF32(const char *parquet_path, std::shared_ptr<parquet::FileMetaD
   auto num_rows = row_group_metadata->num_rows();
   num_rows = num_rows;
 
-  std::vector<int> row_groups = {row_group};
-  parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), arrowReaderProperties.cache_options());
+  if (pre_buffer)
+  {  
+    std::vector<int> row_groups = {row_group};
+    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), arrowReaderProperties.cache_options());
+  }
 
 #ifdef DEBUG
   std::cerr

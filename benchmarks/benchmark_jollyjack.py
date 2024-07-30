@@ -71,7 +71,8 @@ def worker_jollyjack_row_group():
     for r in range(row_groups):
         row_begin = r * chunk_size
         row_end = (r + 1) * chunk_size
-        jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array[row_begin:row_end, :], row_group_idx = r, column_indices = all_columns)
+        jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array[row_begin:row_end, :]
+                               , row_group_idx = r, column_indices = all_columns, pre_buffer=True)
 
     global jollyjack_numpy
     jollyjack_numpy = np_array
