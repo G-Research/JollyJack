@@ -57,7 +57,7 @@ def worker_arrow_record_batch():
     batches = pq_file.iter_batches(batch_size, use_threads=False, use_pandas_metadata=True) # batches will be a generator    
 
     for batch in batches:
-        combined_array = np.column_stack([c.to_numpy() for c in batch.columns])
+        combined_array = batch.to_pandas().to_numpy()
         combined_array = combined_array
 
 def worker_jollyjack_row_group():
