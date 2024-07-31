@@ -6,7 +6,7 @@ import concurrent.futures
 import time
 import os
 
-row_groups = 1
+row_groups = 2
 n_columns = 5_000
 chunk_size = 32_000
 n_rows = row_groups * chunk_size
