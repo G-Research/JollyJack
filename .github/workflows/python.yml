@@ -201,6 +201,7 @@ jobs:
 
     - name: Run benchmarks
       run: |
+        python3 -m pip install -r python/requirements.txt
         # Keep in mind that if the local and remote versions are the same, the remote version will be installed
         pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
