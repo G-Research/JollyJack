@@ -47,10 +47,8 @@ def worker_arrow_row_group():
 
     table = pr.read_row_groups(range(row_groups), use_threads=False)
     table = table
-    combined_array = np.column_stack([c.to_numpy() for c in table.columns])
-    combined_array = combined_array
     global arrow_numpy
-    arrow_numpy = combined_array
+    arrow_numpy = table.to_pandas().to_numpy()
 
 def worker_arrow_record_batch():
     
