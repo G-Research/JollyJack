@@ -46,6 +46,7 @@ jobs:
       working-directory: ./python
       run: |
         pip install --editable .
+        pytest
 
   build:
     needs: test
