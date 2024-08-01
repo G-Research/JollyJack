@@ -9,10 +9,11 @@ import random
 import time
 import os
 
-row_groups = 3
+n_files = 3
+row_groups = 1
 n_columns = 10_000
 n_columns_to_read = 2_000
-chunk_size = 32_000
+chunk_size = 96_000
 n_rows = row_groups * chunk_size
 
 n_threads = 2
@@ -47,33 +48,33 @@ def get_table():
         
 def worker_arrow_row_group(use_threads, pre_buffer):
 
-    pr = pq.ParquetReader()
-    pr.open(parquet_path, pre_buffer=pre_buffer)
+    for f in range(n_files):
+        pr = pq.ParquetReader()
+        pr.open(f"{parquet_path}{f}", pre_buffer=pre_buffer)
 
-    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
-    table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
-    table = table
-    global arrow_numpy
-    arrow_numpy = table.to_pandas().to_numpy()
+        column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
+        table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
+
 
 def worker_jollyjack_row_group(pre_buffer):
         
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype='f', order='F')
-    pr = pq.ParquetReader()
-    pr.open(parquet_path)
     
-    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
-    jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array
-                            , row_group_idx = row_groups-1, column_indices = column_indices_to_read, pre_buffer=pre_buffer)
-
-    global jollyjack_numpy
-    jollyjack_numpy = np_array
+    for f in range(n_files):
+        pr = pq.ParquetReader()
+        pr.open(f"{parquet_path}{f}")
+        
+        column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
+        jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
+                                , row_group_idx = row_groups-1, column_indices = column_indices_to_read, pre_buffer=pre_buffer)
 
 def genrate_data(table):
 
     t = time.time()
     print(f"writing parquet file, columns={n_columns}, row_groups={row_groups}, rows={n_rows}")
-    pq.write_table(table, parquet_path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, compression='snappy', store_schema=False)
+    for f in range(n_files):
+        pq.write_table(table, f"{parquet_path}{f}", row_group_size=chunk_size, use_dictionary=False, write_statistics=False, compression='snappy', store_schema=False)
+
     dt = time.time() - t
     print(f"finished writing parquet file in {dt:.2f} seconds")
 
@@ -115,7 +116,9 @@ for n_threads in [1, 2]:
     for pre_buffer in [False, True]:
         for use_threads in [False, True]:
             print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda:worker_arrow_row_group(use_threads=use_threads, pre_buffer = pre_buffer)):.2f} seconds")
+
+for n_threads in [1, 2]:
+    for pre_buffer in [False, True]:
         print(f"`JollyJack.read_into_numpy_f32` n_threads:{n_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_row_group(pre_buffer)):.2f} seconds")
 
 print (f"np.array_equal(arrow_numpy, jollyjack_numpy):{np.array_equal(arrow_numpy, jollyjack_numpy)}")
-
