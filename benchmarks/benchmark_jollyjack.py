@@ -8,9 +8,9 @@ import random
 import time
 import os
 
-row_groups = 4
-n_columns = 5_000
-n_columns_to_read = 1_000
+row_groups = 3
+n_columns = 10_000
+n_columns_to_read = 2_000
 column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
 chunk_size = 32_000
 n_rows = row_groups * chunk_size
