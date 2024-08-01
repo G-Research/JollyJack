@@ -3,6 +3,7 @@ import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
 import concurrent.futures
+import subprocess
 import humanize
 import random
 import time
@@ -21,6 +22,18 @@ work_items = n_threads
 parquet_path = "my.parquet"
 jollyjack_numpy = None
 arrow_numpy = None
+
+def clear_cache():
+    print('clearing cache')
+    p = subprocess.run(
+                'sync; echo 3 > /proc/sys/vm/drop_caches',
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                shell=True,
+            )
+    if p.returncode != 0:
+        raise ValueError("returncode is not 0!")
 
 def get_table():
     # Generate a random 2D array of floats using NumPy
@@ -80,6 +93,8 @@ def measure_reading(max_workers, worker):
         dummy_items = [pool.submit(dummy_worker) for i in range(0, work_items)]
         for dummy_item in dummy_items: 
             dummy_item.result()
+
+        clear_cache()
 
         # Submit the work
         t = time.time()
