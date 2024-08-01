@@ -74,13 +74,12 @@ def genrate_data(table):
     print(f"writing parquet file, columns={n_columns}, row_groups={row_groups}, rows={n_rows}")
     for f in range(n_files):
         pq.write_table(table, f"{parquet_path}{f}", row_group_size=chunk_size, use_dictionary=False, write_statistics=False, compression='snappy', store_schema=False)
+        parquet_size = os.stat(f"{parquet_path}{f}").st_size
+        print(f"Parquet size={humanize.naturalsize(parquet_size)}")
+        print("")
 
     dt = time.time() - t
     print(f"finished writing parquet file in {dt:.2f} seconds")
-
-    parquet_size = os.stat(parquet_path).st_size
-    print(f"Parquet size={humanize.naturalsize(parquet_size)}")
-    print("")
 
 def measure_reading(max_workers, worker):
 
