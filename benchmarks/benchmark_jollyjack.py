@@ -25,7 +25,7 @@ arrow_numpy = None
 def clear_cache():
     print('clearing cache')
     p = subprocess.run(
-                'sync; echo 3 > /proc/sys/vm/drop_caches',
+                'sudo -S sh -c "sync; echo 3 > /proc/sys/vm/drop_caches"',
                 capture_output=True,
                 text=True,
                 stdin=subprocess.DEVNULL,
