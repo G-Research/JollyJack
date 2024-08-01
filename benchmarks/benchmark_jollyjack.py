@@ -12,7 +12,6 @@ import os
 row_groups = 3
 n_columns = 10_000
 n_columns_to_read = 2_000
-column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
 chunk_size = 32_000
 n_rows = row_groups * chunk_size
 
@@ -51,6 +50,7 @@ def worker_arrow_row_group(use_threads, pre_buffer):
     pr = pq.ParquetReader()
     pr.open(parquet_path, pre_buffer=pre_buffer)
 
+    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
     table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
     table = table
     global arrow_numpy
@@ -62,6 +62,7 @@ def worker_jollyjack_row_group(pre_buffer):
     pr = pq.ParquetReader()
     pr.open(parquet_path)
     
+    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
     jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = parquet_path, np_array = np_array
                             , row_group_idx = row_groups-1, column_indices = column_indices_to_read, pre_buffer=pre_buffer)
 
