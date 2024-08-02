@@ -57,7 +57,7 @@ def worker_jollyjack_row_group(pre_buffer):
 def genrate_data(table, path, compression):
 
     t = time.time()
-    print(f"writing parquet file:{path}, columns={n_columns}, row_groups={row_groups}, rows={n_rows}")
+    print(f"writing parquet file:{path}, columns={n_columns}, row_groups={row_groups}, rows={n_rows}, compression={compression}")
     
     pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, compression=compression, store_schema=False)
     parquet_size = os.stat(path).st_size
@@ -91,16 +91,20 @@ def measure_reading(max_workers, worker):
     return min (tt)
 
 for compression in [None, 'snappy']:
+    
+    print(f".")
     for f in range(n_files):
         table = get_table()
         path = f"{parquet_path}{f}"
         genrate_data(table = table, path = path, compression = compression)
 
+    print(f".")
     for n_threads in [1, 2]:
         for pre_buffer in [False, True]:
             for use_threads in [False, True]:
-                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda:worker_arrow_row_group(use_threads=use_threads, pre_buffer = pre_buffer)):.2f} seconds")
+                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_arrow_row_group(use_threads=use_threads, pre_buffer = pre_buffer)):.2f} seconds")
 
+    print(f".")
     for n_threads in [1, 2]:
         for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_numpy_f32` n_threads:{n_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_row_group(pre_buffer)):.2f} seconds")
+            print(f"`JollyJack.read_into_numpy_f32` n_threads:{n_threads}, pre_buffer:{pre_buffer}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_row_group(pre_buffer)):.2f} seconds")
