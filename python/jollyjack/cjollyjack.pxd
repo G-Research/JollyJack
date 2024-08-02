@@ -7,11 +7,10 @@ from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 
 cdef extern from "jollyjack.h":
-    cdef void ReadColumnChunk(const CFileMetaData& file_metadata, const char *parquet_path, void* data, int row_group, int column) except + nogil
-    cdef void ReadColumnsF32(const char *parquet_path
+    cdef void ReadData(const char *parquet_path
         , shared_ptr[CFileMetaData] file_metadata
-        , void* data
-        , size_t stride_size
-        , int row_group
+        , void* data, size_t buffer_size
+        , size_t stride0_size, size_t stride1_sizexs
+        , const vector[int] row_groups
         , const vector[int] column_indices
         , bool pre_buffer) except + nogil
