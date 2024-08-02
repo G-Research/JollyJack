@@ -9,11 +9,11 @@ import random
 import time
 import os
 
-n_files = 3
+n_files = 7
 row_groups = 1
 n_columns = 10_000
 n_columns_to_read = 2_000
-chunk_size = 96_000
+chunk_size = 64_000
 n_rows = row_groups * chunk_size
 
 n_threads = 2
@@ -55,7 +55,6 @@ def worker_arrow_row_group(use_threads, pre_buffer):
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
         table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
 
-
 def worker_jollyjack_row_group(pre_buffer):
         
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype='f', order='F')
@@ -68,15 +67,15 @@ def worker_jollyjack_row_group(pre_buffer):
         jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
                                 , row_group_idx = row_groups-1, column_indices = column_indices_to_read, pre_buffer=pre_buffer)
 
-def genrate_data(table):
+def genrate_data(table, path):
 
     t = time.time()
     print(f"writing parquet file, columns={n_columns}, row_groups={row_groups}, rows={n_rows}")
-    for f in range(n_files):
-        pq.write_table(table, f"{parquet_path}{f}", row_group_size=chunk_size, use_dictionary=False, write_statistics=False, compression='snappy', store_schema=False)
-        parquet_size = os.stat(f"{parquet_path}{f}").st_size
-        print(f"Parquet size={humanize.naturalsize(parquet_size)}")
-        print("")
+    
+    pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, compression='snappy', store_schema=False)
+    parquet_size = os.stat(path).st_size
+    print(f"Parquet size={humanize.naturalsize(parquet_size)}")
+    print("")
 
     dt = time.time() - t
     print(f"finished writing parquet file in {dt:.2f} seconds")
@@ -107,9 +106,10 @@ def measure_reading(max_workers, worker):
 
     return min (tt)
 
-
-table = get_table()
-genrate_data(table)
+for f in range(n_files):
+    table = get_table()
+    path = f"{parquet_path}{f}"
+    genrate_data(table, path)
 
 for n_threads in [1, 2]:
     for pre_buffer in [False, True]:
