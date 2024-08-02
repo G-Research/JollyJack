@@ -94,8 +94,6 @@ def measure_reading(max_workers, worker):
         for dummy_item in dummy_items: 
             dummy_item.result()
 
-        clear_cache()
-
         # Submit the work
         t = time.time()
         for i in range(0, work_items):
