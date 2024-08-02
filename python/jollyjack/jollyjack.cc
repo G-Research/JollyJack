@@ -53,7 +53,8 @@ void ReadData(const char *parquet_path, std::shared_ptr<parquet::FileMetaData> f
     std::cerr
         << " row_group:" << row_group
         << " num_rows:" << num_rows
-        << " stride_size:" << stride_size
+        << " stride0_size:" << stride0_size
+        << " stride1_size:" << stride1_size
         << std::endl;
 #endif
 
