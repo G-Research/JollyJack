@@ -178,9 +178,10 @@ jobs:
       - run: echo "All required checks done"
 
   benchmarks:
+    needs: build
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -201,7 +202,9 @@ jobs:
     - name: Run benchmarks
       run: |
         # Keep in mind that if the local and remote versions are the same, the remote version will be installed
-        pip install JollyJack
+        pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
+        # So now ensure that the local version is installed 
+        pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
         python3 -m pip install -r python/requirements.txt
         python3 ./benchmarks/benchmark_jollyjack.py
 
