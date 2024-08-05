@@ -52,7 +52,7 @@ def worker_jollyjack_row_group(pre_buffer):
         
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
         jj.read_into_numpy(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
-                                , row_group_idx = row_groups-1, column_indices = column_indices_to_read, pre_buffer=pre_buffer)
+                                , row_group_indices = [row_groups-1], column_indices = column_indices_to_read, pre_buffer=pre_buffer)
 
 def genrate_data(table, path, compression):
 
