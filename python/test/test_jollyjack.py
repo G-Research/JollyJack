@@ -2,7 +2,6 @@ import unittest
 import tempfile
 
 import jollyjack as jj
-import palletjack as pj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
@@ -50,9 +49,9 @@ class TestJollyJack(unittest.TestCase):
             print("\nArray with data read directly into it:")
             print(np_array)            
 
-            expected_data = np.zeros((chunk_size, n_columns), dtype='f', order='F')
             print("\nExpected data:")
-            print(expected_data)
+            expected_data = pr.read_all().to_pandas().to_records(index=False)
+            print(expected_data)         
             self.assertTrue(np.array_equal(np_array, expected_data))
 
 

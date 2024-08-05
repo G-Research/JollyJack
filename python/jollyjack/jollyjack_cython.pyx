@@ -25,6 +25,7 @@ cpdef void read_into_numpy_f32(parquet_path, FileMetaData metadata, cnp.ndarray 
     cdef uint32_t cstride1_size = np_array.strides[1]
     cdef void* cdata = np_array.data
     cdef bool cpre_buffer = pre_buffer
+    cdef uint32_t cbuffer_size = np_array.shape[0] * np_array.shape[1] * np_array.strides[0]
 
     # Ensure the input is a 2D array
     assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
@@ -36,8 +37,10 @@ cpdef void read_into_numpy_f32(parquet_path, FileMetaData metadata, cnp.ndarray 
     # TODO SIZE ?
     with nogil:
         cjollyjack.ReadData(encoded_path.c_str(), metadata.sp_metadata
-            , np_array.data, 1
-            , cstride0_size, cstride1_size
+            , np_array.data
+            , cbuffer_size
+            , cstride0_size
+            , cstride1_size
             , crow_group_indices
             , ccolumn_indices
             , cpre_buffer)
