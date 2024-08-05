@@ -37,7 +37,7 @@ class TestJollyJack(unittest.TestCase):
             pr.open(path)
             expected_data = pr.read_all(use_threads=False)
             # Create an array of zeros
-            np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
+            np_array1 = np.zeros((n_rows, n_columns), dtype='f', order='F')
 
             row_begin = 0
             row_end = 0
@@ -45,15 +45,24 @@ class TestJollyJack(unittest.TestCase):
             for rg in range(pr.metadata.num_row_groups):
                 row_begin = row_end
                 row_end = row_begin + pr.metadata.row_group(rg).num_rows
-                subset_view = np_array[row_begin:row_end, :] 
+                subset_view = np_array1[row_begin:row_end, :] 
                 jj.read_into_numpy (metadata = pr.metadata
                                        , parquet_path = path
                                        , np_array = subset_view
                                        , row_group_indices = [rg]
                                        , column_indices = range(pr.metadata.num_columns))
 
-            self.assertTrue(np.array_equal(np_array, expected_data))
+            self.assertTrue(np.array_equal(np_array1, expected_data))
 
+            np_array2 = np.zeros((n_rows, n_columns), dtype='f', order='F')
+            jj.read_into_numpy (metadata = pr.metadata
+                                    , parquet_path = path
+                                    , np_array = np_array2
+                                    , row_group_indices = range(pr.metadata.num_row_groups)
+                                    , column_indices = range(pr.metadata.num_columns))
+
+            self.assertTrue(np.array_equal(np_array2, expected_data))
+                
     def test_read_with_palletjack(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -166,7 +175,7 @@ class TestJollyJack(unittest.TestCase):
             jj.read_into_numpy (metadata = pr.metadata
                                     , parquet_path = path
                                     , np_array = np_array
-                                    , row_group_idx = [0]
+                                    , row_group_indices = [0]
                                     , column_indices = range(n_columns))
 
             expected_data = pr.read_all().to_pandas().to_numpy()
