@@ -36,7 +36,7 @@ cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_
 
     # TODO SIZE ?
     with nogil:
-        cjollyjack.ReadData(encoded_path.c_str(), metadata.sp_metadata
+        cjollyjack.ReadIntoMemory (encoded_path.c_str(), metadata.sp_metadata
             , np_array.data
             , cbuffer_size
             , cstride0_size

@@ -31,7 +31,7 @@ for rg in range(pr.metadata.num_row_groups):
     # To define which subset of the numpy array we want read into,
     # we create a view which shares underlying memory with the original numpy array
     subset_view = np_array[row_begin:row_end, :] 
-    jj.read_into_numpy_f32(metadata = pr.metadata
+    jj.read_into_numpy(metadata = pr.metadata
                             , parquet_path = path
                             , np_array = subset_view
                             , row_group_idx = rg
