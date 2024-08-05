@@ -2,18 +2,17 @@
 
 ## Features
 
-- Reading parquet files directly into numpy arrays
-- Compatible with PalletJack
+- Reading parquet files directly into numpy arrays (fp16, fp32, fp64)
+- Compatibility with PalletJack
 
 ## Known limitations
 
-- Works only with a single-precision floats
 - Data cannot contain null values
 - Only a local file system is supported
 
 ## Required:
 
-- pyarrow  ~= 16.0
+- pyarrow  ~= 17.0
  
 JollyJack operates on top of pyarrow, making it an essential requirement for both building and using JollyJack. While our source package is compatible with recent versions of pyarrow, the binary distribution package specifically requires the latest major version of pyarrow.
 
@@ -66,7 +65,7 @@ for rg in range(pr.metadata.num_row_groups):
     # To define which subset of the numpy array we want read into,
     # we need to create a view which shares underlying memory with the target numpy array
     subset_view = np_array[row_begin:row_end, :] 
-    jj.read_into_numpy_f32(metadata = pr.metadata
+    jj.read_into_numpy (metadata = pr.metadata
                             , parquet_path = path
                             , np_array = subset_view
                             , row_group_idx = rg
