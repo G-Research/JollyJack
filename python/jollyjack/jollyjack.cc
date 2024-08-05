@@ -88,6 +88,7 @@ void ReadData(const char *parquet_path, std::shared_ptr<parquet::FileMetaData> f
           if (stride0_size != 8)
           {
             auto msg = std::string("Column " + std::to_string(parquet_column) + " has DOUBLE data type, but the target value size is " + std::to_string(stride0_size) + "!");
+            throw std::logic_error(msg);
           }
 
           auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader.get());
@@ -100,6 +101,7 @@ void ReadData(const char *parquet_path, std::shared_ptr<parquet::FileMetaData> f
           if (stride0_size != 4)
           {
             auto msg = std::string("Column " + std::to_string(parquet_column) + " has FLOAT data type, but the target value size is " + std::to_string(stride0_size) + "!");
+            throw std::logic_error(msg);
           }
 
           auto typed_reader = static_cast<parquet::FloatReader *>(column_reader.get());
@@ -123,6 +125,12 @@ void ReadData(const char *parquet_path, std::shared_ptr<parquet::FileMetaData> f
           }
 
           break;
+        }
+
+        default:
+        {          
+          auto msg = std::string("Column " + std::to_string(parquet_column) + " has unsupported data type: " + std::to_string(column_reader->descr()->physical_type()) + "!");
+          throw std::logic_error(msg);
         }
       }
       
