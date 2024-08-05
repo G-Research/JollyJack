@@ -18,7 +18,7 @@ def get_table(n_rows, n_columns, data_type = pa.float32()):
     # Generate a random 2D array of floats using NumPy
     # Each column in the array represents a column in the final table
     data = np.random.rand(n_rows, n_columns).astype(np.float32)
-    
+
     # Convert the NumPy array to a list of PyArrow Arrays, one for each column
     pa_arrays = [pa.array(data[:, i]).cast(data_type, safe = False) for i in range(n_columns)]
     schema = pa.schema([(f'column_{i}', data_type) for i in range(n_columns)])
