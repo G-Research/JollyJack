@@ -155,5 +155,25 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all().to_pandas().to_numpy()
             self.assertTrue(np.array_equal(np_array, expected_data))
 
+    def test_read_fp64(self):
+         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = chunk_size, n_columns = n_columns, data_type = pa.float64())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            # Create an array of zerosx
+            np_array = np.zeros((chunk_size, n_columns), dtype=np.float64, order='F')
+
+            jj.read_into_numpy (metadata = pr.metadata
+                                    , parquet_path = path
+                                    , np_array = np_array
+                                    , row_group_idx = 0
+                                    , column_indices = range(n_columns))
+
+            expected_data = pr.read_all().to_pandas().to_numpy()
+            self.assertTrue(np.array_equal(np_array, expected_data))
+
 if __name__ == '__main__':
     unittest.main()
