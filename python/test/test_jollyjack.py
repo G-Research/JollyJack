@@ -28,7 +28,6 @@ def get_table(n_rows, n_columns, data_type = pa.float32()):
 class TestJollyJack(unittest.TestCase):
    
     def test_read_entire_table(self):
-
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows, n_columns)
@@ -56,7 +55,6 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(np_array, expected_data))
 
     def test_read_with_palletjack(self):
-
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows, n_columns)
@@ -133,7 +131,6 @@ class TestJollyJack(unittest.TestCase):
                                     , column_indices = range(n_columns))
 
                 self.assertTrue(f"Column 0 has unsupported data type: 1!" in str(context.exception), context.exception)
-
 
     def test_read_fp16(self):
          with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
