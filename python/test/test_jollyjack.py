@@ -49,7 +49,7 @@ class TestJollyJack(unittest.TestCase):
                 jj.read_into_numpy (metadata = pr.metadata
                                        , parquet_path = path
                                        , np_array = subset_view
-                                       , row_group_idx = rg
+                                       , row_group_indices = [rg]
                                        , column_indices = range(pr.metadata.num_columns))
 
             self.assertTrue(np.array_equal(np_array, expected_data))
@@ -82,7 +82,7 @@ class TestJollyJack(unittest.TestCase):
                 jj.read_into_numpy (metadata = metadata
                                        , parquet_path = path
                                        , np_array = subset_view
-                                       , row_group_idx = 0
+                                       , row_group_indices = [0]
                                        , column_indices = column_indices)
 
             self.assertTrue(np.array_equal(np_array, expected_data))
@@ -106,7 +106,7 @@ class TestJollyJack(unittest.TestCase):
             jj.read_into_numpy (metadata = pr.metadata
                                     , parquet_path = path
                                     , np_array = np_array
-                                    , row_group_idx = 0
+                                    , row_group_indices = [0]
                                     , column_indices = range(offset, offset + cols))
 
             expected_data = pr.read_all(use_threads=False, column_indices = range(offset, offset + cols))
@@ -127,7 +127,7 @@ class TestJollyJack(unittest.TestCase):
                 jj.read_into_numpy (metadata = pr.metadata
                                     , parquet_path = path
                                     , np_array = np_array
-                                    , row_group_idx = 0
+                                    , row_group_indices = [0]
                                     , column_indices = range(n_columns))
 
             self.assertTrue(f"Column 0 has unsupported data type: 0!" in str(context.exception), context.exception)
@@ -146,7 +146,7 @@ class TestJollyJack(unittest.TestCase):
             jj.read_into_numpy (metadata = pr.metadata
                                     , parquet_path = path
                                     , np_array = np_array
-                                    , row_group_idx = 0
+                                    , row_group_indices = [0]
                                     , column_indices = range(n_columns))
 
             expected_data = pr.read_all().to_pandas().to_numpy()
@@ -166,7 +166,7 @@ class TestJollyJack(unittest.TestCase):
             jj.read_into_numpy (metadata = pr.metadata
                                     , parquet_path = path
                                     , np_array = np_array
-                                    , row_group_idx = 0
+                                    , row_group_idx = [0]
                                     , column_indices = range(n_columns))
 
             expected_data = pr.read_all().to_pandas().to_numpy()

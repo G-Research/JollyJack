@@ -17,9 +17,9 @@ from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 
-cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_array, row_group_idx, column_indices, pre_buffer=False):
+cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices, pre_buffer=False):
     cdef string encoded_path = parquet_path.encode('utf8') if parquet_path is not None else "".encode('utf8')
-    cdef vector[int] crow_group_indices = [row_group_idx]
+    cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices = column_indices
     cdef uint32_t cstride0_size = np_array.strides[0]
     cdef uint32_t cstride1_size = np_array.strides[1]
