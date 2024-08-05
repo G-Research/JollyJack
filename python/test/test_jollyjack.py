@@ -59,10 +59,10 @@ class TestJollyJack(unittest.TestCase):
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows, n_columns)
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
-            
+
             index_path = path + '.index'
             pj.generate_metadata_index(path, index_path)
-            
+
             pr = pq.ParquetReader()
             pr.open(path)
             expected_data = pr.read_all()
@@ -71,11 +71,11 @@ class TestJollyJack(unittest.TestCase):
 
             row_begin = 0
             row_end = 0
-            
+
             for rg in range(pr.metadata.num_row_groups):
                 column_indices=list(range(n_columns))
                 metadata = pj.read_metadata(index_path, row_groups=[rg], column_indices=column_indices)
-          
+
                 row_begin = row_end
                 row_end = row_begin + metadata.num_rows
                 subset_view = np_array[row_begin:row_end, :] 
@@ -102,7 +102,7 @@ class TestJollyJack(unittest.TestCase):
 
             print("\nEmpty array:")
             print(np_array)
-            
+
             jj.read_into_numpy (metadata = pr.metadata
                                     , parquet_path = path
                                     , np_array = np_array

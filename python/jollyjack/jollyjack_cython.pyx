@@ -34,7 +34,6 @@ cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_
     assert ccolumn_indices.size() == np_array.shape[1], f"Requested to read {ccolumn_indices.size()} columns , but the number of columns in numpy array is {np_array.shape[1]}"
     assert np_array.strides[0] < np_array.strides[1], f"Expected array in a Fortran order"
 
-    # TODO SIZE ?
     with nogil:
         cjollyjack.ReadIntoMemory (encoded_path.c_str(), metadata.sp_metadata
             , np_array.data
