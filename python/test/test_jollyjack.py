@@ -115,7 +115,7 @@ class TestJollyJack(unittest.TestCase):
     def test_read_unsupported_column_types(self):
          with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
-            table = get_table(n_rows = chunk_size, n_columns = n_columns, data_type = pa.int32())
+            table = get_table(n_rows = chunk_size, n_columns = n_columns, data_type = pa.bool_())
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
             pr = pq.ParquetReader()
@@ -130,7 +130,7 @@ class TestJollyJack(unittest.TestCase):
                                     , row_group_idx = 0
                                     , column_indices = range(n_columns))
 
-                self.assertTrue(f"Column 0 has unsupported data type: 1!" in str(context.exception), context.exception)
+            self.assertTrue(f"Column 0 has unsupported data type: 0!" in str(context.exception), context.exception)
 
     def test_read_fp16(self):
          with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
