@@ -17,12 +17,14 @@
 
 using arrow::Status;
 
-void ReadIntoMemory (const char *parquet_path, std::shared_ptr<parquet::FileMetaData> file_metadata
-    , void* data
+void ReadIntoMemory (const char *parquet_path
+    , std::shared_ptr<parquet::FileMetaData> file_metadata
+    , void* buffer
     , size_t buffer_size
     , size_t stride0_size
     , size_t stride1_size
-    , const std::vector<int> &row_groups, const std::vector<int> &column_indices
+    , const std::vector<int> &row_groups
+    , const std::vector<int> &column_indices
     , bool pre_buffer)
 {
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
@@ -74,7 +76,7 @@ void ReadIntoMemory (const char *parquet_path, std::shared_ptr<parquet::FileMeta
 #endif
 
       int64_t values_read = 0;
-      char *base_ptr = (char *)data;
+      char *base_ptr = (char *)buffer;
       size_t target_offset = stride0_size * target_row + stride1_size * target_column;
 
       if (buffer_size < target_offset + num_rows * stride0_size)
@@ -113,6 +115,13 @@ void ReadIntoMemory (const char *parquet_path, std::shared_ptr<parquet::FileMeta
 
         case parquet::Type::FIXED_LEN_BYTE_ARRAY:
         {
+          if (stride0_size != column_reader->descr()->type_length())
+          {
+            auto msg = std::string("Column " + std::to_string(parquet_column) + " has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(column_reader->descr()->type_length()) + 
+              ", but the target value size is " + std::to_string(stride0_size) + "!");
+            throw std::logic_error(msg);
+          }
+
           parquet::FixedLenByteArray flba;
           auto typed_reader = static_cast<parquet::FixedLenByteArrayReader *>(column_reader.get());
           values_read = 0;
