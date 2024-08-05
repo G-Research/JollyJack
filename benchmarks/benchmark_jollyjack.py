@@ -51,7 +51,7 @@ def worker_jollyjack_row_group(pre_buffer):
         pr.open(f"{parquet_path}{f}")
         
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
-        jj.read_into_numpy_f32(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
+        jj.read_into_numpy(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
                                 , row_group_idx = row_groups-1, column_indices = column_indices_to_read, pre_buffer=pre_buffer)
 
 def genrate_data(table, path, compression):
