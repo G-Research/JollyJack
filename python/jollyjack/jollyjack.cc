@@ -3,6 +3,8 @@
 #include "arrow/result.h"
 #include "arrow/util/logging.h"
 #include "arrow/util/type_fwd.h"
+#include "arrow/util/thread_pool.h"
+#include "arrow/util/parallel.h"
 #include "parquet/arrow/reader.h"
 #include "parquet/arrow/writer.h"
 #include "parquet/arrow/schema.h"
@@ -29,6 +31,7 @@ void ReadIntoMemory (const char *parquet_path
 {
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
+  bool use_threads = true;
 
   std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::OpenFile(parquet_path, false, reader_properties, file_metadata);
   
@@ -60,6 +63,9 @@ void ReadIntoMemory (const char *parquet_path
         << " stride1_size:" << stride1_size
         << std::endl;
 #endif
+
+    ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
+            [&](int i) { return readers[i]->NextBatch(batch_size, &columns[i]); });
 
     for (int target_column = 0; target_column < column_indices.size(); target_column++)
     {
