@@ -12,7 +12,7 @@ n_files = 10
 row_groups = 1
 n_columns = 7_000
 n_columns_to_read = 1_000
-chunk_size = 64
+chunk_size = 64_000
 n_rows = row_groups * chunk_size
 
 n_threads = 2
