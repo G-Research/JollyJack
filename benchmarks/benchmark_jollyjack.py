@@ -12,7 +12,7 @@ n_files = 10
 row_groups = 1
 n_columns = 7_000
 n_columns_to_read = 1_000
-chunk_size = 64_000
+chunk_size = 64
 n_rows = row_groups * chunk_size
 
 n_threads = 2
@@ -54,10 +54,12 @@ def worker_jollyjack_row_group(pre_buffer, dtype):
         jj.read_into_numpy(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
                                 , row_group_indices = [row_groups-1], column_indices = column_indices_to_read, pre_buffer=pre_buffer)
 
-def genrate_data(table, path, compression):
+def genrate_data(n_rows, n_columns, path, compression, dtype):
+
+    table = get_table(n_rows, n_columns, dtype)
 
     t = time.time()
-    print(f"writing parquet file:{path}, columns={n_columns}, row_groups={row_groups}, rows={n_rows}, compression={compression}")
+    print(f"writing parquet file:{path}, columns={n_columns}, row_groups={row_groups}, rows={n_rows}, compression={compression}, dtype={dtype}")
     
     pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, compression=compression, store_schema=False)
     parquet_size = os.stat(path).st_size
@@ -95,9 +97,8 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     
     print(f".")
     for f in range(n_files):
-        table = get_table(n_rows, n_columns, dtype)
         path = f"{parquet_path}{f}"
-        genrate_data(table = table, path = path, compression = compression)
+        genrate_data(n_rows, n_columns, path = path, compression = compression, dtype = dtype)
 
     print(f".")
     for n_threads in [1, 2]:
