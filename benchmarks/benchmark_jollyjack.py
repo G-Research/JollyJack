@@ -82,8 +82,9 @@ def measure_reading(max_workers, worker):
 
         # Submit the work
         t = time.time()
-        for i in range(0, work_items):
-            pool.submit(worker)
+        work_results = [pool.submit(worker) for i in range(0, work_items)]
+        for work_result in work_results:
+            work_result.result()
 
         pool.shutdown(wait=True)
         tt.append(time.time() - t)
@@ -107,4 +108,4 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     print(f".")
     for n_threads in [1, 2]:
         for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_numpy_f32` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_row_group(pre_buffer, dtype)):.2f} seconds")
+            print(f"`JollyJack.read_into_numpy_f32` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_row_group(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
