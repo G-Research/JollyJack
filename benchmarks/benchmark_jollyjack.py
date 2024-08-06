@@ -22,17 +22,17 @@ parquet_path = "my.parquet"
 jollyjack_numpy = None
 arrow_numpy = None
 
-def get_table():
+def get_table(n_rows, n_columns, data_type = pa.float32()):
     # Generate a random 2D array of floats using NumPy
     # Each column in the array represents a column in the final table
     data = np.random.rand(n_rows, n_columns).astype(np.float32)
 
     # Convert the NumPy array to a list of PyArrow Arrays, one for each column
-    pa_arrays = [pa.array(data[:, i]) for i in range(n_columns)]
-    schema = pa.schema([(f'column_{i}', pa.float32()) for i in range(n_columns)])
+    pa_arrays = [pa.array(data[:, i]).cast(data_type, safe = False) for i in range(n_columns)]
+    schema = pa.schema([(f'column_{i}', data_type) for i in range(n_columns)])
     # Create a PyArrow Table from the Arrays
     return pa.Table.from_arrays(pa_arrays, schema=schema)
-        
+
 def worker_arrow_row_group(use_threads, pre_buffer):
 
     for f in range(n_files):
@@ -42,9 +42,9 @@ def worker_arrow_row_group(use_threads, pre_buffer):
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
         table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
 
-def worker_jollyjack_row_group(pre_buffer):
+def worker_jollyjack_row_group(pre_buffer, dtype):
         
-    np_array = np.zeros((chunk_size, n_columns_to_read), dtype='f', order='F')
+    np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
     
     for f in range(n_files):
         pr = pq.ParquetReader()
@@ -90,11 +90,11 @@ def measure_reading(max_workers, worker):
 
     return min (tt)
 
-for compression in [None, 'snappy']:
+for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None, pa.float16())]:
     
     print(f".")
     for f in range(n_files):
-        table = get_table()
+        table = get_table(n_rows, n_columns, dtype)
         path = f"{parquet_path}{f}"
         genrate_data(table = table, path = path, compression = compression)
 
@@ -102,9 +102,9 @@ for compression in [None, 'snappy']:
     for n_threads in [1, 2]:
         for pre_buffer in [False, True]:
             for use_threads in [False, True]:
-                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_arrow_row_group(use_threads=use_threads, pre_buffer = pre_buffer)):.2f} seconds")
+                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_arrow_row_group(use_threads=use_threads, pre_buffer = pre_buffer)):.2f} seconds")
 
     print(f".")
     for n_threads in [1, 2]:
         for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_numpy_f32` n_threads:{n_threads}, pre_buffer:{pre_buffer}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_row_group(pre_buffer)):.2f} seconds")
+            print(f"`JollyJack.read_into_numpy_f32` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_row_group(pre_buffer, dtype)):.2f} seconds")
