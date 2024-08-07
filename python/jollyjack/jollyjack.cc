@@ -137,12 +137,12 @@ void ReadIntoMemory (const char *parquet_path
           }
 
           const size_t warp_size = 1024;
-          parquet::FixedLenByteArray flba [1024];
+          parquet::FixedLenByteArray flba [warp_size];
           int64_t rows_to_read = num_rows;
           auto typed_reader = static_cast<parquet::FixedLenByteArrayReader *>(column_reader.get());
 
           while (rows_to_read > 0)
-          {            
+          {
               int64_t tmp_values_read = 0;
               auto read_levels = typed_reader->ReadBatch(warp_size, nullptr, nullptr, flba, &tmp_values_read);
               if (tmp_values_read > 0)
@@ -158,14 +158,14 @@ void ReadIntoMemory (const char *parquet_path
                 memcpy(&base_ptr[target_offset + values_read * stride0_size], flba[0].ptr, tmp_values_read * stride0_size);
                 values_read += tmp_values_read;
                 rows_to_read -= tmp_values_read;
-              }            
+              }
           }
 
           break;
         }
 
         default:
-        {          
+        {
           auto msg = std::string("Column " + std::to_string(parquet_column) + " has unsupported data type: " + std::to_string(column_reader->descr()->physical_type()) + "!");
           throw std::logic_error(msg);
         }
