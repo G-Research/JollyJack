@@ -171,9 +171,7 @@ class TestJollyJack(unittest.TestCase):
                                             , row_group_indices = range(n_row_groups)
                                             , column_indices = range(n_columns))
 
-                    expected_data = pr.read_all().to_pandas().to_numpy()
-                    print (n_row_groups, n_columns, chunk_size)
-                    
+                    expected_data = pr.read_all().to_pandas().to_numpy()                    
                     self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
 if __name__ == '__main__':
