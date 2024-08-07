@@ -95,8 +95,15 @@ void ReadIntoMemory (const char *parquet_path
             throw std::logic_error(msg);
           }
 
+          int64_t rows_to_read = num_rows;
           auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader.get());
-          auto read_levels = typed_reader->ReadBatch(num_rows, nullptr, nullptr, (double *)&base_ptr[target_offset], &values_read);
+          while (rows_to_read > 0)
+          {
+            int64_t tmp_values_read = 0;
+            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (double *)&base_ptr[target_offset + values_read * stride0_size], &tmp_values_read);
+            values_read += tmp_values_read;
+            rows_to_read -= tmp_values_read;
+          }
           break;
         }
 
@@ -108,8 +115,15 @@ void ReadIntoMemory (const char *parquet_path
             throw std::logic_error(msg);
           }
 
+          int64_t rows_to_read = num_rows;
           auto typed_reader = static_cast<parquet::FloatReader *>(column_reader.get());
-          auto read_levels = typed_reader->ReadBatch(num_rows, nullptr, nullptr, (float *)&base_ptr[target_offset], &values_read);
+          while (rows_to_read > 0)
+          {
+            int64_t tmp_values_read = 0;
+            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (float *)&base_ptr[target_offset + values_read * stride0_size], &tmp_values_read);
+            values_read += tmp_values_read;
+            rows_to_read -= tmp_values_read;
+          }
           break;
         }
 
@@ -128,41 +142,24 @@ void ReadIntoMemory (const char *parquet_path
           auto typed_reader = static_cast<parquet::FixedLenByteArrayReader *>(column_reader.get());
 
           while (rows_to_read > 0)
-          {
-            if (rows_to_read > warp_size)
-            {
+          {            
               int64_t tmp_values_read = 0;
               auto read_levels = typed_reader->ReadBatch(warp_size, nullptr, nullptr, flba, &tmp_values_read);
-              if (tmp_values_read > 0 && flba[tmp_values_read - 1].ptr - flba[0].ptr == (tmp_values_read - 1) * stride0_size)
+              if (tmp_values_read > 0)
               {
-                memcpy(&base_ptr[target_offset + values_read * stride0_size], flba[0].ptr, (tmp_values_read) * stride0_size);
-                values_read += tmp_values_read;
-              }
-              else 
-              {
-                for (size_t i=0; i<tmp_values_read; i++)
+                if (flba[tmp_values_read - 1].ptr - flba[0].ptr != (tmp_values_read - 1) * stride0_size)
                 {
-                  memcpy(&base_ptr[target_offset + (values_read + i) * stride0_size], flba[i].ptr, stride0_size);
+                  // TODO(marcink)  We could copy each FLB pointed value one by one instead of throwing an exception.
+                  //                However, at the time of this implementation, non-contiguous memory is impossible, so that exception is not expected to occur anyway.
+                  auto msg = std::string("Unexpected situation, FLBA memory is not contiguous for olumn:" + std::to_string(parquet_column) + " !");
+                  throw std::logic_error(msg);
                 }
 
+                memcpy(&base_ptr[target_offset + values_read * stride0_size], flba[0].ptr, tmp_values_read * stride0_size);
                 values_read += tmp_values_read;
-              }
-
-              rows_to_read -= tmp_values_read;
-            }
-            else
-            {
-              for (size_t i=0; i<rows_to_read; i++)
-              {
-                int64_t tmp_values_read = 0;
-                auto read_levels = typed_reader->ReadBatch(1, nullptr, nullptr, flba, &tmp_values_read);
-                memcpy(&base_ptr[target_offset + values_read * stride0_size], flba[0].ptr, stride0_size);
-                values_read += tmp_values_read;
-              }
-
-              rows_to_read = 0;
-            }
-          }         
+                rows_to_read -= tmp_values_read;
+              }            
+          }
 
           break;
         }
