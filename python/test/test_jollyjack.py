@@ -142,16 +142,17 @@ class TestJollyJack(unittest.TestCase):
         
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
             for (n_row_groups, n_columns, chunk_size) in [
-                (1, 1, 1),
-                (2, 2, 1),
-                (1, 1, 2),
-                (1, 1, 10),
-                (1, 1, 100),
-                (1, 1, 1_000),
-                (1, 1, 10_000),
-                (1, 1, 100_000),
-                (1, 1, 1_000_000),
-                (1, 1, 10_000_000),
+                    (1, 1, 1),
+                    (2, 2, 1),
+                    (1, 1, 2),
+                    (1, 1, 10),
+                    (1, 1, 100),
+                    (1, 1, 1_000), 
+                    (1, 1, 10_000),
+                    (1, 1, 100_000),
+                    (1, 1, 1_000_000),
+                    (1, 1, 10_000_000),
+                    (1, 1, 10_000_001), # +1 to make sure it is not a result of multip,lication of a round number
                 ]:
                 
                 n_rows = n_row_groups * chunk_size
