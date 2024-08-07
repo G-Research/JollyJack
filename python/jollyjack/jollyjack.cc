@@ -131,8 +131,6 @@ void ReadIntoMemory (const char *parquet_path
             auto read_levels = typed_reader->ReadBatch(1, nullptr, nullptr, &flba, &tmp_values_read);
             memcpy(&base_ptr[target_offset + values_read * stride0_size], flba.ptr, stride0_size);
             values_read += tmp_values_read;
-            if (tmp_values_read != 1)
-              break;
           }
 
           break;
