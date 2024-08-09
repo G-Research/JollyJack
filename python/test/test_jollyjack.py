@@ -6,6 +6,7 @@ import palletjack as pj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
+import torch
 import os
 
 chunk_size = 3
@@ -27,6 +28,33 @@ def get_table(n_rows, n_columns, data_type = pa.float32()):
 
 class TestJollyJack(unittest.TestCase):
 
+    def test_torch(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows, n_columns)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected_data = pr.read_all(use_threads=False)
+
+            print ("rows, columns =", (n_rows, n_columns))
+            tensor = torch.zeros(n_rows, n_columns)
+            tensor = tensor.share_memory_()
+            tensor = tensor.transpose(0, 1)
+
+            jj.read_into_torch (metadata = pr.metadata
+                                    , parquet_path = path
+                                    , tensor = tensor
+                                    , row_group_indices = range(pr.metadata.num_row_groups)
+                                    , column_indices = range(pr.metadata.num_columns))
+
+            print ("tensor:\n", tensor)
+            print ("shape:", tensor.shape)
+            print ("dim:", tensor.dim())
+            print ("stride:", tensor.stride())
+            print ("element_size:", tensor.element_size())
+            
     def test_read_entire_table(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -38,7 +66,14 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all(use_threads=False)
             # Create an array of zeros
             np_array1 = np.zeros((n_rows, n_columns), dtype='f', order='F')
-
+            print ("np_array1.shape: ", np_array1.shape)
+            print ("np_array1.strides: ", np_array1.strides)
+            subset_view = np_array1[1:3, :]
+            print ("subset_view.shape: ", subset_view.shape)
+            print ("subset_view.strides: ", subset_view.strides)
+            
+            # x x x x x 
+            # x x x x x 
             row_begin = 0
             row_end = 0
             
