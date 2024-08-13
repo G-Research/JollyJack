@@ -41,7 +41,7 @@ cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_gro
     cdef cnp.ndarray cnp_array = np_array
 
     cdef void* cdata = cnp_array.data
-    cdef uint32_t cbuffer_size = (tensor.shape[0] - 1) * cstride0_size + (tensor.shape[1]) * cstride1_size
+    cdef uint32_t cbuffer_size = (tensor.shape[0]) * cstride0_size + (tensor.shape[1] - 1) * cstride1_size
 
     with nogil:
         cjollyjack.ReadIntoMemory (encoded_path.c_str(), metadata.sp_metadata
@@ -62,7 +62,7 @@ cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_
     cdef uint32_t cstride1_size = np_array.strides[1]
     cdef void* cdata = np_array.data
     cdef bool cpre_buffer = pre_buffer
-    cdef uint32_t cbuffer_size = (np_array.shape[0] - 1) * np_array.strides[0] + (np_array.shape[1]) * np_array.strides[1]
+    cdef uint32_t cbuffer_size = (np_array.shape[0]) * cstride0_size + (np_array.shape[1] - 1) * cstride1_size
 
     # Ensure the input is a 2D array
     assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"

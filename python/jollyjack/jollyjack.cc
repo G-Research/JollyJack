@@ -78,10 +78,15 @@ void ReadIntoMemory (const char *parquet_path
       int64_t values_read = 0;
       char *base_ptr = (char *)buffer;
       size_t target_offset = stride0_size * target_row + stride1_size * target_column;
+      size_t required_size = target_offset + num_rows * stride0_size;
 
       if (buffer_size < target_offset + num_rows * stride0_size)
       {
-          auto msg = std::string("Buffer overrun protection, target_row:" + std::to_string(target_row) + " target_column:" + std::to_string(target_column) );
+          auto msg = std::string("Buffer overrun protection:")          
+            + " buffer_size:" + std::to_string(buffer_size) + " required size:" + std::to_string(required_size) 
+            + ", target_row:" + std::to_string(target_row) + " target_column:" + std::to_string(target_column)  
+            + ", stride0:" + std::to_string(stride0_size) + " stride1:" + std::to_string(stride1_size);
+
           throw std::logic_error(msg);
       }
 

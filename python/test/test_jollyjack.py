@@ -29,33 +29,6 @@ def get_table(n_rows, n_columns, data_type = pa.float32()):
 
 class TestJollyJack(unittest.TestCase):
 
-    def test_torch(self):
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
-            path = os.path.join(tmpdirname, "my.parquet")
-            table = get_table(n_rows, n_columns)
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
-
-            pr = pq.ParquetReader()
-            pr.open(path)
-            expected_data = pr.read_all(use_threads=False)
-
-            print ("rows, columns =", (n_rows, n_columns))
-            tensor = torch.zeros(n_columns, n_rows)
-            tensor = tensor.share_memory_()
-            tensor = tensor.transpose(0, 1)
-
-            jj.read_into_torch (metadata = pr.metadata
-                                   , parquet_path = path
-                                   , tensor = tensor
-                                   , row_group_indices = range(pr.metadata.num_row_groups)
-                                   , column_indices = range(pr.metadata.num_columns))
-
-            print ("tensor:\n", tensor)
-            print ("shape:", tensor.shape)
-            print ("dim:", tensor.dim())
-            print ("stride:", tensor.stride())
-            print ("element_size:", tensor.element_size())
-            
     def test_read_entire_table(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -174,7 +147,7 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Column 0 has unsupported data type: 0!" in str(context.exception), context.exception)
 
-    def test_read_dtype(self):
+    def test_read_dtype_numpy(self):
         
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
             for (n_row_groups, n_columns, chunk_size) in [
@@ -200,7 +173,7 @@ class TestJollyJack(unittest.TestCase):
 
                         pr = pq.ParquetReader()
                         pr.open(path)
-                        # Create an array of zerosx
+                        # Create an empty array
                         np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
 
                         jj.read_into_numpy (metadata = pr.metadata
@@ -211,6 +184,47 @@ class TestJollyJack(unittest.TestCase):
 
                         expected_data = pr.read_all().to_pandas().to_numpy()
                         self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
+
+    def test_torch(self):
+        for dtype in [pa.float16(), pa.float32(), pa.float64()]:
+            for (n_row_groups, n_columns, chunk_size) in [
+                    (1, 1, 1),
+                    (2, 2, 1),
+                    (1, 1, 2),
+                    (1, 1, 10),
+                    (1, 1, 100),
+                    (1, 1, 1_000), 
+                    (1, 1, 10_000),
+                    (1, 1, 100_000),
+                    (1, 1, 1_000_000),
+                    (1, 1, 10_000_000),
+                    (1, 1, 10_000_001), # +1 to make sure it is not a result of multip,lication of a round number
+                ]:
+
+                with self.subTest((n_row_groups, n_columns, chunk_size, dtype)):
+                    n_rows = n_row_groups * chunk_size
+
+                    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+                        path = os.path.join(tmpdirname, "my.parquet")
+                        table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
+                        pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+
+                        pr = pq.ParquetReader()
+                        pr.open(path)
+
+                        print ("rows, columns =", (n_rows, n_columns))
+                        tensor = torch.zeros(n_columns, n_rows, dtype = dtype.to_pandas_dtype())
+                        tensor = tensor.share_memory_()
+                        tensor = tensor.transpose(0, 1)
+
+                        jj.read_into_torch (metadata = pr.metadata
+                                            , parquet_path = path
+                                            , tensor = tensor
+                                            , row_group_indices = range(pr.metadata.num_row_groups)
+                                            , column_indices = range(pr.metadata.num_columns))
+
+                        expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
+                        self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
 
 if __name__ == '__main__':
     unittest.main()
