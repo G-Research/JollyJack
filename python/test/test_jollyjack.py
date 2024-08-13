@@ -55,14 +55,7 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all(use_threads=False)
             # Create an array of zeros
             np_array1 = np.zeros((n_rows, n_columns), dtype='f', order='F')
-            print ("np_array1.shape: ", np_array1.shape)
-            print ("np_array1.strides: ", np_array1.strides)
-            subset_view = np_array1[1:3, :]
-            print ("subset_view.shape: ", subset_view.shape)
-            print ("subset_view.strides: ", subset_view.strides)
-            
-            # x x x x x 
-            # x x x x x 
+
             row_begin = 0
             row_end = 0
             
