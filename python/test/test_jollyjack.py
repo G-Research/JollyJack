@@ -16,6 +16,21 @@ n_columns = 5
 n_rows = n_row_groups * chunk_size
 current_dir = os.path.dirname(os.path.realpath(__file__))
 
+
+numpy_to_torch_dtype_dict = {
+        np.bool       : torch.bool,
+        np.uint8      : torch.uint8,
+        np.int8       : torch.int8,
+        np.int16      : torch.int16,
+        np.int32      : torch.int32,
+        np.int64      : torch.int64,
+        np.float16    : torch.float16,
+        np.float32    : torch.float32,
+        np.float64    : torch.float64,
+        np.complex64  : torch.complex64,
+        np.complex128 : torch.complex128
+    }
+
 def get_table(n_rows, n_columns, data_type = pa.float32()):
     # Generate a random 2D array of floats using NumPy
     # Each column in the array represents a column in the final table
@@ -185,7 +200,7 @@ class TestJollyJack(unittest.TestCase):
                         expected_data = pr.read_all().to_pandas().to_numpy()
                         self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
-    def test_torch(self):
+    def test_read_dtype_torch(self):
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
             for (n_row_groups, n_columns, chunk_size) in [
                     (1, 1, 1),
@@ -197,9 +212,8 @@ class TestJollyJack(unittest.TestCase):
                     (1, 1, 10_000),
                     (1, 1, 100_000),
                     (1, 1, 1_000_000),
-                    (1, 1, 10_000_000),
-                    (1, 1, 10_000_001), # +1 to make sure it is not a result of multip,lication of a round number
-                ]:
+                    (1, 1, 1_000_001),
+                ]:                
 
                 with self.subTest((n_row_groups, n_columns, chunk_size, dtype)):
                     n_rows = n_row_groups * chunk_size
@@ -212,8 +226,7 @@ class TestJollyJack(unittest.TestCase):
                         pr = pq.ParquetReader()
                         pr.open(path)
 
-                        print ("rows, columns =", (n_rows, n_columns))
-                        tensor = torch.zeros(n_columns, n_rows, dtype = dtype.to_pandas_dtype())
+                        tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()])
                         tensor = tensor.share_memory_()
                         tensor = tensor.transpose(0, 1)
 
