@@ -6,6 +6,7 @@ import palletjack as pj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
+import ctypes
 import torch
 import os
 
@@ -39,15 +40,15 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all(use_threads=False)
 
             print ("rows, columns =", (n_rows, n_columns))
-            tensor = torch.zeros(n_rows, n_columns)
+            tensor = torch.zeros(n_columns, n_rows)
             tensor = tensor.share_memory_()
             tensor = tensor.transpose(0, 1)
 
             jj.read_into_torch (metadata = pr.metadata
-                                    , parquet_path = path
-                                    , tensor = tensor
-                                    , row_group_indices = range(pr.metadata.num_row_groups)
-                                    , column_indices = range(pr.metadata.num_columns))
+                                   , parquet_path = path
+                                   , tensor = tensor
+                                   , row_group_indices = range(pr.metadata.num_row_groups)
+                                   , column_indices = range(pr.metadata.num_columns))
 
             print ("tensor:\n", tensor)
             print ("shape:", tensor.shape)
