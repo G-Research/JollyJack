@@ -219,8 +219,7 @@ class TestJollyJack(unittest.TestCase):
                         pr = pq.ParquetReader()
                         pr.open(path)
 
-                        tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()])
-                        tensor = tensor.transpose(0, 1)
+                        tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
 
                         jj.read_into_numpy (metadata = pr.metadata
                                                 , parquet_path = path

@@ -72,5 +72,35 @@ for rg in range(pr.metadata.num_row_groups):
                             , column_indices = range(pr.metadata.num_columns)
                             , pre_buffer = True)
 
+### Generating a torch tensor to read into:
+```
+import torch
+# Create a tesnsor and transpose it to get Fortran-style order
+tensor = torch.zeros(n_columns, n_rows, dtype = torch.float32).transpose(0, 1)
+```
+
+### Reading entire file into the tensor:
+```
+pr = pq.ParquetReader()
+pr.open(path)
+
+row_begin = 0
+row_end = 0
+
+for rg in range(pr.metadata.num_row_groups):
+    row_begin = row_end
+    row_end = row_begin + pr.metadata.row_group(rg).num_rows
+
+    # To define which subset of the numpy array we want read into,
+    # we need to create a view which shares underlying memory with the target numpy array
+    subset_view = np_array[row_begin:row_end, :] 
+    jj.read_into_torch (metadata = pr.metadata
+                            , parquet_path = path
+                            , tensor = tensor
+                            , row_group_indices = [rg]
+                            , column_indices = range(pr.metadata.num_columns)
+                            , pre_buffer = True)
+
+
 print(np_array)
 ```
