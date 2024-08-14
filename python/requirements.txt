@@ -2,4 +2,4 @@ pyarrow~=17.0
 pandas
 palletjack
 humanize
-numpy<2.0.0
+
