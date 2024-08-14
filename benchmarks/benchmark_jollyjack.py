@@ -5,6 +5,7 @@ import numpy as np
 import concurrent.futures
 import humanize
 import random
+import torch
 import time
 import os
 
@@ -21,6 +22,20 @@ work_items = n_threads
 parquet_path = "my.parquet"
 jollyjack_numpy = None
 arrow_numpy = None
+
+numpy_to_torch_dtype_dict = {
+        np.bool       : torch.bool,
+        np.uint8      : torch.uint8,
+        np.int8       : torch.int8,
+        np.int16      : torch.int16,
+        np.int32      : torch.int32,
+        np.int64      : torch.int64,
+        np.float16    : torch.float16,
+        np.float32    : torch.float32,
+        np.float64    : torch.float64,
+        np.complex64  : torch.complex64,
+        np.complex128 : torch.complex128
+    }
 
 def get_table(n_rows, n_columns, data_type = pa.float32()):
     # Generate a random 2D array of floats using NumPy
@@ -42,7 +57,7 @@ def worker_arrow_row_group(use_threads, pre_buffer):
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
         table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
 
-def worker_jollyjack_row_group(pre_buffer, dtype):
+def worker_jollyjack_numpy(pre_buffer, dtype):
         
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
     
@@ -52,6 +67,19 @@ def worker_jollyjack_row_group(pre_buffer, dtype):
         
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
         jj.read_into_numpy(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
+                                , row_group_indices = [row_groups-1], column_indices = column_indices_to_read, pre_buffer=pre_buffer)
+
+def worker_jollyjack_torch(pre_buffer, dtype):
+
+    tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()])
+    tensor = tensor.transpose(0, 1)
+                        
+    for f in range(n_files):
+        pr = pq.ParquetReader()
+        pr.open(f"{parquet_path}{f}")
+        
+        column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
+        jj.read_into_torch(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", tensor = tensor
                                 , row_group_indices = [row_groups-1], column_indices = column_indices_to_read, pre_buffer=pre_buffer)
 
 def genrate_data(n_rows, n_columns, path, compression, dtype):
@@ -109,4 +137,9 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     print(f".")
     for n_threads in [1, 2]:
         for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_numpy_f32` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_row_group(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+            print(f"`JollyJack.read_into_numpy` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_numpy(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+
+    print(f".")
+    for n_threads in [1, 2]:
+        for pre_buffer in [False, True]:
+            print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
