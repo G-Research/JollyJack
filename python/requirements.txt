@@ -2,4 +2,3 @@ pyarrow~=17.0
 pandas
 palletjack
 humanize
-torch==2.3.0+cpu
