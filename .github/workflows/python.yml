@@ -156,12 +156,12 @@ jobs:
           
     - name: Test with pytest
       run: |
+        python3 -m pip install -r python/requirements.txt
         python3 -m pip install pytest
         # Keep in mind that if the local and remote versions are the same, the remote version will be installed
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
-        python3 -m pip install -r python/requirements.txt
         python3 python/test/test_jollyjack.py
 
   # Virtual job that can be configured as a required check before a PR can be merged.
