@@ -221,12 +221,11 @@ class TestJollyJack(unittest.TestCase):
 
                         tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
 
-                        jj.read_into_numpy (metadata = pr.metadata
+                        jj.read_into_torch (metadata = pr.metadata
                                                 , parquet_path = path
-                                                , np_array = tensor.numpy()
+                                                , tensor = tensor
                                                 , row_group_indices = range(n_row_groups)
                                                 , column_indices = range(n_columns))
-
 
                         expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
                         self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
