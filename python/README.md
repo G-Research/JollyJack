@@ -2,7 +2,7 @@
 
 ## Features
 
-- Reading parquet files directly into numpy arrays (fp16, fp32, fp64)
+- Reading parquet files directly into numpy arrays and torch tensors (fp16, fp32, fp64)
 - Compatibility with PalletJack
 
 ## Known limitations

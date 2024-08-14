@@ -5,7 +5,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import numpy as np
 cimport numpy as cnp
-import torch
 
 from cython.operator cimport dereference as deref
 from cython.cimports.jollyjack import cjollyjack
@@ -22,6 +21,7 @@ from cpython cimport PyCapsule_GetPointer, PyCapsule_Import
 
 cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_group_indices, column_indices, pre_buffer=False):
     
+    import torch
     cdef string encoded_path = parquet_path.encode('utf8') if parquet_path is not None else "".encode('utf8')
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices = column_indices
