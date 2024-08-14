@@ -71,7 +71,7 @@ def worker_jollyjack_numpy(pre_buffer, dtype):
 
 def worker_jollyjack_torch(pre_buffer, dtype):
 
-    tensor = torch.zeros(chunk_size, n_rows, dtype = numpy_to_torch_dtype_dict[dtype]).transpose(0, 1)
+    tensor = torch.zeros(n_columns_to_read, chunk_size, dtype = numpy_to_torch_dtype_dict[dtype]).transpose(0, 1)
 
     for f in range(n_files):
         pr = pq.ParquetReader()
