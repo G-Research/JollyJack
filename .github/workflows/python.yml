@@ -162,8 +162,7 @@ jobs:
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
-        python3 -m pip install torch
-        python3 -m pip install numpy==1.26.4
+        python3 -m pip install torch torchvision torchaudio
         python3 python/test/test_jollyjack.py
 
   # Virtual job that can be configured as a required check before a PR can be merged.
