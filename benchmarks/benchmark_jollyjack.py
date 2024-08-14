@@ -9,7 +9,7 @@ import torch
 import time
 import os
 
-n_files = 9
+n_files = 10
 row_groups = 1
 n_columns = 7_000
 n_columns_to_read = 1_000
@@ -71,7 +71,7 @@ def worker_jollyjack_numpy(pre_buffer, dtype):
 
 def worker_jollyjack_torch(pre_buffer, dtype):
 
-    tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()])
+    tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype])
     tensor = tensor.transpose(0, 1)
                         
     for f in range(n_files):
