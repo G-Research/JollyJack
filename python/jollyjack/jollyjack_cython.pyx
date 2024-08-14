@@ -19,6 +19,8 @@ from cpython cimport PyCapsule_GetPointer, PyCapsule_Import
 
 cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_group_indices, column_indices, pre_buffer=False):
 
+    import torch
+
     read_into_numpy (parquet_path = parquet_path
         , metadata = metadata
         , np_array = tensor.numpy()
