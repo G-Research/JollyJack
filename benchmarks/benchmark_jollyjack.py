@@ -3,9 +3,9 @@ import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
 import concurrent.futures
+import platform
 import humanize
 import random
-import torch
 import time
 import os
 
@@ -22,20 +22,7 @@ work_items = n_threads
 parquet_path = "my.parquet"
 jollyjack_numpy = None
 arrow_numpy = None
-
-numpy_to_torch_dtype_dict = {
-        np.bool       : torch.bool,
-        np.uint8      : torch.uint8,
-        np.int8       : torch.int8,
-        np.int16      : torch.int16,
-        np.int32      : torch.int32,
-        np.int64      : torch.int64,
-        np.float16    : torch.float16,
-        np.float32    : torch.float32,
-        np.float64    : torch.float64,
-        np.complex64  : torch.complex64,
-        np.complex128 : torch.complex128
-    }
+os_name = platform.system()
 
 def get_table(n_rows, n_columns, data_type = pa.float32()):
     # Generate a random 2D array of floats using NumPy
@@ -70,6 +57,22 @@ def worker_jollyjack_numpy(pre_buffer, dtype):
                                 , row_group_indices = [row_groups-1], column_indices = column_indices_to_read, pre_buffer=pre_buffer)
 
 def worker_jollyjack_torch(pre_buffer, dtype):
+
+    import torch
+    
+    numpy_to_torch_dtype_dict = {
+            np.bool       : torch.bool,
+            np.uint8      : torch.uint8,
+            np.int8       : torch.int8,
+            np.int16      : torch.int16,
+            np.int32      : torch.int32,
+            np.int64      : torch.int64,
+            np.float16    : torch.float16,
+            np.float32    : torch.float32,
+            np.float64    : torch.float64,
+            np.complex64  : torch.complex64,
+            np.complex128 : torch.complex128
+        }
 
     tensor = torch.zeros(n_columns_to_read, chunk_size, dtype = numpy_to_torch_dtype_dict[dtype]).transpose(0, 1)
 
@@ -138,7 +141,8 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
         for pre_buffer in [False, True]:
             print(f"`JollyJack.read_into_numpy` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_numpy(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
 
-    print(f".")
-    for n_threads in [1, 2]:
-        for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+    if os_name != "Windows":
+        print(f".")
+        for n_threads in [1, 2]:
+            for pre_buffer in [False, True]:
+                print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
