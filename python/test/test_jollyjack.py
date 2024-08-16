@@ -7,7 +7,6 @@ import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
 import platform
-import torch
 import os
 
 chunk_size = 3
@@ -201,7 +200,9 @@ class TestJollyJack(unittest.TestCase):
             print("Not running on Windows because of issues with torch + numpy (https://github.com/marcin-krystianc/JollyJack/issues/15).")
             # Add your Windows-specific code here
             return
-            
+        
+        import torch
+
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
             for (n_row_groups, n_columns, chunk_size) in [
                     (1, 1, 1),
