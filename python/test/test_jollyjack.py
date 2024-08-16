@@ -6,7 +6,7 @@ import palletjack as pj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
-import ctypes
+import platform
 import torch
 import os
 
@@ -16,6 +16,7 @@ n_columns = 5
 n_rows = n_row_groups * chunk_size
 current_dir = os.path.dirname(os.path.realpath(__file__))
 
+os_name = platform.system()
 
 numpy_to_torch_dtype_dict = {
         np.bool       : torch.bool,
@@ -194,6 +195,13 @@ class TestJollyJack(unittest.TestCase):
                         self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
     def test_read_dtype_torch(self):
+        
+        if os_name == "Windows":
+            # Code specific to Windows
+            print("Not running on Windows because of issues with torch + numpy (https://github.com/marcin-krystianc/JollyJack/issues/15).")
+            # Add your Windows-specific code here
+            return
+            
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
             for (n_row_groups, n_columns, chunk_size) in [
                     (1, 1, 1),
