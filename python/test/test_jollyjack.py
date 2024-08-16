@@ -17,20 +17,6 @@ current_dir = os.path.dirname(os.path.realpath(__file__))
 
 os_name = platform.system()
 
-numpy_to_torch_dtype_dict = {
-        np.bool       : torch.bool,
-        np.uint8      : torch.uint8,
-        np.int8       : torch.int8,
-        np.int16      : torch.int16,
-        np.int32      : torch.int32,
-        np.int64      : torch.int64,
-        np.float16    : torch.float16,
-        np.float32    : torch.float32,
-        np.float64    : torch.float64,
-        np.complex64  : torch.complex64,
-        np.complex128 : torch.complex128
-    }
-
 def get_table(n_rows, n_columns, data_type = pa.float32()):
     # Generate a random 2D array of floats using NumPy
     # Each column in the array represents a column in the final table
@@ -202,6 +188,20 @@ class TestJollyJack(unittest.TestCase):
             return
         
         import torch
+
+        numpy_to_torch_dtype_dict = {
+                np.bool       : torch.bool,
+                np.uint8      : torch.uint8,
+                np.int8       : torch.int8,
+                np.int16      : torch.int16,
+                np.int32      : torch.int32,
+                np.int64      : torch.int64,
+                np.float16    : torch.float16,
+                np.float32    : torch.float32,
+                np.float64    : torch.float64,
+                np.complex64  : torch.complex64,
+                np.complex128 : torch.complex128
+            }
 
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
             for (n_row_groups, n_columns, chunk_size) in [
