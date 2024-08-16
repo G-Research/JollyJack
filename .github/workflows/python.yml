@@ -211,7 +211,6 @@ jobs:
         python3 ./benchmarks/benchmark_jollyjack.py
 
   benchmarks2:
-    needs: build
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
