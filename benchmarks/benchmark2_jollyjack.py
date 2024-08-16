@@ -7,3 +7,4 @@ import torch
 
 tensor = torch.zeros(10, 10).transpose(0, 1)
 tensor.numpy()
+print ("it works!")
