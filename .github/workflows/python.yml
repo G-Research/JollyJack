@@ -239,7 +239,8 @@ jobs:
         python3 -m pip install JollyJack
         python3 -m pip install torch torchvision torchaudio
         python3 ./benchmarks/benchmark2_jollyjack.py
-        #python3 ./python/test/test_jollyjack.py
+        python3 -m pip install JollyJack
+        python3 ./benchmarks/benchmark2_jollyjack.py
 
   publish:
     if: ${{ !github.event.repository.fork && startsWith(github.ref, 'refs/tags/v') }}
