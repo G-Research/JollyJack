@@ -31,7 +31,7 @@ jobs:
       shell: bash
       run: |
         python3 -m pip install --upgrade pip
-        python3 -m pip install torch==2.3.0+cpu -f https://download.pytorch.org/whl/torch_stable.html # minimal torch installation
+        python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
         python3 -m pip install -r requirements.txt
         python3 -m pip install flake8 pytest
 
@@ -153,7 +153,12 @@ jobs:
         pattern: dist-*
         path: dist
         merge-multiple: true
-          
+ 
+    - name: Setup torch (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+         
     - name: Test with pytest
       run: |
         python3 -m pip install -r python/requirements.txt
@@ -162,7 +167,6 @@ jobs:
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
-        python3 -m pip install torch torchvision torchaudio
         python3 python/test/test_jollyjack.py
 
   # Virtual job that can be configured as a required check before a PR can be merged.
@@ -200,50 +204,19 @@ jobs:
         path: dist
         merge-multiple: true
 
+    - name: Setup torch (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+
     - name: Run benchmarks
       run: |
-        python3 -m pip install torch==2.3.0+cpu -f https://download.pytorch.org/whl/torch_stable.html # minimal torch installation
         python3 -m pip install -r python/requirements.txt
         # Keep in mind that if the local and remote versions are the same, the remote version will be installed
         pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
         pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
         python3 ./benchmarks/benchmark_jollyjack.py
-
-  benchmarks2:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-      fail-fast: false
-
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10"
-
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        pattern: dist-*
-        path: dist
-        merge-multiple: true
-
-    - name: Setup torch
-      if: runner.os == 'Linux'
-      run: |
-        python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-    - name: Run benchmarks2
-      run: |
-        python3 -m pip install -r python/requirements.txt
-        python3 -m pip install pytest
-        # Keep in mind that if the local and remote versions are the same, the remote version will be installed
-        python3 -m pip install JollyJack
-        python3 ./benchmarks/benchmark2_jollyjack.py
-        python3 ./python/test/test_jollyjack.py
 
   publish:
     if: ${{ !github.event.repository.fork && startsWith(github.ref, 'refs/tags/v') }}
