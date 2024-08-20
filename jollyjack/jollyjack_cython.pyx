@@ -44,12 +44,12 @@ cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_
     cdef bool cuse_threads = use_threads
     cdef vector[string] ccolumn_names = [c.encode('utf8') for c in column_names]
     cdef uint32_t cbuffer_size = (np_array.shape[0]) * cstride0_size + (np_array.shape[1] - 1) * cstride1_size
-    
+
     # Ensure the input is a 2D array
     assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
 
     # Ensure the row and column indices are within the array bounds
-    
+
     assert max(ccolumn_indices.size(), ccolumn_names.size()) == np_array.shape[1], f"Requested to read {ccolumn_indices.size()} columns, but the number of columns in numpy array is {np_array.shape[1]}"
     assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran-style (column-major) order"
 
