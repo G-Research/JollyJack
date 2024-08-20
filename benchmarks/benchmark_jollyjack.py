@@ -44,7 +44,7 @@ def worker_arrow_row_group(use_threads, pre_buffer):
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
         table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
 
-def worker_jollyjack_numpy(pre_buffer, dtype):
+def worker_jollyjack_numpy(use_threads, pre_buffer, dtype):
         
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
     
@@ -54,7 +54,8 @@ def worker_jollyjack_numpy(pre_buffer, dtype):
         
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
         jj.read_into_numpy(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
-                                , row_group_indices = [row_groups-1], column_indices = column_indices_to_read, pre_buffer=pre_buffer)
+                                , row_group_indices = [row_groups-1], column_indices = column_indices_to_read
+                                , pre_buffer=pre_buffer, use_threads = use_threads)
 
 def worker_jollyjack_torch(pre_buffer, dtype):
 
@@ -139,7 +140,8 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     print(f".")
     for n_threads in [1, 2]:
         for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_numpy` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_numpy(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+            for use_threads in [False, True]:
+                print(f"`JollyJack.read_into_numpy` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
 
     if os_name != "Windows":
         print(f".")
