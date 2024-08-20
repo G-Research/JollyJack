@@ -27,7 +27,6 @@ jobs:
         python-version: "3.10"
         
     - name: Install dependencies
-      working-directory: ./python
       shell: bash
       run: |
         python3 -m pip install --upgrade pip
@@ -43,7 +42,6 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Test with pytest
-      working-directory: ./python
       run: |
         pip install --editable .
         pytest
@@ -65,7 +63,6 @@ jobs:
         python-version: "3.10"
         
     - name: Install dependencies
-      working-directory: ./python
       shell: bash
       run: |
         python3 -m pip install --upgrade pip
@@ -109,12 +106,10 @@ jobs:
 
     - name: Build sdist (Linux)
       if: runner.os == 'linux'
-      working-directory: ./python
       run: |
         python3 -m build --sdist
         
     - name: Build wheels
-      working-directory: ./python
       run: python3 -m cibuildwheel --output-dir dist
       # to supply options, put them in 'env', like:
       env:
@@ -130,7 +125,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: dist-${{ matrix.os }}
-        path: ./python/dist/*
+        path: ./dist/*
 
   test-binary:
     needs: build
@@ -161,13 +156,13 @@ jobs:
          
     - name: Test with pytest
       run: |
-        python3 -m pip install -r python/requirements.txt
+        python3 -m pip install -r requirements.txt
         python3 -m pip install pytest
         # Keep in mind that if the local and remote versions are the same, the remote version will be installed
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
-        python3 python/test/test_jollyjack.py
+        python3 test/test_jollyjack.py
 
   # Virtual job that can be configured as a required check before a PR can be merged.
   # As GitHub considers a check as successful if it is skipped, we need to check its status in
@@ -211,7 +206,7 @@ jobs:
 
     - name: Run benchmarks
       run: |
-        python3 -m pip install -r python/requirements.txt
+        python3 -m pip install -r requirements.txt
         # Keep in mind that if the local and remote versions are the same, the remote version will be installed
         pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
