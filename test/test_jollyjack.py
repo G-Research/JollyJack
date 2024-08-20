@@ -160,7 +160,7 @@ class TestJollyJack(unittest.TestCase):
                             (1, 1, 10_000_001), # +1 to make sure it is not a result of multip,lication of a round number
                         ]:
                         
-                        with self.subTest((n_row_groups, n_columns, chunk_size, dtype)):
+                        with self.subTest((n_row_groups, n_columns, chunk_size, dtype, pre_buffer, use_threads)):
                             n_rows = n_row_groups * chunk_size
                             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
                                 path = os.path.join(tmpdirname, "my.parquet")
