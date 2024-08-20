@@ -267,37 +267,58 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all().to_pandas().to_numpy()
             self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
-def test_read_torch_column_names(self):
-    
-    if os_name == "Windows":
-        # Code specific to Windows
-        print("Not running on Windows because of issues with torch + numpy (https://github.com/marcin-krystianc/JollyJack/issues/15).")
-        # Add your Windows-specific code here
-        return
+    def test_read_torch_column_names(self):
 
-    if os_name != "Windows":
-        import torch
+        if os_name == "Windows":
+            # Code specific to Windows
+            print("Not running on Windows because of issues with torch + numpy (https://github.com/marcin-krystianc/JollyJack/issues/15).")
+            # Add your Windows-specific code here
+            return
 
-    n_rows = n_row_groups * chunk_size
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
-        path = os.path.join(tmpdirname, "my.parquet")
-        table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-        pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+        if os_name != "Windows":
+            import torch
 
-        pr = pq.ParquetReader()
-        pr.open(path)
-        # Create an empty array
-        tensor = torch.zeros(n_columns, n_rows, dtype = torch.float32).transpose(0, 1)
+        n_rows = n_row_groups * chunk_size
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-        jj.read_into_torch (metadata = pr.metadata
-                                , parquet_path = path
-                                , tensor = tensor
-                                , row_group_indices = range(n_row_groups)
-                                , column_names = [f'column_{i}' for i in range(n_columns)]
-                                )
+            pr = pq.ParquetReader()
+            pr.open(path)
+            # Create an empty array
+            tensor = torch.zeros(n_columns, n_rows, dtype = torch.float32).transpose(0, 1)
 
-        expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
-        self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
+            jj.read_into_torch (metadata = pr.metadata
+                                    , parquet_path = path
+                                    , tensor = tensor
+                                    , row_group_indices = range(n_row_groups)
+                                    , column_names = [f'column_{i}' for i in range(n_columns)]
+                                    )
+
+            expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
+            self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
+
+    def test_read_invalid_column_names(self):
+        n_rows = n_row_groups * chunk_size
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            # Create an empty array
+            np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
+
+            with self.assertRaises(RuntimeError) as context:
+                jj.read_into_numpy (metadata = pr.metadata
+                                        , parquet_path = path
+                                        , np_array = np_array
+                                        , row_group_indices = range(n_row_groups)
+                                        , column_names = [f'foo_bar_{i}' for i in range(n_columns)]
+                                    )
+                self.assertTrue(f"Column 'foo_bar_0' wasn't found!" in str(context.exception), context.exception)
 
 if __name__ == '__main__':
     unittest.main()

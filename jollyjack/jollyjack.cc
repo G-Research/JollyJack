@@ -178,6 +178,13 @@ void ReadIntoMemory (const char *parquet_path
       for (auto column_name : column_names)
       {
         auto column_index = schema->ColumnIndex(column_name);
+         
+        if (column_index < 0)
+        {
+          auto msg = std::string("Column '") + column_name + "' was not found!";
+          throw std::logic_error(msg);
+        }
+
         columns.push_back(column_index);
       }
   }
