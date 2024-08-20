@@ -9,5 +9,6 @@ void ReadIntoMemory (const char *parquet_path, std::shared_ptr<parquet::FileMeta
     , size_t stride1_size
     , const std::vector<int> &row_groups
     , const std::vector<int> &column_indices
+    , const std::vector<std::string> &column_names
     , bool pre_buffer
     , bool use_threads);

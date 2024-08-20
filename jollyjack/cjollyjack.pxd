@@ -15,6 +15,7 @@ cdef extern from "jollyjack.h":
         , size_t stride1_size
         , const vector[int] row_groups
         , const vector[int] column_indices
+        , const vector[string] column_names
         , bool pre_buffer
         , bool use_threads
         ) except + nogil

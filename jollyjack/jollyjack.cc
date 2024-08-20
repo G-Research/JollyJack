@@ -161,6 +161,7 @@ void ReadIntoMemory (const char *parquet_path
     , size_t stride1_size
     , const std::vector<int> &row_groups
     , const std::vector<int> &column_indices
+    , const std::vector<std::string> &column_names
     , bool pre_buffer
     , bool use_threads)
 {
@@ -169,9 +170,21 @@ void ReadIntoMemory (const char *parquet_path
 
   std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::OpenFile(parquet_path, false, reader_properties, file_metadata);
   
+  std::vector<int> columns = column_indices;
+  if (column_names.size() > 0)
+  {
+      columns.reserve(column_names.size());
+      auto schema = file_metadata->schema();
+      for (auto column_name : column_names)
+      {
+        auto column_index = schema->ColumnIndex(column_name);
+        columns.push_back(column_index);
+      }
+  }
+
   if (pre_buffer)
   {
-    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), arrowReaderProperties.cache_options());
+    parquet_reader->PreBuffer(row_groups, columns, arrowReaderProperties.io_context(), arrowReaderProperties.cache_options());
   }
 
   int64_t target_row = 0;
@@ -186,7 +199,7 @@ void ReadIntoMemory (const char *parquet_path
         << " ReadColumnChunk rows:" << file_metadata->num_rows()
         << " metadata row_groups:" << file_metadata->num_row_groups()
         << " metadata columns:" << file_metadata->num_columns()
-        << " columns.size:" << column_indices.size()
+        << " columns.size:" << columns.size()
         << " buffer_size:" << buffer_size
         << std::endl;
 
@@ -198,7 +211,7 @@ void ReadIntoMemory (const char *parquet_path
         << std::endl;
 #endif
 
-  auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
+  auto result = ::arrow::internal::OptionalParallelFor(use_threads, columns.size(),
             [&](int target_column) { 
               return ReadColumn(target_column
                 , target_row
@@ -208,7 +221,7 @@ void ReadIntoMemory (const char *parquet_path
                 , buffer_size
                 , stride0_size
                 , stride1_size
-                , column_indices); 
+                , columns); 
               });
     
     target_row += num_rows;
