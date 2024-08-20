@@ -17,7 +17,7 @@ from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 from cpython cimport PyCapsule_GetPointer, PyCapsule_Import
 
-cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_group_indices, column_indices = None, column_names = [], pre_buffer=False, use_threads=False):
+cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False):
 
     import torch
 
@@ -33,7 +33,7 @@ cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_gro
 
     return
 
-cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = None, column_names = [], pre_buffer=False, use_threads=False):
+cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False):
     cdef string encoded_path = parquet_path.encode('utf8') if parquet_path is not None else "".encode('utf8')
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices = column_indices
@@ -49,7 +49,8 @@ cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_
     assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
 
     # Ensure the row and column indices are within the array bounds
-    assert ccolumn_indices.size() == np_array.shape[1], f"Requested to read {ccolumn_indices.size()} columns, but the number of columns in numpy array is {np_array.shape[1]}"
+    
+    assert max(ccolumn_indices.size(), ccolumn_names.size()) == np_array.shape[1], f"Requested to read {ccolumn_indices.size()} columns, but the number of columns in numpy array is {np_array.shape[1]}"
     assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran-style (column-major) order"
 
     with nogil:

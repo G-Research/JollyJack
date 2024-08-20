@@ -245,27 +245,27 @@ class TestJollyJack(unittest.TestCase):
                             expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
                             self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
 
-def test_read_numpy_column_names(self):
-    n_rows = n_row_groups * chunk_size
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
-        path = os.path.join(tmpdirname, "my.parquet")
-        table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32)
-        pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+    def test_read_numpy_column_names(self):
+        n_rows = n_row_groups * chunk_size
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-        pr = pq.ParquetReader()
-        pr.open(path)
-        # Create an empty array
-        np_array = np.zeros((n_rows, n_columns), dtype=pa.float32.to_pandas_dtype(), order='F')
+            pr = pq.ParquetReader()
+            pr.open(path)
+            # Create an empty array
+            np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
-        jj.read_into_numpy (metadata = pr.metadata
-                                , parquet_path = path
-                                , np_array = np_array
-                                , row_group_indices = range(n_row_groups)
-                                , column_names = [f'column_{i}' for i in range(n_columns)]
-                                )
+            jj.read_into_numpy (metadata = pr.metadata
+                                    , parquet_path = path
+                                    , np_array = np_array
+                                    , row_group_indices = range(n_row_groups)
+                                    , column_names = [f'column_{i}' for i in range(n_columns)]
+                                    )
 
-        expected_data = pr.read_all().to_pandas().to_numpy()
-        self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
+            expected_data = pr.read_all().to_pandas().to_numpy()
+            self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
 if __name__ == '__main__':
     unittest.main()
