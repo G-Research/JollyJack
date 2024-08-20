@@ -31,7 +31,7 @@ cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_gro
 
     return
 
-cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices, pre_buffer=False):
+cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices, pre_buffer=False, use_threads=False):
     cdef string encoded_path = parquet_path.encode('utf8') if parquet_path is not None else "".encode('utf8')
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices = column_indices
@@ -39,6 +39,7 @@ cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_
     cdef uint32_t cstride1_size = np_array.strides[1]
     cdef void* cdata = np_array.data
     cdef bool cpre_buffer = pre_buffer
+    cdef bool cuse_threads = use_threads
     cdef uint32_t cbuffer_size = (np_array.shape[0]) * cstride0_size + (np_array.shape[1] - 1) * cstride1_size
 
     # Ensure the input is a 2D array
@@ -56,7 +57,8 @@ cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_
             , cstride1_size
             , crow_group_indices
             , ccolumn_indices
-            , cpre_buffer)
+            , cpre_buffer
+            , cuse_threads)
         return
 
     return
