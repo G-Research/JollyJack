@@ -17,28 +17,21 @@
             "request": "attach",
             "program": "/bin/python3",
             "processId": "",
-            "MIMode": "gdb"
-            // ,
-            // "setupCommands": [
-            //    {
-            //        "description": "Enable pretty-printing for gdb",
-            //        "text": "-enable-pretty-printing",
-            //        "ignoreFailures": true
-            //    }
-            //]
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
         },
         {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal",
-            "python": "/usr/bin/python3",
-            "justMyCode": false
-            // ,
-            // "env": {
-            //    "LD_LIBRARY_PATH": "/usr/local/lib/"
-            //}
+            "console": "integratedTerminal"
         }
     ]
 }
