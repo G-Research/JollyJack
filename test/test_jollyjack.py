@@ -293,7 +293,8 @@ def test_read_torch_column_names(self):
                                 , parquet_path = path
                                 , tensor = tensor
                                 , row_group_indices = range(n_row_groups)
-                                , column_indices = range(n_columns))
+                                , column_names = [f'column_{i}' for i in range(n_columns)]
+                                )
 
         expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
         self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
