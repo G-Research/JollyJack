@@ -39,6 +39,7 @@ def worker_arrow_row_group(use_threads, pre_buffer):
 
     for f in range(n_files):
         pr = pq.ParquetReader()
+        pq.read_table()
         pr.open(f"{parquet_path}{f}", pre_buffer=pre_buffer)
 
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
@@ -53,7 +54,7 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype):
         pr.open(f"{parquet_path}{f}")
         
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
-        jj.read_into_numpy(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", np_array = np_array
+        jj.read_into_numpy(metadata = pr.metadata, source = f"{parquet_path}{f}", np_array = np_array
                                 , row_group_indices = [row_groups-1], column_indices = column_indices_to_read
                                 , pre_buffer=pre_buffer, use_threads = use_threads)
 

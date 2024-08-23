@@ -50,7 +50,7 @@ class TestJollyJack(unittest.TestCase):
                 row_end = row_begin + pr.metadata.row_group(rg).num_rows
                 subset_view = np_array1[row_begin:row_end, :] 
                 jj.read_into_numpy (metadata = pr.metadata
-                                       , parquet_path = path
+                                       , source = path
                                        , np_array = subset_view
                                        , row_group_indices = [rg]
                                        , column_indices = range(pr.metadata.num_columns))
@@ -59,7 +59,7 @@ class TestJollyJack(unittest.TestCase):
 
             np_array2 = np.zeros((n_rows, n_columns), dtype='f', order='F')
             jj.read_into_numpy (metadata = pr.metadata
-                                    , parquet_path = path
+                                    , source = path
                                     , np_array = np_array2
                                     , row_group_indices = range(pr.metadata.num_row_groups)
                                     , column_indices = range(pr.metadata.num_columns))
@@ -92,7 +92,7 @@ class TestJollyJack(unittest.TestCase):
                 row_end = row_begin + metadata.num_rows
                 subset_view = np_array[row_begin:row_end, :] 
                 jj.read_into_numpy (metadata = metadata
-                                       , parquet_path = path
+                                       , source = path
                                        , np_array = subset_view
                                        , row_group_indices = [0]
                                        , column_indices = column_indices)
@@ -113,7 +113,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros((chunk_size, cols), dtype='f', order='F')
 
             jj.read_into_numpy (metadata = pr.metadata
-                                    , parquet_path = path
+                                    , source = path
                                     , np_array = np_array
                                     , row_group_indices = [0]
                                     , column_indices = range(offset, offset + cols))
@@ -134,7 +134,7 @@ class TestJollyJack(unittest.TestCase):
 
             with self.assertRaises(RuntimeError) as context:
                 jj.read_into_numpy (metadata = pr.metadata
-                                    , parquet_path = path
+                                    , source = path
                                     , np_array = np_array
                                     , row_group_indices = [0]
                                     , column_indices = range(n_columns))
@@ -173,7 +173,7 @@ class TestJollyJack(unittest.TestCase):
                                 np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
 
                                 jj.read_into_numpy (metadata = pr.metadata
-                                                        , parquet_path = path
+                                                        , source = path
                                                         , np_array = np_array
                                                         , row_group_indices = range(n_row_groups)
                                                         , column_indices = range(n_columns)
@@ -237,7 +237,7 @@ class TestJollyJack(unittest.TestCase):
                             tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
 
                             jj.read_into_torch (metadata = pr.metadata
-                                                    , parquet_path = path
+                                                    , source = path
                                                     , tensor = tensor
                                                     , row_group_indices = range(n_row_groups)
                                                     , column_indices = range(n_columns))
@@ -258,7 +258,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
             jj.read_into_numpy (metadata = pr.metadata
-                                    , parquet_path = path
+                                    , source = path
                                     , np_array = np_array
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'column_{i}' for i in range(n_columns)]
@@ -290,7 +290,7 @@ class TestJollyJack(unittest.TestCase):
             tensor = torch.zeros(n_columns, n_rows, dtype = torch.float32).transpose(0, 1)
 
             jj.read_into_torch (metadata = pr.metadata
-                                    , parquet_path = path
+                                    , source = path
                                     , tensor = tensor
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'column_{i}' for i in range(n_columns)]
@@ -313,7 +313,7 @@ class TestJollyJack(unittest.TestCase):
 
             with self.assertRaises(RuntimeError) as context:
                 jj.read_into_numpy (metadata = pr.metadata
-                                        , parquet_path = path
+                                        , source = path
                                         , np_array = np_array
                                         , row_group_indices = range(n_row_groups)
                                         , column_names = [f'foo_bar_{i}' for i in range(n_columns)]
