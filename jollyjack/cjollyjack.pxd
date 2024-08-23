@@ -7,7 +7,7 @@ from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 
 cdef extern from "jollyjack.h":
-    cdef void ReadIntoMemory(const char *parquet_path
+    cdef void ReadIntoMemory(shared_ptr[CRandomAccessFile] source
         , shared_ptr[CFileMetaData] file_metadata
         , void* buffer
         , size_t buffer_size

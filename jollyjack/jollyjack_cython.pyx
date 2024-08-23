@@ -15,9 +15,11 @@ from libcpp.vector cimport vector
 from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
-from cpython cimport PyCapsule_GetPointer, PyCapsule_Import
+from pyarrow.includes.libarrow cimport *
+from pyarrow.includes.libarrow_python cimport *
+from pyarrow.lib cimport (get_reader)
 
-cpdef void read_into_torch (object source not None, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False, use_memory_map = False):
+cpdef void read_into_torch (object source, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False, use_memory_map = False):
 
     import torch
 
@@ -34,7 +36,7 @@ cpdef void read_into_torch (object source not None, tensor, row_group_indices, c
 
     return
 
-cpdef void read_into_numpy (object source not None, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads = False, use_memory_map = False):
+cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads = False, use_memory_map = False):
     """
     Read parquet data directly into numpy array
 
@@ -64,11 +66,11 @@ cpdef void read_into_numpy (object source not None, FileMetaData metadata, cnp.n
     assert max(ccolumn_indices.size(), ccolumn_names.size()) == np_array.shape[1], f"Requested to read {ccolumn_indices.size()} columns, but the number of columns in numpy array is {np_array.shape[1]}"
     assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran-style (column-major) order"
 
-    shared_ptr[CRandomAccessFile] rd_handle
-    get_reader(source, use_memory_map, &self.rd_handle)
+    cdef shared_ptr[CRandomAccessFile] rd_handle
+    get_reader(source, use_memory_map, &rd_handle)
 
     with nogil:
-        cjollyjack.ReadIntoMemory (encoded_path.c_str(), metadata.sp_metadata
+        cjollyjack.ReadIntoMemory (rd_handle, metadata.sp_metadata
             , np_array.data
             , cbuffer_size
             , cstride0_size

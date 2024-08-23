@@ -153,7 +153,7 @@ arrow::Status ReadColumn (int target_column
   return arrow::Status::OK();
 }
 
-void ReadIntoMemory (const char *parquet_path
+void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , std::shared_ptr<parquet::FileMetaData> file_metadata
     , void* buffer
     , size_t buffer_size
@@ -165,10 +165,11 @@ void ReadIntoMemory (const char *parquet_path
     , bool pre_buffer
     , bool use_threads)
 {
+  arrow::io::RandomAccessFile *random_access_file = nullptr;
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
 
-  std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::OpenFile(parquet_path, false, reader_properties, file_metadata);
+  std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::OpenFile(source, false, reader_properties, file_metadata);
   
   std::vector<int> columns = column_indices;
   if (column_names.size() > 0)
