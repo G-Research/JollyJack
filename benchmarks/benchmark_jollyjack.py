@@ -53,9 +53,13 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype):
         pr.open(f"{parquet_path}{f}")
         
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
-        jj.read_into_numpy(metadata = pr.metadata, source = f"{parquet_path}{f}", np_array = np_array
-                                , row_group_indices = [row_groups-1], column_indices = column_indices_to_read
-                                , pre_buffer=pre_buffer, use_threads = use_threads)
+        jj.read_into_numpy(source = f"{parquet_path}{f}"
+                           , metadata = pr.metadata
+                           , np_array = np_array
+                           , row_group_indices = [row_groups-1]
+                           , column_indices = column_indices_to_read
+                           , pre_buffer = pre_buffer
+                           , use_threads = use_threads)
 
 def worker_jollyjack_torch(pre_buffer, dtype):
 
@@ -82,8 +86,13 @@ def worker_jollyjack_torch(pre_buffer, dtype):
         pr.open(f"{parquet_path}{f}")
         
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
-        jj.read_into_torch(metadata = pr.metadata, parquet_path = f"{parquet_path}{f}", tensor = tensor
-                                , row_group_indices = [row_groups-1], column_indices = column_indices_to_read, pre_buffer=pre_buffer)
+        jj.read_into_torch(source = f"{parquet_path}{f}"
+                           , metadata = pr.metadata
+                           , tensor = tensor
+                           , row_group_indices = [row_groups-1]
+                           , column_indices = column_indices_to_read
+                           , pre_buffer = pre_buffer
+                           , use_threads = False)
 
 def genrate_data(n_rows, n_columns, path, compression, dtype):
 
