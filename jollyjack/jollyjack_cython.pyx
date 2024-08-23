@@ -19,11 +19,11 @@ from pyarrow.includes.libarrow cimport *
 from pyarrow.includes.libarrow_python cimport *
 from pyarrow.lib cimport (get_reader)
 
-cpdef void read_into_torch (object source, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False, use_memory_map = False):
+cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False, use_memory_map = False):
 
     import torch
 
-    read_into_numpy (parquet_path = parquet_path
+    read_into_numpy (source = source
         , metadata = metadata
         , np_array = tensor.numpy()
         , row_group_indices = row_group_indices
