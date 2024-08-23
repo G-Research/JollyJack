@@ -17,7 +17,7 @@ from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 from cpython cimport PyCapsule_GetPointer, PyCapsule_Import
 
-cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False):
+cpdef void read_into_torch (object source not None, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False, use_memory_map = False):
 
     import torch
 
@@ -29,12 +29,23 @@ cpdef void read_into_torch (parquet_path, FileMetaData metadata, tensor, row_gro
         , column_names = column_names
         , pre_buffer = pre_buffer
         , use_threads = use_threads
+        , use_memory_map = use_memory_map
     )
 
     return
 
-cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False):
-    cdef string encoded_path = parquet_path.encode('utf8') if parquet_path is not None else "".encode('utf8')
+cpdef void read_into_numpy (object source not None, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads = False, use_memory_map = False):
+    """
+    Read parquet data directly into numpy array
+
+    Parameters
+    ----------
+    source : str, pathlib.Path, pyarrow.NativeFile, or file-like object
+    use_memory_map : bool, default False
+    metadata : FileMetaData, optional
+    pre_buffer : bool, default False
+    """
+
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices = column_indices
     cdef uint32_t cstride0_size = np_array.strides[0]
@@ -52,6 +63,9 @@ cpdef void read_into_numpy (parquet_path, FileMetaData metadata, cnp.ndarray np_
 
     assert max(ccolumn_indices.size(), ccolumn_names.size()) == np_array.shape[1], f"Requested to read {ccolumn_indices.size()} columns, but the number of columns in numpy array is {np_array.shape[1]}"
     assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran-style (column-major) order"
+
+    shared_ptr[CRandomAccessFile] rd_handle
+    get_reader(source, use_memory_map, &self.rd_handle)
 
     with nogil:
         cjollyjack.ReadIntoMemory (encoded_path.c_str(), metadata.sp_metadata
