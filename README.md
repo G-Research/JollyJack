@@ -65,12 +65,12 @@ for rg in range(pr.metadata.num_row_groups):
     # To define which subset of the numpy array we want read into,
     # we need to create a view which shares underlying memory with the target numpy array
     subset_view = np_array[row_begin:row_end, :] 
-    jj.read_into_numpy (metadata = pr.metadata
-                            , parquet_path = path
-                            , np_array = subset_view
-                            , row_group_indices = [rg]
-                            , column_indices = range(pr.metadata.num_columns)
-                            , pre_buffer = True)
+    jj.read_into_numpy (source = path
+                        , metadata = pr.metadata
+                        , np_array = subset_view
+                        , row_group_indices = [rg]
+                        , column_indices = range(pr.metadata.num_columns)
+                        , pre_buffer = True)
 
 ### Generating a torch tensor to read into:
 ```
@@ -94,12 +94,12 @@ for rg in range(pr.metadata.num_row_groups):
     # To define which subset of the numpy array we want read into,
     # we need to create a view which shares underlying memory with the target numpy array
     subset_view = np_array[row_begin:row_end, :] 
-    jj.read_into_torch (metadata = pr.metadata
-                            , parquet_path = path
-                            , tensor = tensor
-                            , row_group_indices = [rg]
-                            , column_indices = range(pr.metadata.num_columns)
-                            , pre_buffer = True)
+    jj.read_into_torch (source = path
+                        , metadata = pr.metadata
+                        , tensor = tensor
+                        , row_group_indices = [rg]
+                        , column_indices = range(pr.metadata.num_columns)
+                        , pre_buffer = True)
 
 
 print(np_array)
