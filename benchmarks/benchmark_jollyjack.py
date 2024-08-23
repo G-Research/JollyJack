@@ -39,7 +39,6 @@ def worker_arrow_row_group(use_threads, pre_buffer):
 
     for f in range(n_files):
         pr = pq.ParquetReader()
-        pq.read_table()
         pr.open(f"{parquet_path}{f}", pre_buffer=pre_buffer)
 
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
