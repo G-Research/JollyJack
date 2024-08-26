@@ -119,7 +119,7 @@ class TestJollyJack(unittest.TestCase):
 
             pr = pq.ParquetReader()
             pr.open(path)
-            expected_data = pr.read_all(, column_indices = range(offset, offset + cols))
+            expected_data = pr.read_all(column_indices = range(offset, offset + cols))
             self.assertTrue(np.array_equal(np_array, expected_data))
 
     def test_read_unsupported_column_types(self):
