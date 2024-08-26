@@ -57,6 +57,9 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef bool cuse_threads = use_threads
     cdef vector[string] ccolumn_names = [c.encode('utf8') for c in column_names]
     cdef uint32_t cbuffer_size = (np_array.shape[0]) * cstride0_size + (np_array.shape[1] - 1) * cstride1_size
+    cdef shared_ptr[CFileMetaData] c_metadata
+    if metadata is not None:
+        c_metadata = metadata.sp_metadata
 
     # Ensure the input is a 2D array
     assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
@@ -70,7 +73,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     get_reader(source, use_memory_map, &rd_handle)
 
     with nogil:
-        cjollyjack.ReadIntoMemory (rd_handle, metadata.sp_metadata
+        cjollyjack.ReadIntoMemory (rd_handle
+            , c_metadata
             , np_array.data
             , cbuffer_size
             , cstride0_size

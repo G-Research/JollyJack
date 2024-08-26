@@ -37,9 +37,6 @@ class TestJollyJack(unittest.TestCase):
             table = get_table(n_rows, n_columns)
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-            pr = pq.ParquetReader()
-            pr.open(path)
-            expected_data = pr.read_all(use_threads=False)
             # Create an array of zeros
             np_array1 = np.zeros((n_rows, n_columns), dtype='f', order='F')
 
@@ -50,17 +47,20 @@ class TestJollyJack(unittest.TestCase):
                 row_begin = row_end
                 row_end = row_begin + pr.metadata.row_group(rg).num_rows
                 subset_view = np_array1[row_begin:row_end, :] 
-                jj.read_into_numpy (metadata = pr.metadata
-                                    , source = path
+                jj.read_into_numpy (source = path
+                                    , metadata = None
                                     , np_array = subset_view
                                     , row_group_indices = [rg]
                                     , column_indices = range(pr.metadata.num_columns))
 
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected_data = pr.read_all()
             self.assertTrue(np.array_equal(np_array1, expected_data))
 
             np_array2 = np.zeros((n_rows, n_columns), dtype='f', order='F')
-            jj.read_into_numpy (metadata = pr.metadata
-                                , source = path
+            jj.read_into_numpy (source = path
+                                , metadata = None
                                 , np_array = np_array2
                                 , row_group_indices = range(pr.metadata.num_row_groups)
                                 , column_indices = range(pr.metadata.num_columns))
@@ -76,9 +76,6 @@ class TestJollyJack(unittest.TestCase):
             index_path = path + '.index'
             pj.generate_metadata_index(path, index_path)
 
-            pr = pq.ParquetReader()
-            pr.open(path)
-            expected_data = pr.read_all()
             # Create an array of zeros
             np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
 
@@ -92,12 +89,15 @@ class TestJollyJack(unittest.TestCase):
                 row_begin = row_end
                 row_end = row_begin + metadata.num_rows
                 subset_view = np_array[row_begin:row_end, :] 
-                jj.read_into_numpy (metadata = metadata
-                                    , source = path
+                jj.read_into_numpy (source = path
+                                    , metadata = metadata
                                     , np_array = subset_view
                                     , row_group_indices = [0]
                                     , column_indices = column_indices)
 
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected_data = pr.read_all()
             self.assertTrue(np.array_equal(np_array, expected_data))
 
     def test_read_nonzero_column_offset(self):
@@ -106,20 +106,20 @@ class TestJollyJack(unittest.TestCase):
             table = get_table(n_rows = chunk_size, n_columns = n_columns)
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-            pr = pq.ParquetReader()
-            pr.open(path)
             # Create an array of zeros
             cols = 2
             offset = n_columns - cols
             np_array = np.zeros((chunk_size, cols), dtype='f', order='F')
 
-            jj.read_into_numpy (metadata = pr.metadata
-                                , source = path
+            jj.read_into_numpy (source = path
+                                , metadata = None
                                 , np_array = np_array
                                 , row_group_indices = [0]
                                 , column_indices = range(offset, offset + cols))
 
-            expected_data = pr.read_all(use_threads=False, column_indices = range(offset, offset + cols))
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected_data = pr.read_all(, column_indices = range(offset, offset + cols))
             self.assertTrue(np.array_equal(np_array, expected_data))
 
     def test_read_unsupported_column_types(self):
@@ -128,14 +128,12 @@ class TestJollyJack(unittest.TestCase):
             table = get_table(n_rows = chunk_size, n_columns = n_columns, data_type = pa.bool_())
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-            pr = pq.ParquetReader()
-            pr.open(path)
             # Create an array of zerosx
             np_array = np.zeros((chunk_size, n_columns), dtype='f', order='F')
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy (metadata = pr.metadata
-                                    , source = path
+                jj.read_into_numpy (source = path
+                                    , metadata = None
                                     , np_array = np_array
                                     , row_group_indices = [0]
                                     , column_indices = range(n_columns))
@@ -168,19 +166,19 @@ class TestJollyJack(unittest.TestCase):
                                 table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
                                 pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-                                pr = pq.ParquetReader()
-                                pr.open(path)
                                 # Create an empty array
                                 np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
 
                                 jj.read_into_numpy (source = path
-                                                    , metadata = pr.metadata 
+                                                    , metadata = None
                                                     , np_array = np_array
                                                     , row_group_indices = range(n_row_groups)
                                                     , column_indices = range(n_columns)
                                                     , pre_buffer = pre_buffer
                                                     , use_threads = use_threads)
 
+                                pr = pq.ParquetReader()
+                                pr.open(path)
                                 expected_data = pr.read_all().to_pandas().to_numpy()
                                 self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
@@ -231,18 +229,17 @@ class TestJollyJack(unittest.TestCase):
                             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
                             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-                            pr = pq.ParquetReader()
-                            pr.open(path)
-
                             tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
 
-                            jj.read_into_torch (metadata = pr.metadata
-                                                    , source = path
-                                                    , tensor = tensor
-                                                    , row_group_indices = range(n_row_groups)
-                                                    , column_indices = range(n_columns))
+                            jj.read_into_torch (source = path
+                                                , metadata = None
+                                                , tensor = tensor
+                                                , row_group_indices = range(n_row_groups)
+                                                , column_indices = range(n_columns))
 
-                            expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
+                            pr = pq.ParquetReader()
+                            pr.open(path)
+                            expected_data = pr.read_all().to_pandas().to_numpy()
                             self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
 
     def test_read_numpy_column_names(self):
@@ -252,18 +249,18 @@ class TestJollyJack(unittest.TestCase):
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-            pr = pq.ParquetReader()
-            pr.open(path)
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
-            jj.read_into_numpy (metadata = pr.metadata
-                                    , source = path
-                                    , np_array = np_array
-                                    , row_group_indices = range(n_row_groups)
-                                    , column_names = [f'column_{i}' for i in range(n_columns)]
-                                    )
+            jj.read_into_numpy (source = path
+                                , metadata = None
+                                , np_array = np_array
+                                , row_group_indices = range(n_row_groups)
+                                , column_names = [f'column_{i}' for i in range(n_columns)]
+                                )
 
+            pr = pq.ParquetReader()
+            pr.open(path)
             expected_data = pr.read_all().to_pandas().to_numpy()
             self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
@@ -284,19 +281,19 @@ class TestJollyJack(unittest.TestCase):
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-            pr = pq.ParquetReader()
-            pr.open(path)
             # Create an empty array
             tensor = torch.zeros(n_columns, n_rows, dtype = torch.float32).transpose(0, 1)
 
-            jj.read_into_torch (metadata = pr.metadata
-                                , source = path
+            jj.read_into_torch (source = path
+                                , metadata = None
                                 , tensor = tensor
                                 , row_group_indices = range(n_row_groups)
                                 , column_names = [f'column_{i}' for i in range(n_columns)]
                                 )
 
-            expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected_data = pr.read_all().to_pandas().to_numpy()
             self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
 
     def test_read_invalid_column_names(self):
@@ -312,8 +309,8 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy (metadata = pr.metadata
-                                    , source = path
+                jj.read_into_numpy (source = path
+                                    , metadata = None
                                     , np_array = np_array
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'foo_bar_{i}' for i in range(n_columns)]
@@ -328,20 +325,19 @@ class TestJollyJack(unittest.TestCase):
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
 
-            pr = pq.ParquetReader()
-            pr.open(path)
-
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
             with fs.LocalFileSystem().open_input_file(path) as f:
                 jj.read_into_numpy (source = f
-                                    , metadata = pr.metadata
+                                    , metadata = None
                                     , np_array = np_array
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'column_{i}' for i in range(n_columns)]
                                     )
 
+            pr = pq.ParquetReader()
+            pr.open(path)
             expected_data = pr.read_all().to_pandas().to_numpy()
             self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
