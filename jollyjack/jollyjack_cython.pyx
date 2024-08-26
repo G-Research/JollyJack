@@ -19,10 +19,26 @@ from pyarrow.includes.libarrow cimport *
 from pyarrow.includes.libarrow_python cimport *
 from pyarrow.lib cimport (get_reader)
 
+cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False, use_memory_map = False):
 
-cpdef void _read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads = True, use_memory_map = False):
+    import torch
+
+    read_into_numpy (source = source
+        , metadata = metadata
+        , np_array = tensor.numpy()
+        , row_group_indices = row_group_indices
+        , column_indices = column_indices
+        , column_names = column_names
+        , pre_buffer = pre_buffer
+        , use_threads = use_threads
+        , use_memory_map = use_memory_map
+    )
+
+    return
+
+cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads = False, use_memory_map = False):
     """
-    Read parquet data directly into a numpy array
+    Read parquet data directly into numpy array
 
     Parameters
     ----------
@@ -69,22 +85,5 @@ cpdef void _read_into_numpy (object source, FileMetaData metadata, cnp.ndarray n
             , cpre_buffer
             , cuse_threads)
         return
-
-    return
-
-cpdef void _read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
-
-    import torch
-
-    _read_into_numpy (source = source
-        , metadata = metadata
-        , np_array = tensor.numpy()
-        , row_group_indices = row_group_indices
-        , column_indices = column_indices
-        , column_names = column_names
-        , pre_buffer = pre_buffer
-        , use_threads = use_threads
-        , use_memory_map = use_memory_map
-    )
 
     return
