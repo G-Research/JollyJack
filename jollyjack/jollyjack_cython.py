@@ -15,7 +15,7 @@ def read_into_torch (source, metadata, tensor, row_group_indices, column_indices
     use_memory_map : bool, default False
     """
 
-    read_into_torch (source
+    _read_into_torch (source
                      , metadata
                      , tensor
                      , row_group_indices
@@ -45,7 +45,7 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, column_indic
     use_memory_map : bool, default False
     """
 
-    read_into_numpy (source
+    _read_into_numpy (source
                      , metadata
                      , np_array
                      , row_group_indices
