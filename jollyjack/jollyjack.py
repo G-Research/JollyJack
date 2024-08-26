@@ -1,3 +1,5 @@
+import jollyjack as jj
+
 def read_into_torch (source, metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
     """
     Read parquet data directly into a tensor.
@@ -15,7 +17,7 @@ def read_into_torch (source, metadata, tensor, row_group_indices, column_indices
     use_memory_map : bool, default False
     """
 
-    _read_into_torch (source
+    jj._read_into_torch (source
                      , metadata
                      , tensor
                      , row_group_indices
@@ -45,7 +47,7 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, column_indic
     use_memory_map : bool, default False
     """
 
-    _read_into_numpy (source
+    jj._read_into_numpy (source
                      , metadata
                      , np_array
                      , row_group_indices
