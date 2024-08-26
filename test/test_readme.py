@@ -1,9 +1,16 @@
+
+# ```
+
+## How to use:
+
 ### Generating a sample parquet file:
 # ```
 import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
+
+from pyarrow import fs
 
 chunk_size = 3
 n_row_groups = 2
@@ -16,7 +23,7 @@ pa_arrays = [pa.array(data[:, i]) for i in range(n_columns)]
 schema = pa.schema([(f'column_{i}', pa.float32()) for i in range(n_columns)])
 table =  pa.Table.from_arrays(pa_arrays, schema=schema)
 pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
-#```
+# ```
 
 ### Generating a numpy array to read into:
 # ```
@@ -44,7 +51,18 @@ for rg in range(pr.metadata.num_row_groups):
                         , np_array = subset_view
                         , row_group_indices = [rg]
                         , column_indices = range(pr.metadata.num_columns)
-                        , pre_buffer = True)
+                        , pre_buffer = True
+                        , use_threads = True)
+
+# Alternatively
+with fs.LocalFileSystem().open_input_file(path) as f:
+    jj.read_into_numpy (source = f
+                        , metadata = None
+                        , np_array = np_array
+                        , row_group_indices = range(pr.metadata.num_row_groups)
+                        , column_indices = range(pr.metadata.num_columns)
+                        , pre_buffer = True
+                        , use_threads = True)
 
 ### Generating a torch tensor to read into:
 # ```
@@ -73,8 +91,8 @@ for rg in range(pr.metadata.num_row_groups):
                         , tensor = tensor
                         , row_group_indices = [rg]
                         , column_indices = range(pr.metadata.num_columns)
-                        , pre_buffer = True)
-
+                        , pre_buffer = True
+                        , use_threads = True)
 
 print(np_array)
 # ```

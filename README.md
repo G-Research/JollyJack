@@ -8,9 +8,8 @@
 ## Known limitations
 
 - Data cannot contain null values
-- Only a local file system is supported
 
-## Required:
+## Required
 
 - pyarrow  ~= 17.0
  
@@ -30,6 +29,8 @@ import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
+
+from pyarrow import fs
 
 chunk_size = 3
 n_row_groups = 2
@@ -70,7 +71,18 @@ for rg in range(pr.metadata.num_row_groups):
                         , np_array = subset_view
                         , row_group_indices = [rg]
                         , column_indices = range(pr.metadata.num_columns)
-                        , pre_buffer = True)
+                        , pre_buffer = True
+                        , use_threads = True)
+
+# Alternatively
+with fs.LocalFileSystem().open_input_file(path) as f:
+    jj.read_into_numpy (source = f
+                        , metadata = None
+                        , np_array = np_array
+                        , row_group_indices = range(pr.metadata.num_row_groups)
+                        , column_indices = range(pr.metadata.num_columns)
+                        , pre_buffer = True
+                        , use_threads = True)
 
 ### Generating a torch tensor to read into:
 ```
@@ -99,8 +111,8 @@ for rg in range(pr.metadata.num_row_groups):
                         , tensor = tensor
                         , row_group_indices = [rg]
                         , column_indices = range(pr.metadata.num_columns)
-                        , pre_buffer = True)
-
+                        , pre_buffer = True
+                        , use_threads = True)
 
 print(np_array)
 ```
