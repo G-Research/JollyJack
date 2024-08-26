@@ -173,8 +173,8 @@ class TestJollyJack(unittest.TestCase):
                                 # Create an empty array
                                 np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
 
-                                jj.read_into_numpy (metadata = pr.metadata
-                                                    , source = input_file
+                                jj.read_into_numpy (source = path
+                                                    , metadata = pr.metadata 
                                                     , np_array = np_array
                                                     , row_group_indices = range(n_row_groups)
                                                     , column_indices = range(n_columns)
@@ -330,6 +330,7 @@ class TestJollyJack(unittest.TestCase):
 
             pr = pq.ParquetReader()
             pr.open(path)
+
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
