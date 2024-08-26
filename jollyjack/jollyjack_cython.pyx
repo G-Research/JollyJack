@@ -23,7 +23,7 @@ cpdef void _read_into_torch (object source, FileMetaData metadata, tensor, row_g
 
     import torch
 
-    read_into_numpy (source = source
+    _read_into_numpy (source = source
         , metadata = metadata
         , np_array = tensor.numpy()
         , row_group_indices = row_group_indices
