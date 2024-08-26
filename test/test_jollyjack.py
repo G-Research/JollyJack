@@ -8,6 +8,7 @@ import pyarrow as pa
 import numpy as np
 import platform
 import os
+from pyarrow import fs
 
 chunk_size = 3
 n_row_groups = 2
@@ -50,19 +51,19 @@ class TestJollyJack(unittest.TestCase):
                 row_end = row_begin + pr.metadata.row_group(rg).num_rows
                 subset_view = np_array1[row_begin:row_end, :] 
                 jj.read_into_numpy (metadata = pr.metadata
-                                       , source = path
-                                       , np_array = subset_view
-                                       , row_group_indices = [rg]
-                                       , column_indices = range(pr.metadata.num_columns))
+                                    , source = path
+                                    , np_array = subset_view
+                                    , row_group_indices = [rg]
+                                    , column_indices = range(pr.metadata.num_columns))
 
             self.assertTrue(np.array_equal(np_array1, expected_data))
 
             np_array2 = np.zeros((n_rows, n_columns), dtype='f', order='F')
             jj.read_into_numpy (metadata = pr.metadata
-                                    , source = path
-                                    , np_array = np_array2
-                                    , row_group_indices = range(pr.metadata.num_row_groups)
-                                    , column_indices = range(pr.metadata.num_columns))
+                                , source = path
+                                , np_array = np_array2
+                                , row_group_indices = range(pr.metadata.num_row_groups)
+                                , column_indices = range(pr.metadata.num_columns))
 
             self.assertTrue(np.array_equal(np_array2, expected_data))
                 
@@ -92,10 +93,10 @@ class TestJollyJack(unittest.TestCase):
                 row_end = row_begin + metadata.num_rows
                 subset_view = np_array[row_begin:row_end, :] 
                 jj.read_into_numpy (metadata = metadata
-                                       , source = path
-                                       , np_array = subset_view
-                                       , row_group_indices = [0]
-                                       , column_indices = column_indices)
+                                    , source = path
+                                    , np_array = subset_view
+                                    , row_group_indices = [0]
+                                    , column_indices = column_indices)
 
             self.assertTrue(np.array_equal(np_array, expected_data))
 
@@ -113,10 +114,10 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros((chunk_size, cols), dtype='f', order='F')
 
             jj.read_into_numpy (metadata = pr.metadata
-                                    , source = path
-                                    , np_array = np_array
-                                    , row_group_indices = [0]
-                                    , column_indices = range(offset, offset + cols))
+                                , source = path
+                                , np_array = np_array
+                                , row_group_indices = [0]
+                                , column_indices = range(offset, offset + cols))
 
             expected_data = pr.read_all(use_threads=False, column_indices = range(offset, offset + cols))
             self.assertTrue(np.array_equal(np_array, expected_data))
@@ -173,13 +174,12 @@ class TestJollyJack(unittest.TestCase):
                                 np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
 
                                 jj.read_into_numpy (metadata = pr.metadata
-                                                        , source = path
-                                                        , np_array = np_array
-                                                        , row_group_indices = range(n_row_groups)
-                                                        , column_indices = range(n_columns)
-                                                        , pre_buffer = pre_buffer
-                                                        , use_threads = use_threads
-                                                        )
+                                                    , source = input_file
+                                                    , np_array = np_array
+                                                    , row_group_indices = range(n_row_groups)
+                                                    , column_indices = range(n_columns)
+                                                    , pre_buffer = pre_buffer
+                                                    , use_threads = use_threads)
 
                                 expected_data = pr.read_all().to_pandas().to_numpy()
                                 self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
@@ -290,11 +290,11 @@ class TestJollyJack(unittest.TestCase):
             tensor = torch.zeros(n_columns, n_rows, dtype = torch.float32).transpose(0, 1)
 
             jj.read_into_torch (metadata = pr.metadata
-                                    , source = path
-                                    , tensor = tensor
-                                    , row_group_indices = range(n_row_groups)
-                                    , column_names = [f'column_{i}' for i in range(n_columns)]
-                                    )
+                                , source = path
+                                , tensor = tensor
+                                , row_group_indices = range(n_row_groups)
+                                , column_names = [f'column_{i}' for i in range(n_columns)]
+                                )
 
             expected_data = pr.read_all(use_threads=False).to_pandas().to_numpy()
             self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
@@ -313,12 +313,36 @@ class TestJollyJack(unittest.TestCase):
 
             with self.assertRaises(RuntimeError) as context:
                 jj.read_into_numpy (metadata = pr.metadata
-                                        , source = path
-                                        , np_array = np_array
-                                        , row_group_indices = range(n_row_groups)
-                                        , column_names = [f'foo_bar_{i}' for i in range(n_columns)]
+                                    , source = path
+                                    , np_array = np_array
+                                    , row_group_indices = range(n_row_groups)
+                                    , column_names = [f'foo_bar_{i}' for i in range(n_columns)]
                                     )
                 self.assertTrue(f"Column 'foo_bar_0' wasn't found!" in str(context.exception), context.exception)
+
+    def test_read_filesystem(self):
+        
+        n_rows = n_row_groups * chunk_size
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            # Create an empty array
+            np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
+
+            with fs.LocalFileSystem().open_input_file(path) as f:
+                jj.read_into_numpy (source = f
+                                    , metadata = pr.metadata
+                                    , np_array = np_array
+                                    , row_group_indices = range(n_row_groups)
+                                    , column_names = [f'column_{i}' for i in range(n_columns)]
+                                    )
+
+            expected_data = pr.read_all().to_pandas().to_numpy()
+            self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
 if __name__ == '__main__':
     unittest.main()
