@@ -63,7 +63,7 @@ class TestJollyJack(unittest.TestCase):
             jj.read_into_numpy (source = path
                                 , metadata = None
                                 , np_array = np_array2
-                                , row_group_indices = range(n_row_groups)
+                                , row_group_indices = range(pr.metadata.num_row_groups)
                                 , column_indices = range(pr.metadata.num_columns))
 
             self.assertTrue(np.array_equal(np_array2, expected_data))
@@ -83,7 +83,7 @@ class TestJollyJack(unittest.TestCase):
             row_begin = 0
             row_end = 0
 
-            for rg in range(pr.metadata.num_row_groups):
+            for rg in range(n_row_groups):
                 column_indices=list(range(n_columns))
                 metadata = pj.read_metadata(index_path, row_groups=[rg], column_indices=column_indices)
 
