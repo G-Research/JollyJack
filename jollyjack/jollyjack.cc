@@ -170,7 +170,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
 
   std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::Open(source, reader_properties, file_metadata);
-  
+  file_metadata = parquet_reader->metadata();
+
   std::vector<int> columns = column_indices;
   if (column_names.size() > 0)
   {
