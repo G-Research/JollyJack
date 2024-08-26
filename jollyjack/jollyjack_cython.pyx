@@ -36,9 +36,9 @@ cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_gr
 
     return
 
-cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads = False, use_memory_map = False):
+cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads = True, use_memory_map = False):
     """
-    Read parquet data directly into numpy array
+    Read parquet data directly into a numpy array
 
     Parameters
     ----------

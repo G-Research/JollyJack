@@ -306,6 +306,7 @@ class TestJollyJack(unittest.TestCase):
 
             pr = pq.ParquetReader()
             pr.open(path)
+
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
@@ -316,6 +317,7 @@ class TestJollyJack(unittest.TestCase):
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'foo_bar_{i}' for i in range(n_columns)]
                                     )
+
                 self.assertTrue(f"Column 'foo_bar_0' wasn't found!" in str(context.exception), context.exception)
 
     def test_read_filesystem(self):
@@ -336,7 +338,6 @@ class TestJollyJack(unittest.TestCase):
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'column_{i}' for i in range(n_columns)]
                                     )
-
             pr = pq.ParquetReader()
             pr.open(path)
             expected_data = pr.read_all().to_pandas().to_numpy()
