@@ -338,6 +338,7 @@ class TestJollyJack(unittest.TestCase):
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'column_{i}' for i in range(n_columns)]
                                     )
+
             pr = pq.ParquetReader()
             pr.open(path)
             expected_data = pr.read_all().to_pandas().to_numpy()
