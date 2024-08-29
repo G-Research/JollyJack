@@ -69,6 +69,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     assert max(ccolumn_indices.size(), ccolumn_names.size()) == np_array.shape[1], f"Requested to read {ccolumn_indices.size()} columns, but the number of columns in numpy array is {np_array.shape[1]}"
     assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran-style (column-major) order"
 
+    cdef int64_t cexpected_rows = np_array.shape[0]
     cdef shared_ptr[CRandomAccessFile] rd_handle
     get_reader(source, use_memory_map, &rd_handle)
 
@@ -83,7 +84,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , ccolumn_indices
             , ccolumn_names
             , cpre_buffer
-            , cuse_threads)
+            , cuse_threads
+            , cexpected_rows)
         return
 
     return

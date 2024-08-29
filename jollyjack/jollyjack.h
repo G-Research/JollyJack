@@ -12,4 +12,5 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<int> &column_indices
     , const std::vector<std::string> &column_names
     , bool pre_buffer
-    , bool use_threads);
+    , bool use_threads
+    , int64_t expected_rows);

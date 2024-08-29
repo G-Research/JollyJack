@@ -390,5 +390,26 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Column 0 contains null values!" in str(context.exception), context.exception)
 
+    def test_read_not_enough_rows(self):
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+
+            # Create an empty array
+            np_array = np.zeros((n_rows + 1, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
+
+            with self.assertRaises(RuntimeError) as context:
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = range(n_row_groups)
+                                    , column_names = [f'column_{i}' for i in range(n_columns)]
+                                    , use_threads = False
+                                    )
+
+            self.assertTrue(f"Expected to read {n_rows + 1} rows, but read only {n_rows}!" in str(context.exception), context.exception)
+
 if __name__ == '__main__':
     unittest.main()

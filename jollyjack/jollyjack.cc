@@ -159,7 +159,7 @@ arrow::Status ReadColumn (int target_column
   
   if (values_read != num_rows)
   {
-    auto msg = std::string("Expected to read ") + std::to_string(num_rows) + " values, but read " + std::to_string(values_read) + "!";
+    auto msg = std::string("Expected to read ") + std::to_string(num_rows) + " values, but read only " + std::to_string(values_read) + "!";
     throw std::logic_error(msg);
   }
 
@@ -176,7 +176,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<int> &column_indices
     , const std::vector<std::string> &column_names
     , bool pre_buffer
-    , bool use_threads)
+    , bool use_threads    
+    , int64_t expected_rows)
 {
   arrow::io::RandomAccessFile *random_access_file = nullptr;
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
@@ -247,5 +248,11 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
               });
     
     target_row += num_rows;
+  }
+
+  if (target_row != expected_rows)
+ {
+    auto msg = std::string("Expected to read ") + std::to_string(expected_rows) + " rows, but read only " + std::to_string(target_row) + "!";
+    throw std::logic_error(msg);
   }
 }

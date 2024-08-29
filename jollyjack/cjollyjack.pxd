@@ -18,4 +18,5 @@ cdef extern from "jollyjack.h":
         , const vector[string] column_names
         , bool pre_buffer
         , bool use_threads
+        , int64_t expected_rows
         ) except + nogil
