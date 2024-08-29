@@ -344,5 +344,26 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all().to_pandas().to_numpy()
             self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
 
+    def test_read_invalid_row_group(self):
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+
+            # Create an empty array
+            np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
+
+            with fs.LocalFileSystem().open_input_file(path) as f:
+                with self.assertRaises(RuntimeError) as context:
+                    jj.read_into_numpy (source = f
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = [n_row_groups]
+                                        , column_names = [f'column_{i}' for i in range(n_columns)]
+                                        )
+                
+                    self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
+
 if __name__ == '__main__':
     unittest.main()
