@@ -121,7 +121,7 @@ print(np_array)
 
 ## Benchmarks:
 
-| n_threads | use_threads | pre_buffer | dtype     | compression | *#arquetReader.read_row_groups | JollyJack.read_into_numpy |
+| n_threads | use_threads | pre_buffer | dtype     | compression | ParquetReader.read_row_groups | JollyJack.read_into_numpy |
 |-----------|-------------|------------|-----------|-------------|--------------------|--------------------|
 | 1         | False       | False      | float     | None        | **6.79s**          | **3.55s**          |
 | 1         | True        | False      | float     | None        | **5.17s**          | **2.32s**          |
