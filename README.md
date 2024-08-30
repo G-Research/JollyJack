@@ -83,6 +83,7 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , column_indices = range(pr.metadata.num_columns)
                         , pre_buffer = True
                         , use_threads = True)
+```
 
 ### Generating a torch tensor to read into:
 ```
