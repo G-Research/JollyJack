@@ -388,7 +388,7 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = False
                                     )
 
-            self.assertTrue(f"Column 0 contains null values!" in str(context.exception), context.exception)
+            self.assertTrue(f"Unexpected end of stream. Column 0 contains null values?" in str(context.exception), context.exception)
 
     def test_read_not_enough_rows(self):
 

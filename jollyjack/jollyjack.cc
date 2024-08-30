@@ -150,7 +150,7 @@ arrow::Status ReadColumn (int target_column
   {
     if (e.what() == std::string("Unexpected end of stream"))
     {
-      auto msg = std::string("Column " + std::to_string(parquet_column) + " contains null values!");
+      auto msg = std::string(e.what() = ". Column " + std::to_string(parquet_column) + " contains null values?");
       throw std::logic_error(msg);
     }
 
