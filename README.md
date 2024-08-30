@@ -104,5 +104,5 @@ jj.read_into_torch (source = path
                     , pre_buffer = True
                     , use_threads = True)
 
-print(np_array)
+print(tensor)
 ```
