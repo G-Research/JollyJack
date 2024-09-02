@@ -1,12 +1,9 @@
 # distutils: include_dirs = .
 
 import cython
-import pyarrow as pa
 import pyarrow.parquet as pq
-import numpy as np
 cimport numpy as cnp
 
-from cython.operator cimport dereference as deref
 from cython.cimports.jollyjack import cjollyjack
 
 from libcpp.string cimport string
@@ -15,8 +12,6 @@ from libcpp.vector cimport vector
 from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
-from pyarrow.includes.libarrow cimport *
-from pyarrow.includes.libarrow_python cimport *
 from pyarrow.lib cimport (get_reader)
 
 cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer=False, use_threads=False, use_memory_map = False):
