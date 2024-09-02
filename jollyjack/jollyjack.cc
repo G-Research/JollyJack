@@ -1,4 +1,5 @@
 
+#include "arrow/status.h"
 #include "arrow/util/parallel.h"
 #include "parquet/column_reader.h"
 
@@ -233,14 +234,14 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                 , buffer_size
                 , stride0_size
                 , stride1_size
-                , columns); 
+                , columns);
               });
     
     target_row += num_rows;
   }
 
   if (target_row != expected_rows)
- {
+  {
     auto msg = std::string("Expected to read ") + std::to_string(expected_rows) + " rows, but read only " + std::to_string(target_row) + "!";
     throw std::logic_error(msg);
   }
