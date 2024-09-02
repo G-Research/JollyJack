@@ -1,21 +1,10 @@
-#include "arrow/api.h"
-#include "arrow/io/api.h"
-#include "arrow/result.h"
-#include "arrow/util/logging.h"
-#include "arrow/util/type_fwd.h"
-#include "arrow/util/thread_pool.h"
+
 #include "arrow/util/parallel.h"
-#include "parquet/arrow/reader.h"
-#include "parquet/arrow/writer.h"
-#include "parquet/arrow/schema.h"
 #include "parquet/column_reader.h"
 
 #include "jollyjack.h"
 
 #include <iostream>
-#include <fstream>
-#include <chrono>
-#include <memory>
 
 using arrow::Status;
 
