@@ -2,8 +2,6 @@ from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.memory cimport shared_ptr
 from libcpp cimport bool
-
-from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 
 cdef extern from "jollyjack.h":
