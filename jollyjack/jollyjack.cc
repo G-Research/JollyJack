@@ -19,9 +19,9 @@ arrow::Status ReadColumn (int target_column
     , const std::vector<int> &column_indices
     )
 {
+  const auto parquet_column = column_indices[target_column];
   const auto num_rows = row_group_metadata->num_rows();
-  auto parquet_column = column_indices[target_column];
-  auto column_reader = row_group_reader->Column(parquet_column);
+  const auto column_reader = row_group_reader->Column(parquet_column);
 
 #ifdef DEBUG
       std::cerr
@@ -37,7 +37,7 @@ arrow::Status ReadColumn (int target_column
   size_t target_offset = stride0_size * target_row + stride1_size * target_column;
   size_t required_size = target_offset + num_rows * stride0_size;
 
-  if (buffer_size < target_offset + num_rows * stride0_size)
+  if (buffer_size < required_size)
   {
       auto msg = std::string("Buffer overrun protection:")          
         + " buffer_size:" + std::to_string(buffer_size) + " required size:" + std::to_string(required_size) 
@@ -48,7 +48,7 @@ arrow::Status ReadColumn (int target_column
   }
 
   try
-  {  
+  {
     switch (column_reader->descr()->physical_type())
     {
       case parquet::Type::DOUBLE:
@@ -165,7 +165,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<int> &column_indices
     , const std::vector<std::string> &column_names
     , bool pre_buffer
-    , bool use_threads    
+    , bool use_threads
     , int64_t expected_rows)
 {
   arrow::io::RandomAccessFile *random_access_file = nullptr;
