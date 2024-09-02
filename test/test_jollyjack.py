@@ -244,7 +244,7 @@ class TestJollyJack(unittest.TestCase):
                             self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
 
     def test_read_numpy_column_names(self):
-        n_rows = n_row_groups * chunk_size
+
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
@@ -276,7 +276,6 @@ class TestJollyJack(unittest.TestCase):
         if os_name != "Windows":
             import torch
 
-        n_rows = n_row_groups * chunk_size
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
@@ -297,8 +296,8 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all().to_pandas().to_numpy()
             self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
 
-    def test_read_invalid_column_names(self):
-        n_rows = n_row_groups * chunk_size
+    def test_read_invalid_column(self):
+
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
@@ -318,11 +317,20 @@ class TestJollyJack(unittest.TestCase):
                                     , column_names = [f'foo_bar_{i}' for i in range(n_columns)]
                                     )
 
-                self.assertTrue(f"Column 'foo_bar_0' wasn't found!" in str(context.exception), context.exception)
+            self.assertTrue(f"Column 'foo_bar_0' was not found!" in str(context.exception), context.exception)
+                
+            with self.assertRaises(RuntimeError) as context:
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = range(n_row_groups)
+                                    , column_indices = [i + 1 for i in range(n_columns)]
+                                    )
+
+            self.assertTrue(f"Trying to read column index {n_columns} but row group metadata has only {n_columns} columns" in str(context.exception), context.exception)
 
     def test_read_filesystem(self):
-        
-        n_rows = n_row_groups * chunk_size
+
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
@@ -354,16 +362,15 @@ class TestJollyJack(unittest.TestCase):
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
-            with fs.LocalFileSystem().open_input_file(path) as f:
-                with self.assertRaises(RuntimeError) as context:
-                    jj.read_into_numpy (source = f
-                                        , metadata = None
-                                        , np_array = np_array
-                                        , row_group_indices = [n_row_groups]
-                                        , column_names = [f'column_{i}' for i in range(n_columns)]
-                                        )
-                
-                    self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
+            with self.assertRaises(RuntimeError) as context:
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = [n_row_groups]
+                                    , column_names = [f'column_{i}' for i in range(n_columns)]
+                                    )
+            
+            self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
 
     def test_read_data_with_nulls(self):
 
@@ -385,7 +392,6 @@ class TestJollyJack(unittest.TestCase):
                                     , np_array = np_array
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'column_{i}' for i in range(n_columns)]
-                                    , use_threads = False
                                     )
 
             self.assertTrue(f"Unexpected end of stream. Column 0 contains null values?" in str(context.exception), context.exception)
@@ -406,7 +412,6 @@ class TestJollyJack(unittest.TestCase):
                                     , np_array = np_array
                                     , row_group_indices = range(n_row_groups)
                                     , column_names = [f'column_{i}' for i in range(n_columns)]
-                                    , use_threads = False
                                     )
 
             self.assertTrue(f"Expected to read {n_rows + 1} rows, but read only {n_rows}!" in str(context.exception), context.exception)
