@@ -86,6 +86,18 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , use_threads = True)
 ```
 
+### Reading columns in reversed order:
+```
+with fs.LocalFileSystem().open_input_file(path) as f:
+    jj.read_into_numpy (source = f
+                        , metadata = None
+                        , np_array = np_array
+                        , row_group_indices = range(pr.metadata.num_row_groups)
+                        , column_indices = {i:pr.metadata.num_columns - i - 1 for i in range(pr.metadata.num_columns)}
+                        , pre_buffer = True
+                        , use_threads = True)
+```
+
 ### Generating a torch tensor to read into:
 ```
 import torch
