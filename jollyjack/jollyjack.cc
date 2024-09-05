@@ -9,7 +9,7 @@
 
 using arrow::Status;
 
-arrow::Status ReadColumn (int target_column
+arrow::Status ReadColumn (int column_index
     , int64_t target_row
     , std::shared_ptr<parquet::RowGroupReader> row_group_reader
     , parquet::RowGroupMetaData *row_group_metadata
@@ -18,14 +18,19 @@ arrow::Status ReadColumn (int target_column
     , size_t stride0_size
     , size_t stride1_size
     , const std::vector<int> &column_indices
+    , const std::vector<int> &target_column_indices
     )
 {
   const auto num_rows = row_group_metadata->num_rows();
-  const auto parquet_column = column_indices[target_column];
+  const auto parquet_column = column_indices[column_index];
   const auto column_reader = row_group_reader->Column(parquet_column);
+  int target_column = column_index;
+  if (target_column_indices.size() > 0)
+    target_column = target_column_indices[column_index];
 
 #ifdef DEBUG
       std::cerr
+          << " column_index:" << column_index
           << " target_column:" << target_column
           << " parquet_column:" << parquet_column
           << " logical_type:" << column_reader->descr()->logical_type()->ToString()
@@ -162,9 +167,10 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , size_t buffer_size
     , size_t stride0_size
     , size_t stride1_size
+    , std::vector<int> column_indices
     , const std::vector<int> &row_groups
-    , const std::vector<int> &column_indices
     , const std::vector<std::string> &column_names
+    , const std::vector<int> &target_column_indices
     , bool pre_buffer
     , bool use_threads
     , int64_t expected_rows)
@@ -176,10 +182,9 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
   std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::Open(source, reader_properties, file_metadata);
   file_metadata = parquet_reader->metadata();
 
-  std::vector<int> columns = column_indices;
   if (column_names.size() > 0)
   {
-      columns.reserve(column_names.size());
+      column_indices.reserve(column_names.size());
       auto schema = file_metadata->schema();
       for (auto column_name : column_names)
       {
@@ -191,13 +196,13 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
           throw std::logic_error(msg);
         }
 
-        columns.push_back(column_index);
+        column_indices.push_back(column_index);
       }
   }
 
   if (pre_buffer)
   {
-    parquet_reader->PreBuffer(row_groups, columns, arrowReaderProperties.io_context(), arrowReaderProperties.cache_options());
+    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), arrowReaderProperties.cache_options());
   }
 
   int64_t target_row = 0;
@@ -212,7 +217,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         << " ReadColumnChunk rows:" << file_metadata->num_rows()
         << " metadata row_groups:" << file_metadata->num_row_groups()
         << " metadata columns:" << file_metadata->num_columns()
-        << " columns.size:" << columns.size()
+        << " column_indices.size:" << column_indices.size()
         << " buffer_size:" << buffer_size
         << std::endl;
 
@@ -224,7 +229,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         << std::endl;
 #endif
 
-  auto result = ::arrow::internal::OptionalParallelFor(use_threads, columns.size(),
+  auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
             [&](int target_column) { 
               return ReadColumn(target_column
                 , target_row
@@ -234,7 +239,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                 , buffer_size
                 , stride0_size
                 , stride1_size
-                , columns);
+                , column_indices
+                , target_column_indices);
               });
     
     target_row += num_rows;
