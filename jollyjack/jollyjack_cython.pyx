@@ -49,21 +49,21 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     target_column_indices = []
     if column_indices and isinstance(column_indices, dict):
         target_column_indices = column_indices.values()
-
-    if column_names and isinstance(column_names, dict):
+    elif column_indices:
+        assert len(column_indices) == np_array.shape[1], f"Requested to read {len(column_indices)} columns, but the number of columns in numpy array is {np_array.shape[1]}"
+       
+    if isinstance(column_names, dict):
         target_column_indices = column_names.values()
+    elif column_names:
+        assert len(column_names) == np_array.shape[1], f"Requested to read {len(column_names)} columns, but the number of columns in numpy array is {np_array.shape[1]}"
 
     cdef vector[int] ctarget_column_indices = target_column_indices
 
     # Ensure that only one input is set
     assert (column_indices or column_names) and (not column_indices or not column_names), f"Either column_indices or column_names needs to be set"
 
-    # Ensure the input is a 2D array
+    # Ensure the input is a 2D array, Fortran-styl
     assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
-
-    # Ensure the row and column indices are within the array bounds
-
-    assert max(ccolumn_indices.size(), ccolumn_names.size()) == np_array.shape[1], f"Requested to read {ccolumn_indices.size()} columns, but the number of columns in numpy array is {np_array.shape[1]}"
     assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran-style (column-major) order"
 
     cdef int64_t cexpected_rows = np_array.shape[0]
