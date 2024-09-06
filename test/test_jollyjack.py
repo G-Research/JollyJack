@@ -32,10 +32,10 @@ def get_table(n_rows, n_columns, data_type = pa.float32()):
 class TestJollyJack(unittest.TestCase):
 
     def test_read_entire_table(self):
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows, n_columns)
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             pr = pq.ParquetReader()
             pr.open(path)
@@ -69,10 +69,10 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(np_array2, expected_data))
                 
     def test_read_with_palletjack(self):
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows, n_columns)
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             index_path = path + '.index'
             pj.generate_metadata_index(path, index_path)
@@ -102,10 +102,10 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(np_array, expected_data))
 
     def test_read_nonzero_column_offset(self):
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = chunk_size, n_columns = n_columns)
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an array of zeros
             cols = 2
@@ -124,10 +124,10 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(np_array, expected_data))
 
     def test_read_unsupported_column_types(self):
-         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = chunk_size, n_columns = n_columns, data_type = pa.bool_())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an array of zerosx
             np_array = np.zeros((chunk_size, n_columns), dtype='f', order='F')
@@ -162,10 +162,10 @@ class TestJollyJack(unittest.TestCase):
                         
                         with self.subTest((n_row_groups, n_columns, chunk_size, dtype, pre_buffer, use_threads)):
                             n_rows = n_row_groups * chunk_size
-                            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+                            with tempfile.TemporaryDirectory() as tmpdirname:
                                 path = os.path.join(tmpdirname, "my.parquet")
                                 table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
-                                pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+                                pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
                                 # Create an empty array
                                 np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
@@ -225,10 +225,10 @@ class TestJollyJack(unittest.TestCase):
                     with self.subTest((n_row_groups, n_columns, chunk_size, dtype)):
                         n_rows = n_row_groups * chunk_size
 
-                        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+                        with tempfile.TemporaryDirectory() as tmpdirname:
                             path = os.path.join(tmpdirname, "my.parquet")
                             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
-                            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+                            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
                             tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
 
@@ -245,10 +245,10 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_numpy_column_names(self):
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -276,10 +276,10 @@ class TestJollyJack(unittest.TestCase):
         if os_name != "Windows":
             import torch
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an empty array
             tensor = torch.zeros(n_columns, n_rows, dtype = torch.float32).transpose(0, 1)
@@ -298,10 +298,10 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_invalid_column(self):
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             pr = pq.ParquetReader()
             pr.open(path)
@@ -331,10 +331,10 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_filesystem(self):
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -354,10 +354,10 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_invalid_row_group(self):
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -374,14 +374,14 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_data_with_nulls(self):
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
             df = table.to_pandas()
             df.iloc[0, 0] = np.nan
             table = pa.Table.from_pandas(df)
 
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -398,10 +398,10 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_not_enough_rows(self):
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an empty array
             np_array = np.zeros((n_rows + 1, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -418,10 +418,10 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_numpy_column_names_mapping(self):
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -451,10 +451,10 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_numpy_column_indices_mapping(self):
 
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
+        with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=True, store_schema=False, write_page_index=True)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -481,6 +481,42 @@ class TestJollyJack(unittest.TestCase):
                                     )
 
             self.assertTrue(np.array_equal(np_array, reversed_expected_data), f"\n{np_array}\n\n{reversed_expected_data}")
+
+    def test_read_large_array(self):
+
+        n_row_groups = 1
+        n_columns = 1
+        chunk_size = 1_100_000_000 # over 4GB
+        n_rows = n_row_groups * chunk_size
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+
+            # Create an array of consecutive float32 numbers with 1 million rows
+            data = np.arange(n_rows, dtype=np.float32)
+
+            # Create a PyArrow table with a single column
+            table = pa.table([data], names=['c0'])
+            data = None
+
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+            table = None
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+
+            # Create an empty array
+            np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
+
+            jj.read_into_numpy (source = path
+                                , metadata = pr.metadata
+                                , np_array = np_array
+                                , row_group_indices = range(pr.metadata.num_row_groups)
+                                , column_indices = range(n_columns)
+                                )
+
+            self.assertTrue(np.min(np_array) == 0)
+            self.assertTrue(np.max(np_array) == n_rows)
 
 if __name__ == '__main__':
     unittest.main()

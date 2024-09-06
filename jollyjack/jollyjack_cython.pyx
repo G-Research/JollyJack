@@ -35,13 +35,13 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
 
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices = column_indices.keys() if isinstance(column_indices, dict) else column_indices
-    cdef uint32_t cstride0_size = np_array.strides[0]
-    cdef uint32_t cstride1_size = np_array.strides[1]
+    cdef uint64_t cstride0_size = np_array.strides[0]
+    cdef uint64_t cstride1_size = np_array.strides[1]
     cdef void* cdata = np_array.data
     cdef bool cpre_buffer = pre_buffer
     cdef bool cuse_threads = use_threads
     cdef vector[string] ccolumn_names = [c.encode('utf8') for c in column_names]
-    cdef uint32_t cbuffer_size = (np_array.shape[0]) * cstride0_size + (np_array.shape[1] - 1) * cstride1_size
+    cdef uint64_t cbuffer_size = (np_array.shape[0]) * cstride0_size + (np_array.shape[1] - 1) * cstride1_size
     cdef shared_ptr[CFileMetaData] c_metadata
     if metadata is not None:
         c_metadata = metadata.sp_metadata
