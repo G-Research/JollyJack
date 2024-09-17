@@ -50,8 +50,7 @@ jobs:
     needs: test
     if: github.event_name == 'push' || github.event.pull_request.head.repo.id != github.event.pull_request.base.repo.id
     strategy:
-      matrix:  
-        fail-fast: false
+      matrix:
         include:
           - runner: ubuntu-latest
             arch: x64
@@ -59,6 +58,8 @@ jobs:
             arch: arm64
           - runner: windows-latest
             arch: x64
+  
+      fail-fast: false
 
     runs-on: ${{ matrix.runner }}
     steps:
