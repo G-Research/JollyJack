@@ -142,7 +142,7 @@ class TestJollyJack(unittest.TestCase):
                                     , row_group_indices = [0]
                                     , column_indices = range(n_columns))
 
-            self.assertTrue(f"Column 0 has unsupported data type: 0!" in str(context.exception), context.exception)
+            self.assertTrue(f"Column[0] ('column_0') has unsupported data type: 0!" in str(context.exception), context.exception)
                         
     def test_read_dtype_numpy(self):
         
