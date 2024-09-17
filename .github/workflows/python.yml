@@ -76,41 +76,6 @@ jobs:
         python3 -m pip install -r requirements.txt
         python3 -m pip install flake8 pytest cibuildwheel build
 
-    # Compute vcpkg triplet and root
-    - name: Compute vcpkg triplet and root
-      id: vcpkg-info
-      run: |
-        triplet="x64-"
-        case ${{ runner.os }} in
-          Linux)
-            triplet+="linux"
-            ;;
-          macOS)
-            triplet+="osx"
-            ;;
-          Windows)
-            triplet+="windows"
-            ;;
-        esac
-        echo "triplet=$triplet" >> $GITHUB_OUTPUT
-        echo "root=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_OUTPUT
-        echo "cmake_version=$(cmake --version | head -n1 | awk '{print $3}')" >> $GITHUB_OUTPUT
-        echo "runner_info=$ImageOS-$ImageVersion" >> $GITHUB_OUTPUT
-      shell: bash
-      
-    - uses: actions/github-script@v7
-      with:
-        script: |
-          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
-    - name: Upload vcpkg arrow logs
-      if: success() || failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ steps.vcpkg-info.outputs.triplet }}-vcpkg-arrow-logs
-        path: ${{ steps.vcpkg-info.outputs.root }}/buildtrees/arrow/*.log
-
     - name: Build sdist (Linux)
       if: runner.os == 'linux'
       run: |
@@ -121,7 +86,6 @@ jobs:
       # to supply options, put them in 'env', like:
       env:
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair --exclude libarrow.so.1700 --exclude libparquet.so.1700 -w {dest_dir} {wheel}
-        CIBW_ENVIRONMENT: VCPKG_TARGET_TRIPLET="${{ steps.vcpkg-info.outputs.triplet }}"
         CIBW_BUILD_VERBOSITY: 1
         # We use manylinux_2_28 for ABI compatibility with pyarrow
         # With the default image we were getting "undefined symbol: _ZNK5arrow6Status8ToStringEv" error (e.g https://github.com/ray-project/ray/issues/24566) 
