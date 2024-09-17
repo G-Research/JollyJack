@@ -403,7 +403,7 @@ class TestJollyJack(unittest.TestCase):
                                     , column_names = [f'column_{i}' for i in range(n_columns)]
                                     )
 
-            self.assertTrue(f"Unexpected end of stream. Column 0 contains null values?" in str(context.exception), context.exception)
+            self.assertTrue(f"Unexpected end of stream. Column[0] ('column_0') contains null values?" in str(context.exception), context.exception)
 
     def test_read_not_enough_rows(self):
 

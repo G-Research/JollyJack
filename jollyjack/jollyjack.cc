@@ -24,6 +24,8 @@ arrow::Status ReadColumn (int column_index
   const auto num_rows = row_group_metadata->num_rows();
   const auto parquet_column = column_indices[column_index];
   const auto column_reader = row_group_reader->Column(parquet_column);
+  const auto column_name = column_reader->descr()->name();
+
   int target_column = column_index;
   if (target_column_indices.size() > 0)
     target_column = target_column_indices[column_index];
@@ -145,7 +147,7 @@ arrow::Status ReadColumn (int column_index
   {
     if (e.what() == std::string("Unexpected end of stream"))
     {
-      auto msg = std::string(e.what() + std::string(". Column ") + std::to_string(parquet_column) + " contains null values?");
+      auto msg = std::string(e.what() + std::string(". Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') contains null values?"));
       throw std::logic_error(msg);
     }
 
