@@ -81,7 +81,7 @@ jobs:
       id: vcpkg-info
       run: |
         triplet="${{ runner.arch }}-"
-        case ${{ runner.runner }} in
+        case ${{ runner.os }} in
           Linux)
             triplet+="linux"
             ;;
