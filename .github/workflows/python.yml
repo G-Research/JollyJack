@@ -149,8 +149,7 @@ jobs:
         path: dist
         merge-multiple: true
  
-    - name: Setup torch (Linux)
-      if: runner.os == 'Linux'
+    - name: Setup torch
       run: |
         python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
          
