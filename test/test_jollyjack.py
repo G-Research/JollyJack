@@ -189,64 +189,57 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_dtype_torch(self):
         
-        if os_name == "Windows":
-            # Code specific to Windows
-            print("Not running on Windows because of issues with torch + numpy (https://github.com/marcin-krystianc/JollyJack/issues/15).")
-            # Add your Windows-specific code here
-            return
-        
-        if os_name != "Windows":
-            import torch
+        import torch
 
-            numpy_to_torch_dtype_dict = {
-                    np.bool       : torch.bool,
-                    np.uint8      : torch.uint8,
-                    np.int8       : torch.int8,
-                    np.int16      : torch.int16,
-                    np.int32      : torch.int32,
-                    np.int64      : torch.int64,
-                    np.float16    : torch.float16,
-                    np.float32    : torch.float32,
-                    np.float64    : torch.float64,
-                    np.complex64  : torch.complex64,
-                    np.complex128 : torch.complex128
-                }
+        numpy_to_torch_dtype_dict = {
+                np.bool       : torch.bool,
+                np.uint8      : torch.uint8,
+                np.int8       : torch.int8,
+                np.int16      : torch.int16,
+                np.int32      : torch.int32,
+                np.int64      : torch.int64,
+                np.float16    : torch.float16,
+                np.float32    : torch.float32,
+                np.float64    : torch.float64,
+                np.complex64  : torch.complex64,
+                np.complex128 : torch.complex128
+            }
 
-            for dtype in [pa.float16(), pa.float32(), pa.float64()]:
-                for (n_row_groups, n_columns, chunk_size) in [
-                        (1, 1, 1),
-                        (2, 2, 1),
-                        (1, 1, 2),
-                        (1, 1, 10),
-                        (1, 1, 100),
-                        (1, 1, 1_000), 
-                        (1, 1, 10_000),
-                        (1, 1, 100_000),
-                        (1, 1, 1_000_000),
-                        (1, 1, 1_000_001),
-                    ]:                
+        for dtype in [pa.float16(), pa.float32(), pa.float64()]:
+            for (n_row_groups, n_columns, chunk_size) in [
+                    (1, 1, 1),
+                    (2, 2, 1),
+                    (1, 1, 2),
+                    (1, 1, 10),
+                    (1, 1, 100),
+                    (1, 1, 1_000), 
+                    (1, 1, 10_000),
+                    (1, 1, 100_000),
+                    (1, 1, 1_000_000),
+                    (1, 1, 1_000_001),
+                ]:                
 
-                    with self.subTest((n_row_groups, n_columns, chunk_size, dtype)):
-                        n_rows = n_row_groups * chunk_size
+                with self.subTest((n_row_groups, n_columns, chunk_size, dtype)):
+                    n_rows = n_row_groups * chunk_size
 
-                        with tempfile.TemporaryDirectory() as tmpdirname:
-                            path = os.path.join(tmpdirname, "my.parquet")
-                            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
-                            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+                    with tempfile.TemporaryDirectory() as tmpdirname:
+                        path = os.path.join(tmpdirname, "my.parquet")
+                        table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
+                        pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
-                            tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
+                        tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
 
-                            jj.read_into_torch (source = path
-                                                , metadata = None
-                                                , tensor = tensor
-                                                , row_group_indices = range(n_row_groups)
-                                                , column_indices = range(n_columns))
+                        jj.read_into_torch (source = path
+                                            , metadata = None
+                                            , tensor = tensor
+                                            , row_group_indices = range(n_row_groups)
+                                            , column_indices = range(n_columns))
 
-                            pr = pq.ParquetReader()
-                            pr.open(path)
-                            expected_data = pr.read_all().to_pandas().to_numpy()
-                            self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
-                            pr.close()
+                        pr = pq.ParquetReader()
+                        pr.open(path)
+                        expected_data = pr.read_all().to_pandas().to_numpy()
+                        self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
+                        pr.close()
 
     def test_read_numpy_column_names(self):
 
@@ -273,14 +266,7 @@ class TestJollyJack(unittest.TestCase):
 
     def test_read_torch_column_names(self):
 
-        if os_name == "Windows":
-            # Code specific to Windows
-            print("Not running on Windows because of issues with torch + numpy (https://github.com/marcin-krystianc/JollyJack/issues/15).")
-            # Add your Windows-specific code here
-            return
-
-        if os_name != "Windows":
-            import torch
+        import torch
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
