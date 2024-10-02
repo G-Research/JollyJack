@@ -19,44 +19,46 @@ arrow::Status ReadColumn (int column_index
     , size_t stride1_size
     , const std::vector<int> &column_indices
     , const std::vector<int> &target_column_indices
-    )
+    ) noexcept
 {
+  std::string column_name;
   const auto num_rows = row_group_metadata->num_rows();
   const auto parquet_column = column_indices[column_index];
-  const auto column_reader = row_group_reader->Column(parquet_column);
-  const auto column_name = column_reader->descr()->name();
-
-  int target_column = column_index;
-  if (target_column_indices.size() > 0)
-    target_column = target_column_indices[column_index];
-
-#ifdef DEBUG
-      std::cerr
-          << " column_index:" << column_index
-          << " target_column:" << target_column
-          << " parquet_column:" << parquet_column
-          << " logical_type:" << column_reader->descr()->logical_type()->ToString()
-          << " physical_type:" << column_reader->descr()->physical_type()
-          << std::endl;
-#endif
-
-  int64_t values_read = 0;
-  char *base_ptr = (char *)buffer;
-  size_t target_offset = stride0_size * target_row + stride1_size * target_column;
-  size_t required_size = target_offset + num_rows * stride0_size;
-
-  if (buffer_size < required_size)
-  {
-      auto msg = std::string("Buffer overrun protection:")          
-        + " buffer_size:" + std::to_string(buffer_size) + " required size:" + std::to_string(required_size) 
-        + ", target_row:" + std::to_string(target_row) + " target_column:" + std::to_string(target_column)  
-        + ", stride0:" + std::to_string(stride0_size) + " stride1:" + std::to_string(stride1_size);
-
-      throw std::logic_error(msg);
-  }
-
+  
   try
   {
+    const auto column_reader = row_group_reader->Column(parquet_column);
+    column_name = column_reader->descr()->name();
+
+    int target_column = column_index;
+    if (target_column_indices.size() > 0)
+      target_column = target_column_indices[column_index];
+
+    #ifdef DEBUG
+        std::cerr
+            << " column_index:" << column_index
+            << " target_column:" << target_column
+            << " parquet_column:" << parquet_column
+            << " logical_type:" << column_reader->descr()->logical_type()->ToString()
+            << " physical_type:" << column_reader->descr()->physical_type()
+            << std::endl;
+    #endif
+
+    int64_t values_read = 0;
+    char *base_ptr = (char *)buffer;
+    size_t target_offset = stride0_size * target_row + stride1_size * target_column;
+    size_t required_size = target_offset + num_rows * stride0_size;
+
+    if (buffer_size < required_size)
+    {
+        auto msg = std::string("Buffer overrun protection:")          
+          + " buffer_size:" + std::to_string(buffer_size) + " required size:" + std::to_string(required_size) 
+          + ", target_row:" + std::to_string(target_row) + " target_column:" + std::to_string(target_column)  
+          + ", stride0:" + std::to_string(stride0_size) + " stride1:" + std::to_string(stride1_size);
+
+        return arrow::Status::Invalid(msg);
+    }
+
     switch (column_reader->descr()->physical_type())
     {
       case parquet::Type::DOUBLE:
@@ -64,7 +66,7 @@ arrow::Status ReadColumn (int column_index
         if (stride0_size != 8)
         {
           auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has DOUBLE data type, but the target value size is " + std::to_string(stride0_size) + "!");
-          throw std::logic_error(msg);
+          return arrow::Status::Invalid(msg);
         }
 
         int64_t rows_to_read = num_rows;
@@ -84,7 +86,7 @@ arrow::Status ReadColumn (int column_index
         if (stride0_size != 4)
         {
           auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FLOAT data type, but the target value size is " + std::to_string(stride0_size) + "!");
-          throw std::logic_error(msg);
+          return arrow::Status::Invalid(msg);
         }
 
         int64_t rows_to_read = num_rows;
@@ -105,7 +107,7 @@ arrow::Status ReadColumn (int column_index
         {
           auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(column_reader->descr()->type_length()) + 
             ", but the target value size is " + std::to_string(stride0_size) + "!");
-          throw std::logic_error(msg);
+          return arrow::Status::Invalid(msg);
         }
 
         const int64_t warp_size = 1024;
@@ -124,7 +126,7 @@ arrow::Status ReadColumn (int column_index
                 // TODO(marcink)  We could copy each FLB pointed value one by one instead of throwing an exception.
                 //                However, at the time of this implementation, non-contiguous memory is impossible, so that exception is not expected to occur anyway.
                 auto msg = std::string("Unexpected, FLBA memory is not contiguous when reading olumn:" + std::to_string(parquet_column) + " !");
-                throw std::logic_error(msg);
+                return arrow::Status::Invalid(msg);
               }
 
               memcpy(&base_ptr[target_offset + values_read * stride0_size], flba[0].ptr, tmp_values_read * stride0_size);
@@ -139,8 +141,14 @@ arrow::Status ReadColumn (int column_index
       default:
       {
         auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has unsupported data type: " + std::to_string(column_reader->descr()->physical_type()) + "!");
-        throw std::logic_error(msg);
+        return arrow::Status::Invalid(msg);
       }
+    }
+
+    if (values_read != num_rows)
+    {
+      auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "'): Expected to read ") + std::to_string(num_rows) + " values, but read only " + std::to_string(values_read) + "!";
+      return arrow::Status::Invalid(msg);
     }
   }
   catch(const parquet::ParquetException& e)
@@ -148,16 +156,10 @@ arrow::Status ReadColumn (int column_index
     if (e.what() == std::string("Unexpected end of stream"))
     {
       auto msg = std::string(e.what() + std::string(". Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') contains null values?"));
-      throw std::logic_error(msg);
+      return arrow::Status::Invalid(msg);
     }
 
-    throw;
-  }
-  
-  if (values_read != num_rows)
-  {
-    auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "'): Expected to read ") + std::to_string(num_rows) + " values, but read only " + std::to_string(values_read) + "!";
-    throw std::logic_error(msg);
+    return arrow::Status::Invalid(e.what());
   }
 
   return arrow::Status::OK();
@@ -244,7 +246,10 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                 , column_indices
                 , target_column_indices);
               });
-    
+    if (result != arrow::Status::OK())
+    {
+      throw std::logic_error(result.message());
+    }
     target_row += num_rows;
   }
 
