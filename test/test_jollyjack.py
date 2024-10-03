@@ -179,7 +179,7 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
 
-        self.assertTrue(f"Column[0] ('column_0') has unsupported data type: 0!" in str(context.exception), context.exception)
+            self.assertTrue(f"Column[0] ('column_0') has unsupported data type: 0!" in str(context.exception), context.exception)
                 
     def test_read_dtype_numpy(self):
         
@@ -366,7 +366,11 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
 
-            self.assertTrue(f"Trying to read column index {n_columns} but row group metadata has only {n_columns} columns" in str(context.exception), context.exception)
+            if pre_buffer:                
+                self.assertTrue(f"The file only has {n_columns} columns, requested metadata for column: {n_columns}" in str(context.exception), context.exception)
+            else:
+                self.assertTrue(f"Trying to read column index {n_columns} but row group metadata has only {n_columns} columns" in str(context.exception), context.exception)
+
             pr.close()
 
     @for_each_parameter()
@@ -416,8 +420,11 @@ class TestJollyJack(unittest.TestCase):
                                     , pre_buffer = pre_buffer
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
-    
-        self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
+
+            if pre_buffer:                
+                self.assertTrue(f"The file only has {n_row_groups} row groups, requested metadata for row group: {n_row_groups}" in str(context.exception), context.exception)
+            else:
+                self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
 
     @for_each_parameter()
     def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map):
