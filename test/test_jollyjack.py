@@ -180,9 +180,9 @@ class TestJollyJack(unittest.TestCase):
                                     , use_memory_map = use_memory_map)
 
             self.assertTrue(f"Column[0] ('column_0') has unsupported data type: 0!" in str(context.exception), context.exception)
-                
+
     def test_read_dtype_numpy(self):
-        
+
         for pre_buffer in [False, True]:
             for use_threads in [False, True]:
                 for dtype in [pa.float16(), pa.float32(), pa.float64()]:
@@ -225,8 +225,6 @@ class TestJollyJack(unittest.TestCase):
                                 pr.close()
 
     def test_read_dtype_torch(self):
-        
-        import torch
 
         numpy_to_torch_dtype_dict = {
                 np.bool       : torch.bool,
@@ -338,9 +336,6 @@ class TestJollyJack(unittest.TestCase):
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
-            pr = pq.ParquetReader()
-            pr.open(path)
-
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
 
@@ -366,12 +361,10 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
 
-            if pre_buffer:                
+            if pre_buffer:
                 self.assertTrue(f"The file only has {n_columns} columns, requested metadata for column: {n_columns}" in str(context.exception), context.exception)
             else:
                 self.assertTrue(f"Trying to read column index {n_columns} but row group metadata has only {n_columns} columns" in str(context.exception), context.exception)
-
-            pr.close()
 
     @for_each_parameter()
     def test_read_filesystem(self, pre_buffer, use_threads, use_memory_map):
@@ -421,7 +414,7 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
 
-            if pre_buffer:                
+            if pre_buffer:
                 self.assertTrue(f"The file only has {n_row_groups} row groups, requested metadata for row group: {n_row_groups}" in str(context.exception), context.exception)
             else:
                 self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
@@ -553,7 +546,7 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(np.array_equal(np_array, reversed_expected_data), f"\n{np_array}\n\n{reversed_expected_data}")
             pr.close()
-            
+
     def test_read_large_array(self):
 
         n_row_groups = 1
