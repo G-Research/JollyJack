@@ -56,7 +56,7 @@ arrow::Status ReadColumn (int column_index
           + ", target_row:" + std::to_string(target_row) + " target_column:" + std::to_string(target_column)  
           + ", stride0:" + std::to_string(stride0_size) + " stride1:" + std::to_string(stride1_size);
 
-        return arrow::Status::Invalid(msg);
+        return arrow::Status::UnknownError(msg);
     }
 
     switch (column_reader->descr()->physical_type())
@@ -66,7 +66,7 @@ arrow::Status ReadColumn (int column_index
         if (stride0_size != 8)
         {
           auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has DOUBLE data type, but the target value size is " + std::to_string(stride0_size) + "!");
-          return arrow::Status::Invalid(msg);
+          return arrow::Status::UnknownError(msg);
         }
 
         int64_t rows_to_read = num_rows;
@@ -86,7 +86,7 @@ arrow::Status ReadColumn (int column_index
         if (stride0_size != 4)
         {
           auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FLOAT data type, but the target value size is " + std::to_string(stride0_size) + "!");
-          return arrow::Status::Invalid(msg);
+          return arrow::Status::UnknownError(msg);
         }
 
         int64_t rows_to_read = num_rows;
@@ -107,7 +107,7 @@ arrow::Status ReadColumn (int column_index
         {
           auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(column_reader->descr()->type_length()) + 
             ", but the target value size is " + std::to_string(stride0_size) + "!");
-          return arrow::Status::Invalid(msg);
+          return arrow::Status::UnknownError(msg);
         }
 
         const int64_t warp_size = 1024;
@@ -126,7 +126,7 @@ arrow::Status ReadColumn (int column_index
                 // TODO(marcink)  We could copy each FLB pointed value one by one instead of throwing an exception.
                 //                However, at the time of this implementation, non-contiguous memory is impossible, so that exception is not expected to occur anyway.
                 auto msg = std::string("Unexpected, FLBA memory is not contiguous when reading olumn:" + std::to_string(parquet_column) + " !");
-                return arrow::Status::Invalid(msg);
+                return arrow::Status::UnknownError(msg);
               }
 
               memcpy(&base_ptr[target_offset + values_read * stride0_size], flba[0].ptr, tmp_values_read * stride0_size);
@@ -141,14 +141,14 @@ arrow::Status ReadColumn (int column_index
       default:
       {
         auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has unsupported data type: " + std::to_string(column_reader->descr()->physical_type()) + "!");
-        return arrow::Status::Invalid(msg);
+        return arrow::Status::UnknownError(msg);
       }
     }
 
     if (values_read != num_rows)
     {
       auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "'): Expected to read ") + std::to_string(num_rows) + " values, but read only " + std::to_string(values_read) + "!";
-      return arrow::Status::Invalid(msg);
+      return arrow::Status::UnknownError(msg);
     }
   }
   catch(const parquet::ParquetException& e)
@@ -156,10 +156,10 @@ arrow::Status ReadColumn (int column_index
     if (e.what() == std::string("Unexpected end of stream"))
     {
       auto msg = std::string(e.what() + std::string(". Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') contains null values?"));
-      return arrow::Status::Invalid(msg);
+      return arrow::Status::UnknownError(msg);
     }
 
-    return arrow::Status::Invalid(e.what());
+    return arrow::Status::UnknownError(e.what());
   }
 
   return arrow::Status::OK();
