@@ -250,6 +250,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     {
       throw std::logic_error(result.message());
     }
+
     target_row += num_rows;
   }
 
