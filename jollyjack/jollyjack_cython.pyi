@@ -23,6 +23,13 @@ def read_into_torch (source, metadata, tensor, row_group_indices, column_indices
     pre_buffer : bool, default False
     use_threads : bool, default True
     use_memory_map : bool, default False
+
+    Notes:
+    -----
+    Either column_indices or column_names must be provided, but not both.
+    When using an iterable of tuples for column_indices or column_names, 
+    each tuple should contain exactly two elements: the source column (index or name) 
+    and the target column index in the numpy array.
     """
 
     jj._read_into_torch (source
@@ -61,6 +68,13 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, column_indic
     pre_buffer : bool, default False
     use_threads : bool, default True
     use_memory_map : bool, default False
+
+    Notes:
+    -----
+    Either column_indices or column_names must be provided, but not both.
+    When using an iterable of tuples for column_indices or column_names, 
+    each tuple should contain exactly two elements: the source column (index or name) 
+    and the target column index in the numpy array.
     """
 
     jj._read_into_numpy (source
