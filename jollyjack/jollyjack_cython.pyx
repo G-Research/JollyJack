@@ -13,6 +13,11 @@ from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 from pyarrow.lib cimport (get_reader)
+from collections.abc import Iterable
+
+def is_iterable_of_iterables(obj):
+    return isinstance(obj, Iterable) and all(isinstance(item, Iterable) for item in obj)
+
 
 cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
 
@@ -50,6 +55,9 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     if column_indices and isinstance(column_indices, dict):
         ccolumn_indices = column_indices.keys()
         target_column_indices = column_indices.values()
+    elif column_indices and is_iterable_of_iterables(column_indices):
+        ccolumn_indices = [item[0] for item in column_indices]
+        target_column_indices = [item[1] for item in column_indices]
     elif column_indices:
         ccolumn_indices = column_indices
         assert len(column_indices) == np_array.shape[1], f"Requested to read {len(column_indices)} columns, but the number of columns in numpy array is {np_array.shape[1]}"
@@ -88,4 +96,3 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cexpected_rows)
         return
 
-    return
