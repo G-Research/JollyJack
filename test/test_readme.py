@@ -50,9 +50,7 @@ for rg in range(pr.metadata.num_row_groups):
                         , metadata = pr.metadata
                         , np_array = subset_view
                         , row_group_indices = [rg]
-                        , column_indices = range(pr.metadata.num_columns)
-                        , pre_buffer = True
-                        , use_threads = True)
+                        , column_indices = range(pr.metadata.num_columns))
 
 # Alternatively
 with fs.LocalFileSystem().open_input_file(path) as f:
@@ -60,9 +58,7 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , metadata = None
                         , np_array = np_array
                         , row_group_indices = range(pr.metadata.num_row_groups)
-                        , column_indices = range(pr.metadata.num_columns)
-                        , pre_buffer = True
-                        , use_threads = True)
+                        , column_indices = range(pr.metadata.num_columns))
 
 ### Reading columns in reversed order:
 #```
@@ -71,9 +67,17 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , metadata = None
                         , np_array = np_array
                         , row_group_indices = range(pr.metadata.num_row_groups)
-                        , column_indices = {i:pr.metadata.num_columns - i - 1 for i in range(pr.metadata.num_columns)}
-                        , pre_buffer = True
-                        , use_threads = True)
+                        , column_indices = {i:pr.metadata.num_columns - i - 1 for i in range(pr.metadata.num_columns)})
+#```
+
+### Reading column 3 into multiple destination columns
+#```
+with fs.LocalFileSystem().open_input_file(path) as f:
+    jj.read_into_numpy (source = f
+                        , metadata = None
+                        , np_array = np_array
+                        , row_group_indices = range(pr.metadata.num_row_groups)
+                        , column_indices = ((3, 0), (3, 1)))
 #```
 
 ### Generating a torch tensor to read into:
