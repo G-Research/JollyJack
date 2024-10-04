@@ -547,6 +547,43 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(np_array, reversed_expected_data), f"\n{np_array}\n\n{reversed_expected_data}")
             pr.close()
 
+    @for_each_parameter()
+    def test_read_numpy_column_indices_multi_mapping(self, pre_buffer, use_threads, use_memory_map):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+
+            expected_data = pr.read_all(column_indices=[0]).to_pandas().to_numpy()
+            expected_data = np.repeat(expected_data, 3, axis=1)
+            print (expected_data)
+
+            # Create an empty array
+            np_array = np.zeros((n_rows, 3), dtype=pa.float32().to_pandas_dtype(), order='F')
+            jj.read_into_numpy (source = path
+                                , metadata = None
+                                , np_array = np_array
+                                , row_group_indices = range(n_row_groups)
+                                , column_indices = ((0, 0), (0, 1))
+                                , pre_buffer = pre_buffer
+                                , use_threads = use_threads
+                                , use_memory_map = use_memory_map)
+
+            jj.read_into_numpy (source = path
+                    , metadata = None
+                    , np_array = np_array
+                    , row_group_indices = range(n_row_groups)
+                    , column_indices = [[0, 2]]
+                    , pre_buffer = pre_buffer
+                    , use_threads = use_threads
+                    , use_memory_map = use_memory_map)
+
+            self.assertTrue(np.array_equal(np_array, expected_data), f"\n{np_array}\n\n{expected_data}")
+
     def test_read_large_array(self):
 
         n_row_groups = 1
