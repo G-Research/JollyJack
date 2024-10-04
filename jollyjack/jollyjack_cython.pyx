@@ -16,8 +16,7 @@ from pyarrow.lib cimport (get_reader)
 from collections.abc import Iterable
 
 def is_iterable_of_iterables(obj):
-    return isinstance(obj, Iterable) and all(isinstance(item, Iterable) and not isinstance(item, str) for item in obj)
-
+    return isinstance(obj, Iterable) and isinstance(obj[0], Iterable) and not isinstance(obj[0], str)
 
 cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
 
