@@ -34,7 +34,7 @@ cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_gr
 cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
 
     cdef vector[int] crow_group_indices = row_group_indices
-    cdef vector[int] ccolumn_indices = column_indices.keys() if isinstance(column_indices, dict) else column_indices
+    cdef vector[int] ccolumn_indices
     cdef uint64_t cstride0_size = np_array.strides[0]
     cdef uint64_t cstride1_size = np_array.strides[1]
     cdef void* cdata = np_array.data
@@ -48,8 +48,10 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
 
     target_column_indices = []
     if column_indices and isinstance(column_indices, dict):
+        ccolumn_indices = column_indices.keys()
         target_column_indices = column_indices.values()
     elif column_indices:
+        ccolumn_indices = column_indices
         assert len(column_indices) == np_array.shape[1], f"Requested to read {len(column_indices)} columns, but the number of columns in numpy array is {np_array.shape[1]}"
        
     if isinstance(column_names, dict):
