@@ -558,9 +558,8 @@ class TestJollyJack(unittest.TestCase):
             pr = pq.ParquetReader()
             pr.open(path)
 
-            expected_data = pr.read_all(column_indices=[3]).to_pandas().to_numpy()
-            expected_data = np.repeat(expected_data, 3, axis=1)
-            print (expected_data)
+            column_data = pr.read_all(column_indices=[3]).to_pandas().to_numpy()
+            expected_data = np.repeat(column_data, 3, axis=1)
 
             # Create an empty array
             np_array = np.zeros((n_rows, 3), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -583,6 +582,7 @@ class TestJollyJack(unittest.TestCase):
                     , use_memory_map = use_memory_map)
 
             self.assertTrue(np.array_equal(np_array, expected_data), f"\n{np_array}\n\n{expected_data}")
+            pr.close()
 
     @for_each_parameter()
     def test_read_numpy_column_names_multi_mapping(self, pre_buffer, use_threads, use_memory_map):
@@ -595,9 +595,8 @@ class TestJollyJack(unittest.TestCase):
             pr = pq.ParquetReader()
             pr.open(path)
 
-            expected_data = pr.read_all(column_indices=[3]).to_pandas().to_numpy()
-            expected_data = np.repeat(expected_data, 3, axis=1)
-            print (expected_data)
+            column_data = pr.read_all(column_indices=[3]).to_pandas().to_numpy()
+            expected_data = np.repeat(column_data, 3, axis=1)
 
             # Create an empty array
             np_array = np.zeros((n_rows, 3), dtype=pa.float32().to_pandas_dtype(), order='F')
@@ -620,6 +619,7 @@ class TestJollyJack(unittest.TestCase):
                     , use_memory_map = use_memory_map)
 
             self.assertTrue(np.array_equal(np_array, expected_data), f"\n{np_array}\n\n{expected_data}")
+            pr.close()
 
     def test_read_large_array(self):
 
