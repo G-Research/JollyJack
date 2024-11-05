@@ -658,5 +658,40 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.max(np_array) == n_rows)
             pr.close()
 
+    @for_each_parameter()
+    def test_read_not_enough_buffer(self, pre_buffer, use_threads, use_memory_map):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = pa.float32())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+
+            # Create an empty array
+            np_array = np.zeros((n_rows - 1, n_columns), dtype=pa.float32().to_pandas_dtype(), order='F')
+
+            with self.assertRaises(RuntimeError) as context:
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = range(n_row_groups)
+                                    , column_indices = {0:n_columns}
+                                    , pre_buffer = pre_buffer
+                                    , use_threads = use_threads
+                                    , use_memory_map = use_memory_map)
+
+            self.assertTrue(f"Attempted to read {chunk_size} rows into location [0, {n_columns}], but that is beyond target's boundaries." in str(context.exception), context.exception)
+
+            with self.assertRaises(RuntimeError) as context:
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = range(n_row_groups)
+                                    , column_indices = range(n_columns)
+                                    , pre_buffer = pre_buffer
+                                    , use_threads = use_threads
+                                    , use_memory_map = use_memory_map)
+
+            self.assertTrue(f"Buffer overrun error: Attempted to read {chunk_size} rows into location [{chunk_size}, {n_columns - 1}], but there was space available for only {chunk_size - 1} rows." in str(context.exception), context.exception)
+
 if __name__ == '__main__':
     unittest.main()

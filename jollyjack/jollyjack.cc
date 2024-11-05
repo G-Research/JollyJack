@@ -49,12 +49,21 @@ arrow::Status ReadColumn (int column_index
     size_t target_offset = stride0_size * target_row + stride1_size * target_column;
     size_t required_size = target_offset + num_rows * stride0_size;
 
-    if (buffer_size < required_size)
+    if (target_offset >= buffer_size)
+    {        
+        auto msg = std::string("Buffer overrun error:")          
+          + " Attempted to read " + std::to_string(num_rows) + " rows into location [" + std::to_string(target_row)
+          + ", " + std::to_string(target_column) + "], but that is beyond target's boundaries.";
+
+        return arrow::Status::UnknownError(msg);
+    }
+
+    if (required_size > buffer_size)
     {
-        auto msg = std::string("Buffer overrun protection:")          
-          + " buffer_size:" + std::to_string(buffer_size) + " required size:" + std::to_string(required_size) 
-          + ", target_row:" + std::to_string(target_row) + " target_column:" + std::to_string(target_column)  
-          + ", stride0:" + std::to_string(stride0_size) + " stride1:" + std::to_string(stride1_size);
+        auto left_space = (buffer_size - target_offset) / stride0_size;
+        auto msg = std::string("Buffer overrun error:")          
+          + " Attempted to read " + std::to_string(num_rows) + " rows into location [" + std::to_string(target_row)
+          + ", " + std::to_string(target_column) + "], but there was space available for only " + std::to_string(left_space) + " rows.";
 
         return arrow::Status::UnknownError(msg);
     }
