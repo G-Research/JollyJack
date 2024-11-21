@@ -99,12 +99,14 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cexpected_rows)
         return
 
-cpdef void transpose_shuffled (cnp.ndarray source, cnp.ndarray destination, row_indices = []):
+cpdef void transpose_shuffled (cnp.ndarray src_array, cnp.ndarray dst_array, row_indices = []):
 
-    assert source.ndim == 2, f"Unexpected source.ndim, {source.ndim} != 2"
-    assert destination.ndim == 2, f"Unexpected destination.ndim, {destination.ndim} != 2"
-    assert source.shape[0] == destination.shape[1], f"TODO"
-    assert source.shape[1] == destination.shape[0], f"TODO"
-    assert min(source.strides) == min(destination.strides) , f"Expected array in a Fortran-style (column-major) order"
+    assert src_array.ndim == 2, f"Unexpected src_array.ndim, {src_array.ndim} != 2"
+    assert dst_array.ndim == 2, f"Unexpected dst_array.ndim, {dst_array.ndim} != 2"
+    assert src_array.shape[0] == dst_array.shape[1], f"TODO"
+    assert src_array.shape[1] == dst_array.shape[0], f"TODO"
+    assert min([src_array.strides[0], src_array.strides[1]]) == min([dst_array.strides[0], dst_array.strides[1]]) , f"Expected array in a Fortran-style (column-major) order"
+    assert len(row_indices)
+    cdef vector[int] crow_indices = row_indices
 
     return
