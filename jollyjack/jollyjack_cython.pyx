@@ -99,3 +99,12 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cexpected_rows)
         return
 
+cpdef void transpose_shuffled (cnp.ndarray source, cnp.ndarray destination, row_indices = []):
+
+    assert source.ndim == 2, f"Unexpected source.ndim, {source.ndim} != 2"
+    assert destination.ndim == 2, f"Unexpected destination.ndim, {destination.ndim} != 2"
+    assert source.shape[0] == destination.shape[1], f"TODO"
+    assert source.shape[1] == destination.shape[0], f"TODO"
+    assert min(source.strides) == min(destination.strides) , f"Expected array in a Fortran-style (column-major) order"
+
+    return
