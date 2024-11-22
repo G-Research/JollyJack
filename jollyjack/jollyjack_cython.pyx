@@ -110,7 +110,7 @@ cpdef void transpose_shuffled (cnp.ndarray src_array, cnp.ndarray dst_array, row
     assert (src_array.strides[0] <= src_array.strides[1]), f"Expected source array in a Fortran (column-major) order"
     assert (dst_array.strides[1] <= dst_array.strides[0]), f"Expected destination array in a C (row-major) order"
 
-    assert len(row_indices) == dst_array.shape[1], f"Unexpected len of row indices, {len(row_indices)} != {dst_array.shape[1]}"
+    assert len(row_indices) == dst_array.shape[0], f"Unexpected len of row indices, {len(row_indices)} != {dst_array.shape[0]}"
 
     cdef vector[int] crow_indices = row_indices
     cdef uint64_t csrc_stride0 = src_array.strides[0]
@@ -122,13 +122,12 @@ cpdef void transpose_shuffled (cnp.ndarray src_array, cnp.ndarray dst_array, row
 
     with nogil:
         cjollyjack.TransposeShuffled (src_array.data
-            , 0 # size_t src_buffer_size
             , csrc_stride0
             , csrc_stride1
             , csrc_rows
             , csrc_columns
             , dst_array.data
-            , 0 # dst_buffer_size
             , cdst_stride0
-            , cdst_stride1);
+            , cdst_stride1
+            , crow_indices);
         return

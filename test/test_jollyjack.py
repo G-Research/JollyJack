@@ -42,13 +42,19 @@ class TestJollyJack(unittest.TestCase):
 
                     src_array = get_table(n_rows, n_columns, data_type = dtype).to_pandas().to_numpy()
                     dst_array = np.zeros((n_columns, n_rows), dtype=dtype.to_pandas_dtype(), order='C')
-                    jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = range(n_rows))
+                    jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns))
                     self.assertTrue(np.array_equal(src_array.T, dst_array), f"{src_array.T}\n!=\n{dst_array}")
 
+                    # Reversed rows
+                    jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = [n_columns - i - 1 for i in range(n_columns)])
+                    expected_array = src_array.T[::-1, :]
+                    self.assertTrue(np.array_equal(expected_array, dst_array), f"{src_array.T}\n!=\n{dst_array}")
+                    
+                    # Subsets
                     src_view = src_array[1:(n_rows - 1), 1:(n_columns - 1)] 
                     dst_array = np.zeros((n_columns, n_rows), dtype=dtype.to_pandas_dtype(), order='C')
                     dst_view = dst_array[1:(n_columns - 1), 1:(n_rows - 1)] 
-                    jj.transpose_shuffled(src_array = src_view, dst_array = dst_view, row_indices = range(n_rows - 2))
+                    jj.transpose_shuffled(src_array = src_view, dst_array = dst_view, row_indices = range(n_columns - 2))
                     self.assertTrue(np.array_equal(src_view.T, dst_view), f"{src_view.T}\n!=\n{dst_view}")
 
 if __name__ == '__main__':

@@ -89,5 +89,5 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, column_indic
                      )
     return
 
-def transpose_shuffled (source, destination, row_indices = []):
+def transpose_shuffled (src_array, dst_array, row_indices = []):
     return
