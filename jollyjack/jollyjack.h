@@ -13,3 +13,14 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , bool pre_buffer
     , bool use_threads
     , int64_t expected_rows);
+
+void TransposeShuffled(void* src_buffer,
+    size_t src_buffer_size,
+    size_t src_stride0_size,
+    size_t src_stride1_size,
+    int src_rows,
+    int src_cols,
+    void* dst_buffer,
+    size_t dst_buffer_size,
+    size_t dst_stride0_size,
+    size_t dst_stride1_size);

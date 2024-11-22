@@ -75,9 +75,9 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     # Ensure that only one input is set
     assert (column_indices or column_names) and (not column_indices or not column_names), f"Either column_indices or column_names needs to be set"
 
-    # Ensure the input is a 2D array, Fortran-styl
+    # Ensure the input is a 2D array, Fortran order
     assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
-    assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran-style (column-major) order"
+    assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran (column-major) order"
 
     cdef int64_t cexpected_rows = np_array.shape[0]
     cdef shared_ptr[CRandomAccessFile] rd_handle
@@ -103,10 +103,32 @@ cpdef void transpose_shuffled (cnp.ndarray src_array, cnp.ndarray dst_array, row
 
     assert src_array.ndim == 2, f"Unexpected src_array.ndim, {src_array.ndim} != 2"
     assert dst_array.ndim == 2, f"Unexpected dst_array.ndim, {dst_array.ndim} != 2"
-    assert src_array.shape[0] == dst_array.shape[1], f"TODO"
-    assert src_array.shape[1] == dst_array.shape[0], f"TODO"
-    assert min([src_array.strides[0], src_array.strides[1]]) == min([dst_array.strides[0], dst_array.strides[1]]) , f"Expected array in a Fortran-style (column-major) order"
-    assert len(row_indices)
-    cdef vector[int] crow_indices = row_indices
+    assert src_array.shape[0] == dst_array.shape[1], f"src_array.shape[0] != dst_array.shape[1], {src_array.shape[0]} != {dst_array.shape[1]}"
+    assert src_array.shape[1] == dst_array.shape[0], f"src_array.shape[1] != dst_array.shape[0], {src_array.shape[1]} != {dst_array.shape[0]}"
+    assert min([src_array.strides[0], src_array.strides[1]]) == min([dst_array.strides[0], dst_array.strides[1]]) , f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != {dst_array.dtype}"
 
-    return
+    assert (src_array.strides[0] <= src_array.strides[1]) , f"Expected source array in a Fortran (column-major) order"
+    assert (dst_array.strides[1] <= dst_array.strides[0]) , f"Expected destination array in a C (row-major) order"
+
+    assert len(row_indices)
+
+    cdef vector[int] crow_indices = row_indices
+    cdef uint64_t csrc_stride0 = src_array.strides[0]
+    cdef uint64_t csrc_stride1 = src_array.strides[1]
+    cdef uint64_t csrc_rows = src_array.shape[0]
+    cdef uint64_t csrc_columns = src_array.shape[1]
+    cdef uint64_t cdst_stride0 = dst_array.strides[0]
+    cdef uint64_t cdst_stride1 = dst_array.strides[1]
+
+    with nogil:
+        cjollyjack.TransposeShuffled (src_array.data
+            , 0 # size_t src_buffer_size
+            , csrc_stride0
+            , csrc_stride1
+            , csrc_rows
+            , csrc_columns
+            , dst_array.data
+            , 0 # dst_buffer_size
+            , cdst_stride0
+            , cdst_stride1);
+        return
