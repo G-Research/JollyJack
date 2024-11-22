@@ -107,10 +107,10 @@ cpdef void transpose_shuffled (cnp.ndarray src_array, cnp.ndarray dst_array, row
     assert src_array.shape[1] == dst_array.shape[0], f"src_array.shape[1] != dst_array.shape[0], {src_array.shape[1]} != {dst_array.shape[0]}"
     assert min([src_array.strides[0], src_array.strides[1]]) == min([dst_array.strides[0], dst_array.strides[1]]) , f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != {dst_array.dtype}"
 
-    assert (src_array.strides[0] <= src_array.strides[1]) , f"Expected source array in a Fortran (column-major) order"
-    assert (dst_array.strides[1] <= dst_array.strides[0]) , f"Expected destination array in a C (row-major) order"
+    assert (src_array.strides[0] <= src_array.strides[1]), f"Expected source array in a Fortran (column-major) order"
+    assert (dst_array.strides[1] <= dst_array.strides[0]), f"Expected destination array in a C (row-major) order"
 
-    assert len(row_indices)
+    assert len(row_indices) == dst_array.shape[1], f"Unexpected len of row indices, {len(row_indices)} != {dst_array.shape[1]}"
 
     cdef vector[int] crow_indices = row_indices
     cdef uint64_t csrc_stride0 = src_array.strides[0]

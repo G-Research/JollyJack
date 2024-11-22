@@ -35,20 +35,20 @@ def get_table(n_rows, n_columns, data_type = pa.float32()):
 class TestJollyJack(unittest.TestCase):
 
     def test_shuffled(self):
-        
+
         for (n_rows, n_columns) in [(5,6), ]:
             for dtype in [pa.float16(), pa.float32(), pa.float64()]:
                 with self.subTest((n_rows, n_columns, dtype)):
 
                     src_array = get_table(n_rows, n_columns, data_type = dtype).to_pandas().to_numpy()
                     dst_array = np.zeros((n_columns, n_rows), dtype=dtype.to_pandas_dtype(), order='C')
-                    jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = [0, 1, 2, 3, 4, 5])
+                    jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = range(n_rows))
                     self.assertTrue(np.array_equal(src_array.T, dst_array), f"{src_array.T}\n!=\n{dst_array}")
 
                     src_view = src_array[1:(n_rows - 1), 1:(n_columns - 1)] 
                     dst_array = np.zeros((n_columns, n_rows), dtype=dtype.to_pandas_dtype(), order='C')
                     dst_view = dst_array[1:(n_columns - 1), 1:(n_rows - 1)] 
-                    jj.transpose_shuffled(src_array = src_view, dst_array = dst_view, row_indices = [0, 1, 2, 3,])
+                    jj.transpose_shuffled(src_array = src_view, dst_array = dst_view, row_indices = range(n_rows - 2))
                     self.assertTrue(np.array_equal(src_view.T, dst_view), f"{src_view.T}\n!=\n{dst_view}")
 
 if __name__ == '__main__':
