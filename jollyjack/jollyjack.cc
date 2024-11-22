@@ -274,6 +274,15 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
     void* dst_buffer, size_t dst_stride0_size, size_t dst_stride1_size,
     std::vector<int> row_indices)
 {
+    for (auto row_index : row_indices)
+    {
+        if (row_index < 0 || row_index >= src_cols)
+        {          
+            auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
+            throw std::logic_error(msg);
+        }
+    }
+
     for (int src_row = 0; src_row < src_rows; src_row++)
     {
         for (int src_col = 0; src_col < src_cols; src_col++)
