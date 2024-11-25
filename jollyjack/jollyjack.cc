@@ -336,4 +336,57 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
         }
       }
     }
+
+    if (variant == 3)
+    {
+      for (auto row_index : row_indices)
+      {
+          if (row_index < 0 || row_index >= src_cols)
+          {          
+              auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
+              throw std::logic_error(msg);
+          }
+      }
+
+      switch (src_stride0_size)
+      {
+        case 2:
+        {
+          for (int src_col = 0; src_col < src_cols; src_col++)
+          {
+            for (int src_row = 0; src_row < src_rows; src_row++)
+            {          
+                int dst_row = row_indices[src_col];
+                int dst_col = src_row;
+                uint8_t *src_ptr = (uint8_t *)src_buffer;
+                size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
+                
+                uint8_t *dst_ptr = (uint8_t *)dst_buffer;
+                size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
+
+                *(uint16_t*)&dst_ptr[dst_offset] = *(uint16_t*)&src_ptr[src_offset];
+            }
+          }
+        }
+
+        case 4:
+        {
+          for (int src_col = 0; src_col < src_cols; src_col++)
+          {
+            for (int src_row = 0; src_row < src_rows; src_row++)
+            {          
+                int dst_row = row_indices[src_col];
+                int dst_col = src_row;
+                uint8_t *src_ptr = (uint8_t *)src_buffer;
+                size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
+                
+                uint8_t *dst_ptr = (uint8_t *)dst_buffer;
+                size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
+
+                *(uint32_t*)&dst_ptr[dst_offset] = *(uint32_t*)&src_ptr[src_offset];
+            }
+          }
+        }
+      }
+    }      
 }
