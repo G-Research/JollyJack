@@ -276,7 +276,7 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
     std::vector<int> row_indices)
 {
   const int BLOCK_SIZE = 32;
-  char *env_value = getenv("JJ_transpose_shuffle");
+  char *env_value = getenv("JJ_TRANSPOSE_SHUFFLE");
   int variant = 1;
   if (env_value != NULL)
   {

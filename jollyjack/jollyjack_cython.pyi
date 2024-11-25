@@ -89,5 +89,25 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, column_indic
                      )
     return
 
-def transpose_shuffle (src_array, dst_array, row_indices = []):
+def transpose_shuffle (src_array, dst_array, row_indices):
+    """
+    Transposes source array and shuffles its rows according to provided indices.
+    
+    Args:
+        src_array (numpy.ndarray): Source array to be transposed and shuffled.
+        dst_array (numpy.ndarray): Destination array to store the result.
+        row_indices (numpy.ndarray): Array of indices specifying the row permutation.
+
+    Raises:
+        AssertError: If array shapes are incompatible or row_indices is invalid.
+        RuntimeError: If row_indices has invalid index.
+        
+    Example:
+        >>> src = np.array([[1, 2], [3, 4]])
+        >>> dst = np.zeros((2, 2))
+        >>> indices = np.array([1, 0])
+        >>> transpose_shuffle(src, dst, indices)
+        array([[2, 4],
+                [1, 3]])
+   """
     return
