@@ -9,7 +9,7 @@ import random
 import time
 import os
 
-n_files = 10
+n_files = 2
 row_groups = 1
 n_columns = 7_000
 n_columns_to_read = 1_000
