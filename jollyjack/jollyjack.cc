@@ -274,19 +274,56 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
     void* dst_buffer, size_t dst_stride0_size, size_t dst_stride1_size,
     std::vector<int> row_indices)
 {
-    for (auto row_index : row_indices)
+    char *env_value = getenv("JJ_TRANSPOSE_SHUFFLED");
+    int variant = 0;
+    if (env_value != NULL)
     {
-        if (row_index < 0 || row_index >= src_cols)
-        {          
-            auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
-            throw std::logic_error(msg);
-        }
+      variant = atoi(env_value);
     }
 
-    for (int src_row = 0; src_row < src_rows; src_row++)
+    if (variant == 0 || variant == 1)
     {
-        for (int src_col = 0; src_col < src_cols; src_col++)
-        {
+      for (auto row_index : row_indices)
+      {
+          if (row_index < 0 || row_index >= src_cols)
+          {          
+              auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
+              throw std::logic_error(msg);
+          }
+      }
+
+      for (int src_row = 0; src_row < src_rows; src_row++)
+      {
+          for (int src_col = 0; src_col < src_cols; src_col++)
+          {
+              int dst_row = row_indices[src_col];
+              int dst_col = src_row;
+              uint8_t *src_ptr = (uint8_t *)src_buffer;
+              size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
+              
+              uint8_t *dst_ptr = (uint8_t *)dst_buffer;
+              size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
+
+              memcpy(&dst_ptr[dst_offset], &src_ptr[src_offset], src_stride0_size);
+          }
+      }
+    }
+
+    if (variant == 2)
+    {
+      for (auto row_index : row_indices)
+      {
+          if (row_index < 0 || row_index >= src_cols)
+          {          
+              auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
+              throw std::logic_error(msg);
+          }
+      }
+
+      for (int src_col = 0; src_col < src_cols; src_col++)
+      {
+        for (int src_row = 0; src_row < src_rows; src_row++)
+        {          
             int dst_row = row_indices[src_col];
             int dst_col = src_row;
             uint8_t *src_ptr = (uint8_t *)src_buffer;
@@ -297,5 +334,6 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
 
             memcpy(&dst_ptr[dst_offset], &src_ptr[src_offset], src_stride0_size);
         }
+      }
     }
 }
