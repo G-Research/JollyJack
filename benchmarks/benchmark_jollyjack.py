@@ -183,7 +183,7 @@ for compression, dtype in [(None, pa.float32()), (None, pa.float16())]:
         genrate_data(n_rows, n_columns, path = path, compression = compression, dtype = dtype)
 
     print(f".")
-    for jj_variant in [4, 5, 6]:
+    for jj_variant in [1, 2]:
         os.environ["JJ_TRANSPOSE_SHUFFLED"] = str(jj_variant)
         for n_threads in [1, 2]:
             print(f"`JollyJack.transpose_shuffled` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda:worker_jollyjack_transpose_shuffled(dtype.to_pandas_dtype())):.2f} seconds")
