@@ -61,7 +61,7 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype):
                            , pre_buffer = pre_buffer
                            , use_threads = use_threads)
 
-def worker_jollyjack_transpose_shuffled(dtype):
+def worker_jollyjack_transpose_shuffle(dtype):
 
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
     dst_array = np.zeros((n_columns_to_read, chunk_size), dtype=dtype, order='C')
@@ -81,7 +81,7 @@ def worker_jollyjack_transpose_shuffled(dtype):
                            , pre_buffer = True
                            , use_threads = False)
         
-        jj.transpose_shuffled(np_array, dst_array, row_indicies)
+        jj.transpose_shuffle(np_array, dst_array, row_indicies)
         
 def worker_transpose_numpy(dtype):
 
@@ -184,9 +184,9 @@ for compression, dtype in [(None, pa.float32()), (None, pa.float16())]:
 
     print(f".")
     for jj_variant in [1, 2]:
-        os.environ["JJ_TRANSPOSE_SHUFFLED"] = str(jj_variant)
+        os.environ["JJ_transpose_shuffle"] = str(jj_variant)
         for n_threads in [1, 2]:
-            print(f"`JollyJack.transpose_shuffled` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda:worker_jollyjack_transpose_shuffled(dtype.to_pandas_dtype())):.2f} seconds")
+            print(f"`JollyJack.transpose_shuffle` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda:worker_jollyjack_transpose_shuffle(dtype.to_pandas_dtype())):.2f} seconds")
 
     print(f".")
     for n_threads in [1, 2]:

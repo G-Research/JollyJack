@@ -99,7 +99,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cexpected_rows)
         return
 
-cpdef void transpose_shuffled (cnp.ndarray src_array, cnp.ndarray dst_array, row_indices = []):
+cpdef void transpose_shuffle (cnp.ndarray src_array, cnp.ndarray dst_array, row_indices = []):
 
     assert src_array.ndim == 2, f"Unexpected src_array.ndim, {src_array.ndim} != 2"
     assert dst_array.ndim == 2, f"Unexpected dst_array.ndim, {dst_array.ndim} != 2"
