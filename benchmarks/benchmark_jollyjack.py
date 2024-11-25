@@ -175,7 +175,7 @@ def measure_reading(max_workers, worker):
 
     return min (tt)
 
-for compression, dtype in [(None), ('snappy', pa.float32()), (None, pa.float16())]:
+for compression, dtype in [(None, pa.float32()), (None, pa.float16())]:
 
     print(f".")
     for f in range(n_files):
