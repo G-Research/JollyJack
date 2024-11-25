@@ -277,7 +277,7 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
 {
   const int BLOCK_SIZE = 32;
   char *env_value = getenv("JJ_TRANSPOSE_SHUFFLED");
-  int variant = 4;
+  int variant = 6;
   if (env_value != NULL)
   {
     variant = atoi(env_value);
@@ -387,6 +387,40 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
           case 8:*(uint64_t*)&dst_ptr[dst_offset] = *(uint64_t*)&src_ptr[src_offset]; break;
         }
       }
+    }
+  }
+
+  if (variant == 6)
+  {
+    for (int i = 0; i < src_cols; i += BLOCK_SIZE) {
+        for (int j = 0; j < src_rows; j += BLOCK_SIZE) {
+            // Transpose block
+            int cols_limit = std::min(i + BLOCK_SIZE, src_cols);
+            for (int ii = i; ii < cols_limit; ii++) {
+
+                int rows_limit = std::min(j + BLOCK_SIZE, src_rows);
+                for (int jj = j; jj < rows_limit; jj++) {
+                    int dst_row = row_indices[ii];
+                    int dst_col = jj;
+                    
+                    uint8_t *src_ptr = (uint8_t *)src_buffer;
+                    uint8_t *dst_ptr = (uint8_t *)dst_buffer;
+                    size_t src_offset = src_stride0_size * jj + src_stride1_size * ii;
+                    size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
+
+                    switch (src_stride0_size) {
+                        case 1: *(uint8_t*)&dst_ptr[dst_offset] = 
+                               *(uint8_t*)&src_ptr[src_offset]; break;
+                        case 2: *(uint16_t*)&dst_ptr[dst_offset] = 
+                               *(uint16_t*)&src_ptr[src_offset]; break;
+                        case 4: *(uint32_t*)&dst_ptr[dst_offset] = 
+                               *(uint32_t*)&src_ptr[src_offset]; break;
+                        case 8: *(uint64_t*)&dst_ptr[dst_offset] = 
+                               *(uint64_t*)&src_ptr[src_offset]; break;
+                    }
+                }
+            }
+        }
     }
   }
 }
