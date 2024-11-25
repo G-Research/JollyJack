@@ -277,23 +277,23 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
 {
   const int BLOCK_SIZE = 32;
   char *env_value = getenv("JJ_TRANSPOSE_SHUFFLED");
-  int variant = 5;
+  int variant = 4;
   if (env_value != NULL)
   {
     variant = atoi(env_value);
   }
 
+  for (auto row_index : row_indices)
+  {
+      if (row_index < 0 || row_index >= src_cols)
+      {          
+          auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
+          throw std::logic_error(msg);
+      }
+  }
+
   if (variant == 0 || variant == 1)
   {
-    for (auto row_index : row_indices)
-    {
-        if (row_index < 0 || row_index >= src_cols)
-        {          
-            auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
-            throw std::logic_error(msg);
-        }
-    }
-
     for (int src_row = 0; src_row < src_rows; src_row++)
     {
         for (int src_col = 0; src_col < src_cols; src_col++)
@@ -311,17 +311,9 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
     }
   }
 
+  /*
   if (variant == 2)
   {
-    for (auto row_index : row_indices)
-    {
-        if (row_index < 0 || row_index >= src_cols)
-        {          
-            auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
-            throw std::logic_error(msg);
-        }
-    }
-
     for (int src_col = 0; src_col < src_cols; src_col++)
     {
       for (int src_row = 0; src_row < src_rows; src_row++)
@@ -338,174 +330,43 @@ void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_str
       }
     }
   }
-
-  if (variant == 3)
-  {
-    for (auto row_index : row_indices)
-    {
-        if (row_index < 0 || row_index >= src_cols)
-        {          
-            auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
-            throw std::logic_error(msg);
-        }
-    }
-
-    switch (src_stride0_size)
-    {
-      case 2:
-      {
-        for (int src_col = 0; src_col < src_cols; src_col++)
-        {
-          for (int src_row = 0; src_row < src_rows; src_row++)
-          {          
-              int dst_row = row_indices[src_col];
-              int dst_col = src_row;
-              uint8_t *src_ptr = (uint8_t *)src_buffer;
-              size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
-              
-              uint8_t *dst_ptr = (uint8_t *)dst_buffer;
-              size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
-
-              *(uint16_t*)&dst_ptr[dst_offset] = *(uint16_t*)&src_ptr[src_offset];
-          }
-        }
-        break;
-      }
-
-      case 4:
-      {
-        for (int src_col = 0; src_col < src_cols; src_col++)
-        {
-          for (int src_row = 0; src_row < src_rows; src_row++)
-          {          
-              int dst_row = row_indices[src_col];
-              int dst_col = src_row;
-              uint8_t *src_ptr = (uint8_t *)src_buffer;
-              size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
-              
-              uint8_t *dst_ptr = (uint8_t *)dst_buffer;
-              size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
-
-              *(uint32_t*)&dst_ptr[dst_offset] = *(uint32_t*)&src_ptr[src_offset];
-          }
-        }
-        break;
-      }
-    }
-  }
+  */
 
   if (variant == 4)
-  {
-    for (auto row_index : row_indices)
-    {
-      if (row_index < 0 || row_index >= src_cols)
-      {          
-          auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
-          throw std::logic_error(msg);
-      }
-    }
-
-    switch (src_stride0_size)
-    {
-      case 2:
+  {  
+    for (int block_col = 0; block_col < src_cols; block_col += BLOCK_SIZE)
+    {            
+      int src_col_limit = std::min (src_cols, block_col + BLOCK_SIZE);
+      for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE)
       {
-        for (int block_col = 0; block_col < src_cols; block_col += BLOCK_SIZE)
-        {            
-          int src_col_limit = std::min (src_cols, block_col + BLOCK_SIZE);
-          for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE)
+        int src_row_limit = std::min (src_rows, block_row + BLOCK_SIZE);
+        for (int src_col = block_col; src_col < src_col_limit; src_col++)
+        {
+          for (int src_row = block_row; src_row < src_row_limit; src_row++)
           {
-            int src_row_limit = std::min (src_rows, block_row + BLOCK_SIZE);
-            for (int src_col = block_col; src_col < src_col_limit; src_col++)
-            {
-              for (int src_row = block_row; src_row < src_row_limit; src_row++)
-              {
-                  int dst_row = row_indices[src_col];
-                  int dst_col = src_row;
-                  uint8_t *src_ptr = (uint8_t *)src_buffer;
-                  size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
-                  
-                  uint8_t *dst_ptr = (uint8_t *)dst_buffer;
-                  size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
+            int dst_row = row_indices[src_col];
+            int dst_col = src_row;
+            uint8_t *src_ptr = (uint8_t *)src_buffer;
+            size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
+            
+            uint8_t *dst_ptr = (uint8_t *)dst_buffer;
+            size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
 
-                  *(uint16_t*)&dst_ptr[dst_offset] = *(uint16_t*)&src_ptr[src_offset];
-              }
+            switch (src_stride0_size)
+            {
+              case 1:*(uint8_t*)&dst_ptr[dst_offset] = *(uint8_t*)&src_ptr[src_offset]; break;
+              case 2:*(uint16_t*)&dst_ptr[dst_offset] = *(uint16_t*)&src_ptr[src_offset]; break;
+              case 4:*(uint32_t*)&dst_ptr[dst_offset] = *(uint32_t*)&src_ptr[src_offset]; break;
+              case 8:*(uint64_t*)&dst_ptr[dst_offset] = *(uint64_t*)&src_ptr[src_offset]; break;
             }
           }
         }
-        break;
-      }
-
-      case 4:
-      {
-        for (int block_col = 0; block_col < src_cols; block_col += BLOCK_SIZE)
-        {            
-          int src_col_limit = std::min (src_cols, block_col + BLOCK_SIZE);
-          for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE)
-          {
-            int src_row_limit = std::min (src_rows, block_row + BLOCK_SIZE);
-            for (int src_col = block_col; src_col < src_col_limit; src_col++)
-            {
-              for (int src_row = block_row; src_row < src_row_limit; src_row++)
-              {
-                  int dst_row = row_indices[src_col];
-                  int dst_col = src_row;
-                  uint8_t *src_ptr = (uint8_t *)src_buffer;
-                  size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
-                  
-                  uint8_t *dst_ptr = (uint8_t *)dst_buffer;
-                  size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
-
-                  *(uint32_t*)&dst_ptr[dst_offset] = *(uint32_t*)&src_ptr[src_offset];
-              }
-            }
-          }
-        }
-
-        break;
-      }
-
-      case 8:
-      {
-        for (int block_col = 0; block_col < src_cols; block_col += BLOCK_SIZE)
-        {            
-          int src_col_limit = std::min (src_cols, block_col + BLOCK_SIZE);
-          for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE)
-          {
-            int src_row_limit = std::min (src_rows, block_row + BLOCK_SIZE);
-            for (int src_col = block_col; src_col < src_col_limit; src_col++)
-            {
-              for (int src_row = block_row; src_row < src_row_limit; src_row++)
-              {
-                  int dst_row = row_indices[src_col];
-                  int dst_col = src_row;
-                  uint8_t *src_ptr = (uint8_t *)src_buffer;
-                  size_t src_offset = src_stride0_size * src_row + src_stride1_size * src_col;
-                  
-                  uint8_t *dst_ptr = (uint8_t *)dst_buffer;
-                  size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * dst_col;
-
-                  *(uint64_t*)&dst_ptr[dst_offset] = *(uint64_t*)&src_ptr[src_offset];
-              }
-            }
-          }
-        }
-
-        break;
       }
     }
   }
 
   if (variant == 5)
   {
-    for (auto row_index : row_indices)
-    {
-        if (row_index < 0 || row_index >= src_cols)
-        {          
-            auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
-            throw std::logic_error(msg);
-        }
-    }
-
     for (int src_col = 0; src_col < src_cols; src_col++)
     {
       for (int src_row = 0; src_row < src_rows; src_row++)
