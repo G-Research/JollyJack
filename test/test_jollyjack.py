@@ -64,17 +64,17 @@ class TestJollyJack(unittest.TestCase):
                 with self.subTest((n_rows, n_columns, dtype)):
 
                     src_array = get_table(n_rows, n_columns, data_type = dtype).to_pandas().to_numpy()
-                    
+
                     with self.assertRaises(AssertionError) as context:
                         dst_array = np.zeros((n_columns + 1, n_rows), dtype=dtype.to_pandas_dtype(), order='C')
                         jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns))
                     self.assertTrue(f"src_array.shape[1] != dst_array.shape[0], {n_columns} != {n_columns + 1}" in str(context.exception), context.exception)
-                    
+
                     with self.assertRaises(AssertionError) as context:
                         dst_array = np.zeros((n_columns, n_rows + 1), dtype=dtype.to_pandas_dtype(), order='C')
                         jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns))
                     self.assertTrue(f"src_array.shape[0] != dst_array.shape[1], {n_rows} != {n_rows + 1}" in str(context.exception), context.exception)
-                    
+
                     with self.assertRaises(AssertionError) as context:
                         dst_array = np.zeros((n_columns, n_rows), dtype=dtype.to_pandas_dtype(), order='F')
                         jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns))
@@ -86,19 +86,19 @@ class TestJollyJack(unittest.TestCase):
                     self.assertTrue(f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != uint8" in str(context.exception), context.exception)
 
                     with self.assertRaises(AssertionError) as context:
-                        dst_array = np.zeros((n_columns, n_rows), dtype=np.uint8, order='C')
-                        jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns) - 1)
-                    self.assertTrue(f"TODO" in str(context.exception), context.exception)
-                    
-                    with self.assertRaises(AssertionError) as context:
-                        dst_array = np.zeros((n_columns, n_rows), dtype=np.uint8, order='C')
+                        dst_array = np.zeros((n_columns, n_rows), dtype=dtype.to_pandas_dtype(), order='C')
+                        jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns - 1))
+                    self.assertTrue(f"Unexpected len of row indices, {n_columns - 1} != {n_columns}" in str(context.exception), context.exception)
+
+                    with self.assertRaises(RuntimeError) as context:
+                        dst_array = np.zeros((n_columns, n_rows), dtype=dtype.to_pandas_dtype(), order='C')
                         jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = [i - 1 for i in range(n_columns)])
-                    self.assertTrue(f"TODO" in str(context.exception), context.exception)
-                    
-                    with self.assertRaises(AssertionError) as context:
-                        dst_array = np.zeros((n_columns, n_rows), dtype=np.uint8, order='C')
+                    self.assertTrue(f"Row index = '-1' is not in the expected range [0, {n_columns})!" in str(context.exception), context.exception)
+
+                    with self.assertRaises(RuntimeError) as context:
+                        dst_array = np.zeros((n_columns, n_rows), dtype=dtype.to_pandas_dtype(), order='C')
                         jj.transpose_shuffled(src_array = src_array, dst_array = dst_array, row_indices = [i + 1 for i in range(n_columns)])
-                    self.assertTrue(f"TODO" in str(context.exception), context.exception)
+                    self.assertTrue(f"Row index = '6' is not in the expected range [0, {n_columns})!" in str(context.exception), context.exception)
 
 if __name__ == '__main__':
     unittest.main()
