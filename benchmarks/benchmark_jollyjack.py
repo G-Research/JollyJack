@@ -9,7 +9,7 @@ import random
 import time
 import os
 
-n_files = 2
+n_files = 10
 row_groups = 1
 n_columns = 7_000
 n_columns_to_read = 1_000
@@ -45,13 +45,13 @@ def worker_arrow_row_group(use_threads, pre_buffer):
         table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
 
 def worker_jollyjack_numpy(use_threads, pre_buffer, dtype):
-
+        
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
-
+    
     for f in range(n_files):
         pr = pq.ParquetReader()
         pr.open(f"{parquet_path}{f}")
-
+        
         column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
         jj.read_into_numpy(source = f"{parquet_path}{f}"
                            , metadata = pr.metadata
@@ -67,7 +67,7 @@ def worker_jollyjack_transpose_shuffle(dtype):
     dst_array = np.zeros((n_columns_to_read, chunk_size), dtype=dtype, order='C')
     row_indicies = list(range(n_columns_to_read))
     random.shuffle(row_indicies)
-    
+
     for f in range(n_files):
         pr = pq.ParquetReader()
         pr.open(f"{parquet_path}{f}")
@@ -80,15 +80,15 @@ def worker_jollyjack_transpose_shuffle(dtype):
                            , column_indices = column_indices_to_read
                            , pre_buffer = True
                            , use_threads = False)
-        
+
         jj.transpose_shuffle(np_array, dst_array, row_indicies)
-        
+
 def worker_transpose_numpy(dtype):
 
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
     row_indicies = list(range(n_columns_to_read))
     random.shuffle(row_indicies)
-    
+
     for f in range(n_files):
         pr = pq.ParquetReader()
         pr.open(f"{parquet_path}{f}")
@@ -101,8 +101,9 @@ def worker_transpose_numpy(dtype):
                            , column_indices = column_indices_to_read
                            , pre_buffer = True
                            , use_threads = False)
-        
+
         dst_array = np.copy(np_array.T)
+
 def worker_jollyjack_torch(pre_buffer, dtype):
 
     import torch
@@ -175,12 +176,29 @@ def measure_reading(max_workers, worker):
 
     return min (tt)
 
-for compression, dtype in [(None, pa.float32()), (None, pa.float16())]:
-
+for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None, pa.float16())]:
+    
     print(f".")
     for f in range(n_files):
         path = f"{parquet_path}{f}"
         genrate_data(n_rows, n_columns, path = path, compression = compression, dtype = dtype)
+
+    print(f".")
+    for n_threads in [1, 2]:
+        for pre_buffer in [False, True]:
+            for use_threads in [False, True]:
+                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_arrow_row_group(use_threads=use_threads, pre_buffer = pre_buffer)):.2f} seconds")
+
+    print(f".")
+    for n_threads in [1, 2]:
+        for pre_buffer in [False, True]:
+            for use_threads in [False, True]:
+                print(f"`JollyJack.read_into_numpy` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+
+    print(f".")
+    for n_threads in [1, 2]:
+        for pre_buffer in [False, True]:
+            print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
 
     print(f".")
     for jj_variant in [1, 2]:
