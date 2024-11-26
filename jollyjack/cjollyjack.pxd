@@ -5,7 +5,7 @@ from libcpp cimport bool
 from pyarrow._parquet cimport *
 
 cdef extern from "jollyjack.h":
-    cdef void ReadIntoMemory(shared_ptr[CRandomAccessFile] source
+    cdef void ReadIntoMemory (shared_ptr[CRandomAccessFile] source
         , shared_ptr[CFileMetaData] file_metadata
         , void* buffer
         , size_t buffer_size
@@ -20,7 +20,7 @@ cdef extern from "jollyjack.h":
         , int64_t expected_rows
         ) except + nogil
 
-    cdef void TransposeShuffle(void* src_buffer,
+    cdef void TransposeShuffle (void* src_buffer,
         size_t src_stride0_size,
         size_t src_stride1_size,
         int src_rows,

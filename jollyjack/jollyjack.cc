@@ -271,7 +271,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
   }
 }
 
-void TransposeShuffled(void* src_buffer, size_t src_stride0_size, size_t src_stride1_size, int src_rows, int src_cols,
+void TransposeShuffle (void* src_buffer, size_t src_stride0_size, size_t src_stride1_size, int src_rows, int src_cols,
     void* dst_buffer, size_t dst_stride0_size, size_t dst_stride1_size,
     std::vector<int> row_indices)
 {
