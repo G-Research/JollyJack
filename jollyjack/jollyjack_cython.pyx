@@ -121,7 +121,7 @@ cpdef void transpose_shuffle (cnp.ndarray src_array, cnp.ndarray dst_array, row_
     cdef uint64_t cdst_stride1 = dst_array.strides[1]
 
     with nogil:
-        cjollyjack.TransposeShuffled (src_array.data
+        cjollyjack.TransposeShuffle (src_array.data
             , csrc_stride0
             , csrc_stride1
             , csrc_rows
