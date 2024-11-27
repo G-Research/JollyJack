@@ -103,13 +103,11 @@ cpdef void transpose_shuffle (cnp.ndarray src_array, cnp.ndarray dst_array, row_
 
     assert src_array.ndim == 2, f"Unexpected src_array.ndim, {src_array.ndim} != 2"
     assert dst_array.ndim == 2, f"Unexpected dst_array.ndim, {dst_array.ndim} != 2"
-    assert src_array.shape[0] == dst_array.shape[1], f"src_array.shape[0] != dst_array.shape[1], {src_array.shape[0]} != {dst_array.shape[1]}"
-    assert src_array.shape[1] == dst_array.shape[0], f"src_array.shape[1] != dst_array.shape[0], {src_array.shape[1]} != {dst_array.shape[0]}"
-    assert min([src_array.strides[0], src_array.strides[1]]) == min([dst_array.strides[0], dst_array.strides[1]]) , f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != {dst_array.dtype}"
-
+    assert src_array.shape[0] == dst_array.shape[0], f"src_array.shape[0] != dst_array.shape[0], {src_array.shape[0]} != {dst_array.shape[0]}"
+    assert src_array.shape[1] == dst_array.shape[1], f"src_array.shape[1] != dst_array.shape[1], {src_array.shape[0]} != {dst_array.shape[1]}"
     assert (src_array.strides[0] <= src_array.strides[1]), f"Expected source array in a Fortran (column-major) order"
     assert (dst_array.strides[1] <= dst_array.strides[0]), f"Expected destination array in a C (row-major) order"
-
+    assert src_array.dtype == dst_array.dtype, f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != {dst_array.dtype}"
     assert len(row_indices) == dst_array.shape[0], f"Unexpected len of row indices, {len(row_indices)} != {dst_array.shape[0]}"
 
     cdef vector[int] crow_indices = row_indices

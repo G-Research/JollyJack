@@ -297,13 +297,13 @@ void TransposeShuffle (void* src_buffer, size_t src_stride0_size, size_t src_str
   if (variant == 1)
   {
     for (int src_col = 0; src_col < src_cols; src_col++)
-    {    
-      int dst_row = row_indices[src_col];
+    {
       size_t src_offset = src_stride1_size * src_col;
-      size_t dst_offset = dst_stride0_size * dst_row;
 
-      for (int src_row = 0; src_row < src_rows; src_row++, src_offset += src_stride0_size, dst_offset += dst_stride1_size)
+      for (int src_row = 0; src_row < src_rows; src_row++, src_offset += src_stride0_size)
       {
+        int dst_row = row_indices[src_row];
+        size_t dst_offset = dst_stride0_size * dst_row + dst_stride1_size * src_col;
         switch (src_stride0_size)
         {
           case 1:*(uint8_t*)&dst_ptr[dst_offset] = *(uint8_t*)&src_ptr[src_offset]; break;
