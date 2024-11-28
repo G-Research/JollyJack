@@ -393,6 +393,7 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
         }
       }
     }
+  }
 
   BLOCK_SIZE = 64;
   if (variant == 5)
