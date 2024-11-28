@@ -58,11 +58,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up QEMU
-      if: runner.os == 'Linux'
-      uses: docker/setup-qemu-action@v3
-      with:
-        platforms: all
 
     - name: Set up Python 3.10
       uses: actions/setup-python@v5
@@ -91,7 +86,7 @@ jobs:
         # With the default image we were getting "undefined symbol: _ZNK5arrow6Status8ToStringEv" error (e.g https://github.com/ray-project/ray/issues/24566) 
         CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
         CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
-        CIBW_ARCHS_LINUX: auto aarch64
+        CIBW_ARCHS_LINUX: auto 
         # Disable unsupported builds
         CIBW_SKIP: "pp* *_i686 *-musllinux_* *win32 cp313-*"
 
