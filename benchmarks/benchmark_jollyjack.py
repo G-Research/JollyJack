@@ -81,7 +81,7 @@ def worker_jollyjack_copy_to_row_major(dtype):
                            , pre_buffer = True
                            , use_threads = False)
 
-        jj.copy_to_row_major(np_array, dst_array, row_indicies)
+        jj.copy_to_numpy_row_major(np_array, dst_array, row_indicies)
 
 def worker_numpy_copy_to_row_major(dtype):
 
@@ -203,7 +203,7 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     for jj_variant in [4, 5]:
         os.environ["JJ_copy_to_row_major"] = str(jj_variant)
         for n_threads in [1, 2]:
-            print(f"`JollyJack.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
+            print(f"`JollyJack.copy_to_numpy_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
 
     print(f".")
     for n_threads in [1, 2]:
