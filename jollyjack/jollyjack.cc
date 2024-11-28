@@ -279,7 +279,7 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
   uint8_t *dst_ptr = (uint8_t *)dst_buffer;
   const int BLOCK_SIZE = 32;
   char *env_value = getenv("JJ_copy_to_row_major");
-  int variant = 3;
+  int variant = 4;
   if (env_value != NULL)
   {
     variant = atoi(env_value);
