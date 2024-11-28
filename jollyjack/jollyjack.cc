@@ -279,7 +279,7 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
   uint8_t *dst_ptr = (uint8_t *)dst_buffer;
   int BLOCK_SIZE = 32;
   char *env_value = getenv("JJ_copy_to_row_major");
-  int variant = 4;
+  int variant = 6;
   if (env_value != NULL)
   {
     variant = atoi(env_value);
@@ -424,4 +424,36 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
     }
   }
 
+  BLOCK_SIZE = 32;
+  if (variant == 6)
+  {
+    size_t src_offset_0 = 0;
+    size_t dst_offset_0 = 0;
+    for (int block_col = 0; block_col < src_cols; block_col += BLOCK_SIZE, src_offset_0 += src_stride1_size * BLOCK_SIZE, dst_offset_0 += dst_stride1_size * BLOCK_SIZE)
+    {
+      int src_col_limit = std::min (src_cols, block_col + BLOCK_SIZE);
+      size_t src_offset_1 = src_offset_0;
+      for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE, src_offset_1 += src_stride0_size * BLOCK_SIZE)
+      {
+        int src_row_limit = std::min (src_rows, block_row + BLOCK_SIZE);
+        size_t src_offset_2 = src_offset_1;
+        for (int src_row = block_row; src_row < src_row_limit; src_row++, src_offset_2 += src_stride0_size)
+        {
+          int dst_row = row_indices[src_row];
+          size_t src_offset = src_offset_2;
+          size_t dst_offset = dst_stride0_size * dst_row + dst_offset_0;
+          for (int src_col = block_col; src_col < src_col_limit; src_col++, dst_offset += dst_stride1_size, src_offset += src_stride1_size)
+          {
+            switch (src_stride0_size)
+            {
+              case 1:*(uint8_t*)&dst_ptr[dst_offset] = *(uint8_t*)&src_ptr[src_offset]; break;
+              case 2:*(uint16_t*)&dst_ptr[dst_offset] = *(uint16_t*)&src_ptr[src_offset]; break;
+              case 4:*(uint32_t*)&dst_ptr[dst_offset] = *(uint32_t*)&src_ptr[src_offset]; break;
+              case 8:*(uint64_t*)&dst_ptr[dst_offset] = *(uint64_t*)&src_ptr[src_offset]; break;
+            }
+          }
+        }
+      }
+    }
+  }
 }
