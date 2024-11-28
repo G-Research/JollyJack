@@ -99,7 +99,15 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cexpected_rows)
         return
 
-cpdef void copy_to_row_major (cnp.ndarray src_array, cnp.ndarray dst_array, row_indices = []):
+cpdef void copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
+    import torch
+
+    copy_to_numpy_row_major (src_array = src_tensor.numpy()
+        , dst_array = dst_tensor.numpy()
+        , row_indices = row_indices
+    )
+
+cpdef void copy_to_numpy_row_major (cnp.ndarray src_array, cnp.ndarray dst_array, row_indices):
 
     assert src_array.ndim == 2, f"Unexpected src_array.ndim, {src_array.ndim} != 2"
     assert dst_array.ndim == 2, f"Unexpected dst_array.ndim, {dst_array.ndim} != 2"
