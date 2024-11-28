@@ -397,9 +397,9 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
 
   BLOCK_SIZE = 64;
   if (variant == 5)
-  {  
+  {
     for (int block_col = 0; block_col < src_cols; block_col += BLOCK_SIZE)
-    {            
+    {
       int src_col_limit = std::min (src_cols, block_col + BLOCK_SIZE);
       for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE)
       {
