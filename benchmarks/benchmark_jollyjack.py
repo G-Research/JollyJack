@@ -200,7 +200,7 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
             print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
 
     print(f".")
-    for jj_variant in [1]:
+    for jj_variant in [1, 2]:
         os.environ["JJ_copy_to_row_major"] = str(jj_variant)
         for n_threads in [1, 2]:
             print(f"`JollyJack.copy_to_numpy_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
