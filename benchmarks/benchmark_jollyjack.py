@@ -100,7 +100,7 @@ def worker_transpose_numpy(dtype):
                            , pre_buffer = True
                            , use_threads = False)
 
-        expected_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype.to_pandas_dtype(), order='C')
+        expected_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='C')
         np.copyto(expected_array, np_array)        
 
 def worker_jollyjack_torch(pre_buffer, dtype):
