@@ -65,7 +65,7 @@ def worker_jollyjack_transpose_shuffle(dtype):
 
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
     dst_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='C')
-    row_indicies = list(range(n_columns_to_read))
+    row_indicies = list(range(chunk_size))
     random.shuffle(row_indicies)
 
     for f in range(n_files):
