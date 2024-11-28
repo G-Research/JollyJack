@@ -83,7 +83,7 @@ def worker_jollyjack_copy_to_row_major(dtype):
 
         jj.copy_to_row_major(np_array, dst_array, row_indicies)
 
-def worker_transpose_numpy(dtype):
+def worker_numpy_copy_to_row_major(dtype):
 
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
 
@@ -183,6 +183,23 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
         genrate_data(n_rows, n_columns, path = path, compression = compression, dtype = dtype)
 
     print(f".")
+    for n_threads in [1, 2]:
+        for pre_buffer in [False, True]:
+            for use_threads in [False, True]:
+                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_arrow_row_group(use_threads=use_threads, pre_buffer = pre_buffer)):.2f} seconds")
+
+    print(f".")
+    for n_threads in [1, 2]:
+        for pre_buffer in [False, True]:
+            for use_threads in [False, True]:
+                print(f"`JollyJack.read_into_numpy` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+
+    print(f".")
+    for n_threads in [1, 2]:
+        for pre_buffer in [False, True]:
+            print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+
+    print(f".")
     for jj_variant in [1, 2, 3, 4]:
         os.environ["JJ_copy_to_row_major"] = str(jj_variant)
         for n_threads in [1, 2]:
@@ -190,4 +207,4 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
 
     print(f".")
     for n_threads in [1, 2]:
-        print(f"`numpy.transpose().copy()` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_transpose_numpy(dtype.to_pandas_dtype())):.2f} seconds")
+        print(f"`numpy.transpose().copy()` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
