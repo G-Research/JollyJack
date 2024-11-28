@@ -99,12 +99,12 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cexpected_rows)
         return
 
-cpdef void transpose_shuffle (cnp.ndarray src_array, cnp.ndarray dst_array, row_indices = []):
+cpdef void copy_to_row_major (cnp.ndarray src_array, cnp.ndarray dst_array, row_indices = []):
 
     assert src_array.ndim == 2, f"Unexpected src_array.ndim, {src_array.ndim} != 2"
     assert dst_array.ndim == 2, f"Unexpected dst_array.ndim, {dst_array.ndim} != 2"
     assert src_array.shape[0] == dst_array.shape[0], f"src_array.shape[0] != dst_array.shape[0], {src_array.shape[0]} != {dst_array.shape[0]}"
-    assert src_array.shape[1] == dst_array.shape[1], f"src_array.shape[1] != dst_array.shape[1], {src_array.shape[0]} != {dst_array.shape[1]}"
+    assert src_array.shape[1] == dst_array.shape[1], f"src_array.shape[1] != dst_array.shape[1], {src_array.shape[1]} != {dst_array.shape[1]}"
     assert (src_array.strides[0] <= src_array.strides[1]), f"Expected source array in a Fortran (column-major) order"
     assert (dst_array.strides[1] <= dst_array.strides[0]), f"Expected destination array in a C (row-major) order"
     assert src_array.dtype == dst_array.dtype, f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != {dst_array.dtype}"
@@ -119,7 +119,7 @@ cpdef void transpose_shuffle (cnp.ndarray src_array, cnp.ndarray dst_array, row_
     cdef uint64_t cdst_stride1 = dst_array.strides[1]
 
     with nogil:
-        cjollyjack.TransposeShuffle (src_array.data
+        cjollyjack.CopyToRowMajor (src_array.data
             , csrc_stride0
             , csrc_stride1
             , csrc_rows

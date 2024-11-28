@@ -271,14 +271,14 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
   }
 }
 
-void TransposeShuffle (void* src_buffer, size_t src_stride0_size, size_t src_stride1_size, int src_rows, int src_cols,
+void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_stride1_size, int src_rows, int src_cols,
     void* dst_buffer, size_t dst_stride0_size, size_t dst_stride1_size,
     std::vector<int> row_indices)
 {
   uint8_t *src_ptr = (uint8_t *)src_buffer;
   uint8_t *dst_ptr = (uint8_t *)dst_buffer;
   const int BLOCK_SIZE = 32;
-  char *env_value = getenv("JJ_TRANSPOSE_SHUFFLE");
+  char *env_value = getenv("JJ_copy_to_row_major");
   int variant = 3;
   if (env_value != NULL)
   {
@@ -289,7 +289,7 @@ void TransposeShuffle (void* src_buffer, size_t src_stride0_size, size_t src_str
   {
       if (row_index < 0 || row_index >= src_rows)
       {          
-          auto msg = std::string("Row index = '" + std::to_string(row_index) + "' is not in the expected range [0, " + std::to_string(src_cols) + ")!");
+          auto msg = std::string("Row index = " + std::to_string(row_index) + " is not in the expected range [0, " + std::to_string(src_rows) + ")!");
           throw std::logic_error(msg);
       }
   }

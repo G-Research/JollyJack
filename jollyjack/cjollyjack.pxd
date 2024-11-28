@@ -20,7 +20,7 @@ cdef extern from "jollyjack.h":
         , int64_t expected_rows
         ) except + nogil
 
-    cdef void TransposeShuffle (void* src_buffer,
+    cdef void CopyToRowMajor (void* src_buffer,
         size_t src_stride0_size,
         size_t src_stride1_size,
         int src_rows,
