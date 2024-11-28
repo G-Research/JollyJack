@@ -207,4 +207,4 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
 
     print(f".")
     for n_threads in [1, 2]:
-        print(f"`numpy.transpose().copy()` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
+        print(f"`numpy.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
