@@ -86,6 +86,7 @@ def worker_jollyjack_copy_to_row_major(dtype):
 def worker_numpy_copy_to_row_major(dtype):
 
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
+    dst_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='C')
 
     for f in range(n_files):
         pr = pq.ParquetReader()
@@ -100,8 +101,7 @@ def worker_numpy_copy_to_row_major(dtype):
                            , pre_buffer = True
                            , use_threads = False)
 
-        expected_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='C')
-        np.copyto(expected_array, np_array)        
+        np.copyto(dst_array, np_array)        
 
 def worker_jollyjack_torch(pre_buffer, dtype):
 
