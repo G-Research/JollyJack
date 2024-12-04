@@ -296,15 +296,6 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
     variant = atoi(env_value);
   }
 
-  for (auto row_index : row_indices)
-  {
-      if (row_index < 0 || row_index >= src_rows)
-      {          
-          auto msg = std::string("Row index = " + std::to_string(row_index) + " is not in the expected range [0, " + std::to_string(src_rows) + ")!");
-          throw std::logic_error(msg);
-      }
-  }
-
   if (variant == 1)
   {
     size_t src_offset_0 = 0;
