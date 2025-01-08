@@ -1,5 +1,5 @@
 pyarrow~=18.0
 pandas
-palletjack
+palletjack>=2.4.0
 humanize
 numpy>=1.16.6
