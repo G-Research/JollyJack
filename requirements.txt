@@ -2,4 +2,4 @@ pyarrow~=18.0
 pandas
 palletjack
 humanize
-
+numpy>=1.16.6
