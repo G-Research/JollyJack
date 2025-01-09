@@ -109,14 +109,19 @@ cpdef void copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
 
 cpdef void copy_to_numpy_row_major (cnp.ndarray src_array, cnp.ndarray dst_array, row_indices):
 
+    if src_array.shape[0] == 0:
+        return # nothing to do
+
     assert src_array.ndim == 2, f"Unexpected src_array.ndim, {src_array.ndim} != 2"
     assert dst_array.ndim == 2, f"Unexpected dst_array.ndim, {dst_array.ndim} != 2"
-    assert src_array.shape[0] == dst_array.shape[0], f"src_array.shape[0] != dst_array.shape[0], {src_array.shape[0]} != {dst_array.shape[0]}"
+    assert src_array.shape[0] <= dst_array.shape[0], f"src_array.shape[0] > dst_array.shape[0], {src_array.shape[0]} > {dst_array.shape[0]}"
     assert src_array.shape[1] == dst_array.shape[1], f"src_array.shape[1] != dst_array.shape[1], {src_array.shape[1]} != {dst_array.shape[1]}"
     assert (src_array.strides[0] <= src_array.strides[1]), f"Expected source array in a Fortran (column-major) order"
     assert (dst_array.strides[1] <= dst_array.strides[0]), f"Expected destination array in a C (row-major) order"
     assert src_array.dtype == dst_array.dtype, f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != {dst_array.dtype}"
-    assert len(row_indices) == dst_array.shape[0], f"Unexpected len of row indices, {len(row_indices)} != {dst_array.shape[0]}"
+    assert len(row_indices) == src_array.shape[0], f"Unexpected len of row indices, {len(row_indices)} != {src_array.shape[0]}"
+    assert min(row_indices) >= 0, f"Row index = {min(row_indices)} is not in the expected range [0, {dst_array.shape[0]})" 
+    assert max(row_indices) < dst_array.shape[0], f"Row index = {max(row_indices)} is not in the expected range [0, {dst_array.shape[0]})" 
 
     cdef vector[int] crow_indices = row_indices
     cdef uint64_t csrc_stride0 = src_array.strides[0]

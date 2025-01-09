@@ -695,7 +695,9 @@ class TestJollyJack(unittest.TestCase):
 
     def test_copy_to_numpy_row_major(self):
 
-        for (n_rows, n_columns) in [(5,6), (1, 1), (100, 200), ]:
+        for (n_rows, n_columns) in [(1, 1), (5,6),
+                                    (8, 8), (16, 16), (32, 32), (32, 33), (33, 32),
+                                    (64, 64), (65, 64), (64, 65), (100, 200), (1000, 2000)]:
             for dtype in [pa.float16(), pa.float32(), pa.float64()]:
                 with self.subTest((n_rows, n_columns, dtype)):
 
@@ -721,11 +723,16 @@ class TestJollyJack(unittest.TestCase):
                     jj.copy_to_numpy_row_major(src_array = src_view, dst_array = dst_view, row_indices = range(n_rows - 2))
                     self.assertTrue(np.array_equal(expected_array, dst_view), f"{expected_array}\n!=\n{dst_view}")
 
+                    # Scattered rows
+                    dst_array = np.zeros((2 * n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
+                    expected_array = np.zeros((2 * n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
+                    expected_array[::2] = src_array # Copy to even indices (0, 2, ...)
+                    jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = [i * 2 for i in range(n_rows)])
+                    self.assertTrue(np.array_equal(expected_array, dst_array), f"{expected_array}\n!=\n{dst_array}")
+
     def test_copy_to_torch_row_major(self):
 
-        for (n_rows, n_columns) in [(1, 1), (1, 2), (2, 1), (5,6), (4, 4)
-                                    , (8, 8), (16, 16), (32, 32), (32, 33), (33, 32)
-                                    , (64, 64), (65, 64), (64, 65), (100, 200), (10000, 20000),]:
+        for (n_rows, n_columns) in [(1, 1), (1, 2), (2, 1), (2, 2), ]:
             for dtype in [pa.float16(), pa.float32(), pa.float64()]:
                 with self.subTest((n_rows, n_columns, dtype)):
 
@@ -742,7 +749,7 @@ class TestJollyJack(unittest.TestCase):
 # 
     def test_copy_to_row_major_arg_validation(self):
  
-        for (n_rows, n_columns) in [(5,6), ]:
+        for (n_rows, n_columns) in [(5,6), (50, 60), ]:
             for dtype in [pa.float16(), pa.float32(), pa.float64()]:
                 with self.subTest((n_rows, n_columns, dtype)):
 
@@ -750,22 +757,22 @@ class TestJollyJack(unittest.TestCase):
 
                     with self.assertRaises(AssertionError) as context:
                         dst_array = np.zeros((n_rows, n_columns + 1), dtype=dtype.to_pandas_dtype(), order='C')
-                        jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns))
+                        jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_rows))
                     self.assertTrue(f"src_array.shape[1] != dst_array.shape[1], {n_columns} != {n_columns + 1}" in str(context.exception), context.exception)
 
                     with self.assertRaises(AssertionError) as context:
-                        dst_array = np.zeros((n_rows + 1, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
-                        jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns))
-                    self.assertTrue(f"src_array.shape[0] != dst_array.shape[0], {n_rows} != {n_rows + 1}" in str(context.exception), context.exception)
+                        dst_array = np.zeros((n_rows - 1, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
+                        jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_rows))
+                    self.assertTrue(f"src_array.shape[0] > dst_array.shape[0], {n_rows} > {n_rows - 1}" in str(context.exception), context.exception)
 
                     with self.assertRaises(AssertionError) as context:
                         dst_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
-                        jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns))
+                        jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_rows))
                     self.assertTrue(f"Expected destination array in a C (row-major) order" in str(context.exception), context.exception)
 
                     with self.assertRaises(AssertionError) as context:
                         dst_array = np.zeros((n_rows, n_columns), dtype=np.uint8, order='C')
-                        jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_columns))
+                        jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_rows))
                     self.assertTrue(f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != uint8" in str(context.exception), context.exception)
 
                     with self.assertRaises(AssertionError) as context:
@@ -773,15 +780,15 @@ class TestJollyJack(unittest.TestCase):
                         jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_rows - 1))
                     self.assertTrue(f"Unexpected len of row indices, {n_rows - 1} != {n_rows}" in str(context.exception), context.exception)
 
-                    with self.assertRaises(RuntimeError) as context:
+                    with self.assertRaises(AssertionError) as context:
                         dst_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
                         jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = [i - 1 for i in range(n_rows)])
-                    self.assertTrue(f"Row index = -1 is not in the expected range [0, {n_rows})!" in str(context.exception), context.exception)
+                    self.assertTrue(f"Row index = -1 is not in the expected range [0, {n_rows})" in str(context.exception), context.exception)
 
-                    with self.assertRaises(RuntimeError) as context:
+                    with self.assertRaises(AssertionError) as context:
                         dst_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
                         jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = [i + 1 for i in range(n_rows)])
-                    self.assertTrue(f"Row index = {n_rows} is not in the expected range [0, {n_rows})!" in str(context.exception), context.exception)
+                    self.assertTrue(f"Row index = {n_rows} is not in the expected range [0, {n_rows})" in str(context.exception), context.exception)
 
 if __name__ == '__main__':
     unittest.main()
