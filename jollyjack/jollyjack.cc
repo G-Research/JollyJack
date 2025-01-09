@@ -191,7 +191,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<int> &target_column_indices
     , bool pre_buffer
     , bool use_threads
-    , int64_t expected_rows)
+    , int64_t expected_rows
+    , const std::vector<int> &ctarget_row_ranges)
 {
   arrow::io::RandomAccessFile *random_access_file = nullptr;
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();

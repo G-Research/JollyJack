@@ -12,7 +12,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<int> &target_column_indices
     , bool pre_buffer
     , bool use_threads
-    , int64_t expected_rows);
+    , int64_t expected_rows
+    , const std::vector<int> &ctarget_row_ranges);
 
 void CopyToRowMajor (void* src_buffer,
     size_t src_stride0_size,
