@@ -106,6 +106,37 @@ class TestJollyJack(unittest.TestCase):
             pr.close()
 
     @for_each_parameter()
+    def test_read_entire_table_with_slices(self, pre_buffer, use_threads, use_memory_map):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows, n_columns)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+
+            # Create an array of zeros
+            expected_data = pr.read_all()
+            expected_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
+            expected_array[0:chunk_size] = expected_data[chunk_size:2 * chunk_size, :]
+            expected_array[chunk_size:2 * chunk_size] = expected_data[chunk_size:2 * chunk_size, :]
+            row_ranges = [slice (chunk_size, 2 * chunk_size), slice(0, 1), slice (1, chunk_size), ]
+            np_array2 = np.zeros((n_rows, n_columns), dtype='f', order='F')
+            jj.read_into_numpy (source = path
+                                , metadata = None
+                                , np_array = np_array2
+                                , row_group_indices = range(pr.metadata.num_row_groups)
+                                , column_indices = range(pr.metadata.num_columns)
+                                , pre_buffer = pre_buffer
+                                , use_threads = use_threads
+                                , use_memory_map = use_memory_map
+                                , row_ranges = row_ranges)
+
+            self.assertTrue(np.array_equal(np_array2, expected_array))
+            pr.close()
+            
+    @for_each_parameter()
     def test_read_with_palletjack(self, pre_buffer, use_threads, use_memory_map):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
