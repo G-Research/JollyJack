@@ -73,6 +73,7 @@ arrow::Status ReadColumn (int column_index
         return arrow::Status::UnknownError(msg);
     }
 
+    int64_t rows_to_read = num_rows;
     switch (column_reader->descr()->physical_type())
     {
       case parquet::Type::DOUBLE:
@@ -83,7 +84,6 @@ arrow::Status ReadColumn (int column_index
           return arrow::Status::UnknownError(msg);
         }
 
-        int64_t rows_to_read = num_rows;
         auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader.get());
         while (rows_to_read > 0)
         {
@@ -103,7 +103,6 @@ arrow::Status ReadColumn (int column_index
           return arrow::Status::UnknownError(msg);
         }
 
-        int64_t rows_to_read = num_rows;
         auto typed_reader = static_cast<parquet::FloatReader *>(column_reader.get());
         while (rows_to_read > 0)
         {
@@ -126,7 +125,6 @@ arrow::Status ReadColumn (int column_index
 
         const int64_t warp_size = 1024;
         parquet::FixedLenByteArray flba [warp_size];
-        int64_t rows_to_read = num_rows;
         auto typed_reader = static_cast<parquet::FixedLenByteArrayReader *>(column_reader.get());
 
         while (rows_to_read > 0)
@@ -192,8 +190,13 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , bool pre_buffer
     , bool use_threads
     , int64_t expected_rows
-    , const std::vector<int> &ctarget_row_ranges)
+    , const std::vector<int> &target_row_ranges)
 {
+  if (target_row_ranges.size() % 2 != 0)
+  {
+    throw std::logic_error("target_row_ranges must contain pairs of start and end indices");
+  }
+
   arrow::io::RandomAccessFile *random_access_file = nullptr;
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
