@@ -13,7 +13,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , bool pre_buffer
     , bool use_threads
     , int64_t expected_rows
-    , const std::vector<int> &ctarget_row_ranges);
+    , const std::vector<int64_t> &target_row_ranges);
 
 void CopyToRowMajor (void* src_buffer,
     size_t src_stride0_size,

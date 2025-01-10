@@ -24,6 +24,7 @@ arrow::Status ReadColumn (int column_index
     , size_t stride1_size
     , const std::vector<int> &column_indices
     , const std::vector<int> &target_column_indices
+    , const std::vector<int64_t> &target_row_ranges
     ) noexcept
 {
   std::string column_name;
@@ -190,7 +191,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , bool pre_buffer
     , bool use_threads
     , int64_t expected_rows
-    , const std::vector<int> &target_row_ranges)
+    , const std::vector<int64_t> &target_row_ranges)
 {
   if (target_row_ranges.size() % 2 != 0)
   {
@@ -262,7 +263,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                 , stride0_size
                 , stride1_size
                 , column_indices
-                , target_column_indices);
+                , target_column_indices
+                , target_row_ranges);
               });
     if (result != arrow::Status::OK())
     {

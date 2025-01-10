@@ -48,7 +48,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef uint64_t cbuffer_size = (np_array.shape[0]) * cstride0_size + (np_array.shape[1] - 1) * cstride1_size
     cdef shared_ptr[CFileMetaData] c_metadata
     cdef vector[int] ctarget_column_indices
-    cdef vector[int] ctarget_row_ranges
+    cdef vector[int64_t] ctarget_row_ranges
 
     if metadata is not None:
         c_metadata = metadata.sp_metadata
