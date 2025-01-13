@@ -109,7 +109,8 @@ arrow::Status ReadColumn (int column_index
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
-            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (double *)&base_ptr[target_offset + values_read * stride0_size], &tmp_values_read);
+            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (double *)&base_ptr[target_offset], &tmp_values_read);
+            target_offset += tmp_values_read * stride0_size;
             values_read += tmp_values_read;
             rows_to_read -= tmp_values_read;
           }
@@ -128,7 +129,8 @@ arrow::Status ReadColumn (int column_index
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
-            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (float *)&base_ptr[target_offset + values_read * stride0_size], &tmp_values_read);
+            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (float *)&base_ptr[target_offset], &tmp_values_read);
+            target_offset += tmp_values_read * stride0_size;
             values_read += tmp_values_read;
             rows_to_read -= tmp_values_read;
           }
@@ -162,7 +164,8 @@ arrow::Status ReadColumn (int column_index
                   return arrow::Status::UnknownError(msg);
                 }
 
-                memcpy(&base_ptr[target_offset + values_read * stride0_size], flba[0].ptr, tmp_values_read * stride0_size);
+                memcpy(&base_ptr[target_offset], flba[0].ptr, tmp_values_read * stride0_size);
+                target_offset += tmp_values_read * stride0_size;
                 values_read += tmp_values_read;
                 rows_to_read -= tmp_values_read;
               }
@@ -318,11 +321,15 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         }
 
         auto range_rows = target_row_ranges[target_row_ranges_idx + 1] - target_row_ranges[target_row_ranges_idx];
+        target_row_ranges_idx += 2;
         if (rows < range_rows)
         {
           auto msg = std::string("range_rows < rows ");
           throw std::logic_error(msg);
         }
+
+        if (rows  == range_rows)
+          break;
 
         rows -= range_rows;
       }
