@@ -91,7 +91,7 @@ class TestJollyJack(unittest.TestCase):
                 pr.close()
 
     @for_each_parameter()
-    def test_read_with_slices_to_large(self, pre_buffer, use_threads, use_memory_map):
+    def test_read_with_slices_error_handling(self, pre_buffer, use_threads, use_memory_map):
 
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
             with tempfile.TemporaryDirectory() as tmpdirname:
@@ -101,7 +101,6 @@ class TestJollyJack(unittest.TestCase):
                 pr = pq.ParquetReader()
                 pr.open(path)
 
-                row_ranges = [slice (0, 2 * chunk_size), ]
                 np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
                 
                 with self.assertRaises(RuntimeError) as context:
@@ -113,9 +112,22 @@ class TestJollyJack(unittest.TestCase):
                                         , pre_buffer = pre_buffer
                                         , use_threads = use_threads
                                         , use_memory_map = use_memory_map
-                                        , row_ranges = row_ranges)
+                                        , row_ranges =  [slice (0, 2 * chunk_size), ])
 
                 self.assertTrue(f"Requested to read {2 * chunk_size} rows, but the current row group has only {chunk_size} rows" in str(context.exception), context.exception)
+
+                with self.assertRaises(RuntimeError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = range(pr.metadata.num_row_groups)
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges =  [slice (0, chunk_size), slice (chunk_size, 2 * chunk_size - 1)])
+
+                self.assertTrue(f"Requested to read {chunk_size - 1} rows, but the current row group has {chunk_size} rows" in str(context.exception), context.exception)
 
 if __name__ == '__main__':
     unittest.main()

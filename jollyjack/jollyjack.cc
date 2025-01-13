@@ -61,7 +61,9 @@ arrow::Status ReadColumn (int column_index
       {
         if (target_row_ranges_idx + 1 >= target_row_ranges.size())
         {
-          auto msg = std::string("target_row_ranges:");
+          auto msg = std::string("Requested to read ") + std::to_string(rows_to_read + values_read) + " rows"
+              + ", but the current row group has " + std::to_string(num_rows) + " rows.";
+
           return arrow::Status::UnknownError(msg);
         }
 
