@@ -190,16 +190,10 @@ arrow::Status ReadColumn (int column_index
         }
       }      
 
-      if (target_row_ranges.size() == 0)
+      if (values_read == num_rows)
         break;
 
-      if (target_row_ranges.size() > 0)
-      {      
-        if (values_read == num_rows)
-          break;
-
-        target_row_ranges_idx += 2;
-      }
+      target_row_ranges_idx += 2;
     }
 
     if (values_read != num_rows)
