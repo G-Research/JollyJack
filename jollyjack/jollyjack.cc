@@ -67,11 +67,20 @@ arrow::Status ReadColumn (int column_index
 
         target_row = target_row_ranges[target_row_ranges_idx];
         rows_to_read = target_row_ranges[target_row_ranges_idx + 1] - target_row;
+
+        if (rows_to_read + values_read > num_rows)
+        {
+            auto msg = std::string("Requested to read ") + std::to_string(rows_to_read + values_read) + " rows"
+              + ", but the current row group has only " + std::to_string(num_rows) + " rows.";
+
+            return arrow::Status::UnknownError(msg);
+        }
       }
       else
       {
         rows_to_read = num_rows;
       }
+
 
       size_t target_offset = stride0_size * target_row + stride1_size * target_column;
       size_t required_size = target_offset + num_rows * stride0_size;

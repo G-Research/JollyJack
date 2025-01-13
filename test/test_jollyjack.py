@@ -67,7 +67,6 @@ class TestJollyJack(unittest.TestCase):
                 path = os.path.join(tmpdirname, "my.parquet")
                 table = get_table(n_rows, n_columns, data_type=dtype)
                 pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
-
                 pr = pq.ParquetReader()
                 pr.open(path)
 
@@ -90,7 +89,7 @@ class TestJollyJack(unittest.TestCase):
 
                 self.assertTrue(np.array_equal(np_array, expected_array))
                 pr.close()
-            
+
     @for_each_parameter()
     def test_read_with_slices_to_large(self, pre_buffer, use_threads, use_memory_map):
 
@@ -99,20 +98,24 @@ class TestJollyJack(unittest.TestCase):
                 path = os.path.join(tmpdirname, "my.parquet")
                 table = get_table(n_rows, n_columns, data_type=dtype)
                 pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+                pr = pq.ParquetReader()
+                pr.open(path)
 
                 row_ranges = [slice (0, 2 * chunk_size), ]
-
                 np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
-                jj.read_into_numpy (source = path
-                                    , metadata = None
-                                    , np_array = np_array
-                                    , row_group_indices = range(pr.metadata.num_row_groups)
-                                    , column_indices = range(pr.metadata.num_columns)
-                                    , pre_buffer = pre_buffer
-                                    , use_threads = use_threads
-                                    , use_memory_map = use_memory_map
-                                    , row_ranges = row_ranges)
+                
+                with self.assertRaises(RuntimeError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = range(pr.metadata.num_row_groups)
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges = row_ranges)
 
+                self.assertTrue(f"Requested to read {2 * chunk_size} rows, but the current row group has only {chunk_size} rows" in str(context.exception), context.exception)
 
 if __name__ == '__main__':
     unittest.main()
