@@ -325,20 +325,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
       auto rows = num_rows;
       while (true)
       {
-        if (target_row_ranges_idx + 1 >= target_row_ranges.size())
-        {
-          auto msg = std::string("target_row_ranges:");
-          throw std::logic_error(msg);
-        }
-
         auto range_rows = target_row_ranges[target_row_ranges_idx + 1] - target_row_ranges[target_row_ranges_idx];
         target_row_ranges_idx += 2;
-        if (rows < range_rows)
-        {
-          auto msg = std::string("range_rows < rows ");
-          throw std::logic_error(msg);
-        }
-
         if (rows  == range_rows)
           break;
 

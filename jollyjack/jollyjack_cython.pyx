@@ -75,8 +75,11 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
 
     if row_ranges:
         for sl in row_ranges:
+            if sl.start is None or sl.stop is None or sl.start < 0 or sl.stop < 0 or sl.stop <= sl.start:
+                raise ValueError(f"Row range '{sl}' is not a valid range")
+
             if sl.step is not None and sl.step != 1:
-                raise ValueError(f"row_ranges step must be 1, got {sl.step}")
+                raise ValueError(f"Row range '{sl}' is not contiguous")
 
         ctarget_row_ranges = [x for sl in row_ranges for x in (sl.start, sl.stop)]
 
