@@ -239,7 +239,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 {
   if (target_row_ranges.size() % 2 != 0)
   {
-    throw std::logic_error("target_row_ranges must contain pairs of start and end indices");
+    throw std::logic_error("target_row_ranges must contain pairs of [start, end) indices");
   }
 
   arrow::io::RandomAccessFile *random_access_file = nullptr;
