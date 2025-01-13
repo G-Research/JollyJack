@@ -325,7 +325,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
       {
         auto range_rows = target_row_ranges[target_row_ranges_idx + 1] - target_row_ranges[target_row_ranges_idx];
         target_row_ranges_idx += 2;
-        if (rows  == range_rows)
+        if (rows == range_rows)
           break;
 
         rows -= range_rows;
