@@ -53,7 +53,7 @@ arrow::Status ReadColumn (int column_index
     int64_t values_read = 0;
     char *base_ptr = (char *)buffer;
     
-    int64_t rows_to_read;
+    int64_t rows_to_read = num_rows;
     while (true)
     {
       if (target_row_ranges.size() > 0)
@@ -76,10 +76,6 @@ arrow::Status ReadColumn (int column_index
 
             return arrow::Status::UnknownError(msg);
         }
-      }
-      else
-      {
-        rows_to_read = num_rows;
       }
 
       size_t target_offset = stride0_size * target_row + stride1_size * target_column;
