@@ -726,6 +726,38 @@ class TestJollyJack(unittest.TestCase):
                 pr.close()
 
     @for_each_parameter()
+    def test_read_entire_tensor_with_slices(self, pre_buffer, use_threads, use_memory_map):
+
+        for dtype in [pa.float16(), pa.float32(), pa.float64()]:
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                path = os.path.join(tmpdirname, "my.parquet")
+                table = get_table(n_rows, n_columns, data_type=dtype)
+                pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+                pr = pq.ParquetReader()
+                pr.open(path)
+
+                # Create an array of zeros
+                expected_data = pr.read_all()
+                expected_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
+                expected_array[:chunk_size] = expected_data[chunk_size:]
+                expected_array[chunk_size:] = expected_data[:chunk_size]
+                row_ranges = [slice (chunk_size, 2 * chunk_size), slice(0, 1), slice (1, chunk_size), ]
+                tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
+                
+                jj.read_into_torch (source = path
+                                    , metadata = None
+                                    , tensor = tensor
+                                    , row_group_indices = range(pr.metadata.num_row_groups)
+                                    , column_indices = range(pr.metadata.num_columns)
+                                    , pre_buffer = pre_buffer
+                                    , use_threads = use_threads
+                                    , use_memory_map = use_memory_map
+                                    , row_ranges = row_ranges)
+
+                self.assertTrue(np.array_equal(tensor.numpy(), expected_array))
+                pr.close()
+
+    @for_each_parameter()
     def test_read_with_slices_error_handling(self, pre_buffer, use_threads, use_memory_map):
 
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
