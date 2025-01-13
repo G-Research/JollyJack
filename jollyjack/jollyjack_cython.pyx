@@ -18,7 +18,7 @@ from collections.abc import Iterable
 def is_iterable_of_iterables(obj):
     return isinstance(obj, Iterable) and isinstance(obj[0], Iterable) and not isinstance(obj[0], str)
 
-cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
+cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
 
     import torch
 
@@ -26,6 +26,7 @@ cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_gr
         , metadata = metadata
         , np_array = tensor.numpy()
         , row_group_indices = row_group_indices
+        , row_ranges = row_ranges
         , column_indices = column_indices
         , column_names = column_names
         , pre_buffer = pre_buffer
@@ -35,7 +36,7 @@ cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_gr
 
     return
 
-cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, row_ranges = []):
+cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
 
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices
@@ -103,12 +104,12 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cstride1_size
             , ccolumn_indices
             , crow_group_indices
+            , ctarget_row_ranges
             , ccolumn_names
             , ctarget_column_indices
             , cpre_buffer
             , cuse_threads
-            , cexpected_rows
-            , ctarget_row_ranges)
+            , cexpected_rows)
         return
 
 cpdef void copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
