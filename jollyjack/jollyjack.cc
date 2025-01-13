@@ -1,4 +1,3 @@
-
 #include "arrow/status.h"
 #include "arrow/util/parallel.h"
 #include "parquet/column_reader.h"
@@ -82,7 +81,6 @@ arrow::Status ReadColumn (int column_index
       {
         rows_to_read = num_rows;
       }
-
 
       size_t target_offset = stride0_size * target_row + stride1_size * target_column;
       size_t required_size = target_offset + num_rows * stride0_size;
