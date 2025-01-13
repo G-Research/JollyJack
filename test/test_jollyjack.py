@@ -693,6 +693,123 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Buffer overrun error: Attempted to read {chunk_size} rows into location [{chunk_size}, {n_columns - 1}], but there was space available for only {chunk_size - 1} rows." in str(context.exception), context.exception)
 
+
+    @for_each_parameter()
+    def test_read_entire_table_with_slices(self, pre_buffer, use_threads, use_memory_map):
+
+        for dtype in [pa.float16(), pa.float32(), pa.float64()]:
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                path = os.path.join(tmpdirname, "my.parquet")
+                table = get_table(n_rows, n_columns, data_type=dtype)
+                pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+                pr = pq.ParquetReader()
+                pr.open(path)
+
+                # Create an array of zeros
+                expected_data = pr.read_all()
+                expected_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
+                expected_array[:chunk_size] = expected_data[chunk_size:]
+                expected_array[chunk_size:] = expected_data[:chunk_size]
+                row_ranges = [slice (chunk_size, 2 * chunk_size), slice(0, 1), slice (1, chunk_size), ]
+                np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = range(pr.metadata.num_row_groups)
+                                    , column_indices = range(pr.metadata.num_columns)
+                                    , pre_buffer = pre_buffer
+                                    , use_threads = use_threads
+                                    , use_memory_map = use_memory_map
+                                    , row_ranges = row_ranges)
+
+                self.assertTrue(np.array_equal(np_array, expected_array))
+                pr.close()
+
+    @for_each_parameter()
+    def test_read_with_slices_error_handling(self, pre_buffer, use_threads, use_memory_map):
+
+        for dtype in [pa.float16(), pa.float32(), pa.float64()]:
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                path = os.path.join(tmpdirname, "my.parquet")
+                table = get_table(n_rows, n_columns, data_type=dtype)
+                pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+                pr = pq.ParquetReader()
+                pr.open(path)
+
+                np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
+                
+                with self.assertRaises(RuntimeError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = range(pr.metadata.num_row_groups)
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges =  [slice (0, 2 * chunk_size), ])
+                self.assertTrue(f"Requested to read {2 * chunk_size} rows, but the current row group has only {chunk_size} rows" in str(context.exception), context.exception)
+
+                with self.assertRaises(RuntimeError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = range(pr.metadata.num_row_groups)
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges =  [slice (0, chunk_size), slice (chunk_size, 2 * chunk_size - 1)])
+                self.assertTrue(f"Requested to read {chunk_size - 1} rows, but the current row group has {chunk_size} rows" in str(context.exception), context.exception)
+
+                with self.assertRaises(ValueError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = [0]
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges =  [slice (0, chunk_size, 2)])
+                self.assertTrue(f"Row range 'slice(0, {chunk_size}, 2)' is not contiguous" in str(context.exception), context.exception)
+
+                with self.assertRaises(ValueError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = [0]
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges =  [slice(None, chunk_size)])
+                self.assertTrue(f"Row range 'slice(None, {chunk_size}, None)' is not a valid range" in str(context.exception), context.exception)
+
+                with self.assertRaises(ValueError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = [0]
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges =  [slice(chunk_size, None)])
+                self.assertTrue(f"Row range 'slice({chunk_size}, None, None)' is not a valid range" in str(context.exception), context.exception)
+
+                with self.assertRaises(ValueError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = [0]
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges =  [slice(chunk_size, chunk_size - 1)])
+                self.assertTrue(f"Row range 'slice({chunk_size}, {chunk_size - 1}, None)' is not a valid range" in str(context.exception), context.exception)
+
     def test_copy_to_numpy_row_major(self):
 
         for (n_rows, n_columns) in [(1, 1), (5,6),
