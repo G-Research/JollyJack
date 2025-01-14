@@ -870,6 +870,19 @@ class TestJollyJack(unittest.TestCase):
                                         , use_memory_map = use_memory_map
                                         , row_ranges =  [slice(chunk_size, chunk_size - 1)])
                 self.assertTrue(f"Row range 'slice({chunk_size}, {chunk_size - 1}, None)' is not a valid range" in str(context.exception), context.exception)
+                
+                with self.assertRaises(RuntimeError) as context:
+                    jj.read_into_numpy (source = path
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = [0]
+                                        , column_indices = range(pr.metadata.num_columns)
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map
+                                        , row_ranges =  [slice(0, chunk_size), slice(0, chunk_size)])
+                self.assertTrue(f"Expected to read 2 row ranges, but read only 1!" in str(context.exception), context.exception)
+
                 pr.close()
 
     def test_copy_to_numpy_row_major(self):
