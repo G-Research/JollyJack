@@ -79,7 +79,7 @@ arrow::Status ReadColumn (int column_index
       }
 
       size_t target_offset = stride0_size * target_row + stride1_size * target_column;
-      size_t required_size = target_offset + num_rows * stride0_size;
+      size_t required_size = target_offset + rows_to_read * stride0_size;
 
       if (target_offset >= buffer_size)
       {        

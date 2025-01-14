@@ -102,6 +102,20 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , column_indices = ((3, 0), (3, 1)))
 ```
 
+### Sparse reading
+```
+np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
+with fs.LocalFileSystem().open_input_file(path) as f:
+    jj.read_into_numpy (source = f
+                        , metadata = None
+                        , np_array = np_array
+                        , row_group_indices = [0]
+                        , row_ranges = [slice(0, 1), slice(4, 6)]
+                        , column_indices = range(pr.metadata.num_columns)
+						)
+print(np_array)
+```
+
 ### Generating a torch tensor to read into:
 ```
 import torch
