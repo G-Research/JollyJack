@@ -841,6 +841,7 @@ class TestJollyJack(unittest.TestCase):
                                         , use_memory_map = use_memory_map
                                         , row_ranges =  [slice(chunk_size, chunk_size - 1)])
                 self.assertTrue(f"Row range 'slice({chunk_size}, {chunk_size - 1}, None)' is not a valid range" in str(context.exception), context.exception)
+                pr.close()
 
     def test_copy_to_numpy_row_major(self):
 
