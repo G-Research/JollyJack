@@ -722,6 +722,22 @@ class TestJollyJack(unittest.TestCase):
                                     , row_ranges = row_ranges)
 
                 self.assertTrue(np.array_equal(np_array, expected_array))
+
+                # Create an array of zeros
+                expected_data = pr.read_all()
+                np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = range(pr.metadata.num_row_groups)
+                                    , column_indices = range(pr.metadata.num_columns)
+                                    , pre_buffer = pre_buffer
+                                    , use_threads = use_threads
+                                    , use_memory_map = use_memory_map
+                                    , row_ranges = [slice (x, x + 1) for x in range(n_rows)])
+
+                self.assertTrue(np.array_equal(np_array, expected_data))
+
                 pr.close()
  
     @for_each_parameter()
