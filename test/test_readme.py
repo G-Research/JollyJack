@@ -88,7 +88,7 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , metadata = None
                         , np_array = np_array
                         , row_group_indices = [0]
-                        , row_ranges = [slice(0, 1), slice(4, 7)]
+                        , row_ranges = [slice(0, 1), slice(4, 6)]
                         , column_indices = range(pr.metadata.num_columns)
 						)
 print(np_array)
