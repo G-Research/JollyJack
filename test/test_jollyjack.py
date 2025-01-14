@@ -693,7 +693,6 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Buffer overrun error: Attempted to read {chunk_size} rows into location [{chunk_size}, {n_columns - 1}], but there was space available for only {chunk_size - 1} rows." in str(context.exception), context.exception)
 
-
     @for_each_parameter()
     def test_read_entire_table_with_slices(self, pre_buffer, use_threads, use_memory_map):
 
@@ -716,6 +715,36 @@ class TestJollyJack(unittest.TestCase):
                                     , metadata = None
                                     , np_array = np_array
                                     , row_group_indices = range(pr.metadata.num_row_groups)
+                                    , column_indices = range(pr.metadata.num_columns)
+                                    , pre_buffer = pre_buffer
+                                    , use_threads = use_threads
+                                    , use_memory_map = use_memory_map
+                                    , row_ranges = row_ranges)
+
+                self.assertTrue(np.array_equal(np_array, expected_array))
+                pr.close()
+ 
+    @for_each_parameter()
+    def test_read_partial_table_with_slices(self, pre_buffer, use_threads, use_memory_map):
+
+        for dtype in [pa.float16(), pa.float32(), pa.float64()]:
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                path = os.path.join(tmpdirname, "my.parquet")
+                table = get_table(n_rows, n_columns, data_type=dtype)
+                pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+                pr = pq.ParquetReader()
+                pr.open(path)
+
+                # Create an array of zeros
+                expected_data = pr.read_all()
+                expected_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
+                expected_array[:chunk_size] = expected_data[:chunk_size]
+                row_ranges = [slice (0, chunk_size), ]
+                np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = [0]
                                     , column_indices = range(pr.metadata.num_columns)
                                     , pre_buffer = pre_buffer
                                     , use_threads = use_threads
