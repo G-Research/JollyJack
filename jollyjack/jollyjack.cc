@@ -323,11 +323,22 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     }
   }
 
-  if (target_row != expected_rows)
-  {
-    auto msg = std::string("Expected to read ") + std::to_string(expected_rows) + " rows, but read only " + std::to_string(target_row) + "!";
-    throw std::logic_error(msg);
-  }
+    if (target_row_ranges.size() > 0)
+    {
+      if (target_row_ranges_idx != target_row_ranges.size())
+      {
+        auto msg = std::string("Expected to read ") + std::to_string(target_row_ranges.size() / 2) + " row ranges, but read only " + std::to_string(target_row_ranges_idx / 2) + "!";
+        throw std::logic_error(msg);
+      }
+    }
+    else
+    {
+      if (target_row != expected_rows)
+      {
+        auto msg = std::string("Expected to read ") + std::to_string(expected_rows) + " rows, but read only " + std::to_string(target_row) + "!";
+        throw std::logic_error(msg);
+      }
+    }
 }
 
 void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_stride1_size, int src_rows, int src_cols,
