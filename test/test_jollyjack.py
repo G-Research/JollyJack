@@ -213,7 +213,7 @@ class TestJollyJack(unittest.TestCase):
                         (1, 1, 10_000_001), # +1 to make sure it is not a result of multip,lication of a round number
                     ]:
 
-                    if dtype == pa.float16 and use_dictionary:
+                    if dtype == pa.float16() and use_dictionary:
                         continue
 
                     with self.subTest((n_row_groups, n_columns, chunk_size, dtype, pre_buffer, use_threads, use_dictionary)):
@@ -814,7 +814,7 @@ class TestJollyJack(unittest.TestCase):
 
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
 
-            if dtype == pa.float16 and use_dictionary:
+            if dtype == pa.float16() and use_dictionary:
                 continue
 
             with tempfile.TemporaryDirectory() as tmpdirname:
