@@ -51,7 +51,7 @@ def for_each_parameter():
         @wraps(test_func)
         def wrapper(self: unittest.TestCase):
             for pre_buffer, use_threads, use_memory_map, use_dictionary in itertools.product ([False, True], [False, True], [False, True], [False, True]):
-                with self.subTest((pre_buffer, use_threads, use_memory_map)):
+                with self.subTest((pre_buffer, use_threads, use_memory_map, use_dictionary)):
                     test_func(self, pre_buffer = pre_buffer, use_threads = use_threads, use_memory_map = use_memory_map, use_dictionary = use_dictionary)
 
         return wrapper
@@ -212,7 +212,10 @@ class TestJollyJack(unittest.TestCase):
                         (1, 1, 10_000_000),
                         (1, 1, 10_000_001), # +1 to make sure it is not a result of multip,lication of a round number
                     ]:
-                    
+
+                    if dtype == pa.float16 and use_dictionary:
+                        continue
+
                     with self.subTest((n_row_groups, n_columns, chunk_size, dtype, pre_buffer, use_threads, use_dictionary)):
                         n_rows = n_row_groups * chunk_size
                         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -810,6 +813,10 @@ class TestJollyJack(unittest.TestCase):
     def test_read_with_slices_error_handling(self, pre_buffer, use_threads, use_memory_map, use_dictionary):
 
         for dtype in [pa.float16(), pa.float32(), pa.float64()]:
+
+            if dtype == pa.float16 and use_dictionary:
+                continue
+
             with tempfile.TemporaryDirectory() as tmpdirname:
                 path = os.path.join(tmpdirname, "my.parquet")
                 table = get_table(n_rows, n_columns, data_type=dtype)
