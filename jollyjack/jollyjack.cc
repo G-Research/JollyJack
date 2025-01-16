@@ -60,7 +60,7 @@ arrow::Status ReadColumn (int column_index
 
         if (unsupported_encoding)
         {
-          auto msg = std::string("Encoding '") + unsupported_encoding + "' is not supported when reading FIXED_LEN_BYTE_ARRAY(float16) data, column:" + std::to_string(parquet_column) + " !");
+          auto msg = std::string("Encoding '") + unsupported_encoding + "' is not supported when reading FIXED_LEN_BYTE_ARRAY(float16) data, column:" + std::to_string(parquet_column) + "!";
           return arrow::Status::UnknownError(msg);
         }
       }
