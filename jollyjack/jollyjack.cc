@@ -161,15 +161,20 @@ arrow::Status ReadColumn (int column_index
               auto read_levels = typed_reader->ReadBatch(std::min(warp_size, rows_to_read), nullptr, nullptr, flba, &tmp_values_read);
               if (tmp_values_read > 0)
               {
-                if (flba[tmp_values_read - 1].ptr - flba[0].ptr != (tmp_values_read - 1) * stride0_size)
+                if (flba[tmp_values_read - 1].ptr - flba[0].ptr == (tmp_values_read - 1) * stride0_size)
                 {
-                  // TODO(marcink)  We could copy each FLB pointed value one by one instead of throwing an exception.
-                  //                However, at the time of this implementation, non-contiguous memory is impossible, so that exception is not expected to occur anyway.
-                  auto msg = std::string("Unexpected, FLBA memory is not contiguous when reading olumn:" + std::to_string(parquet_column) + " !");
-                  return arrow::Status::UnknownError(msg);
+                  // fast path
+                  memcpy(&base_ptr[target_offset], flba[0].ptr, tmp_values_read * stride0_size);
+                }
+                else
+                {
+                  // slow path
+                  for (int64_t i = 0; i < tmp_values_read; i++)
+                  {
+                    memcpy(&base_ptr[target_offset + i * stride0_size], flba[i].ptr, stride0_size);
+                  }
                 }
 
-                memcpy(&base_ptr[target_offset], flba[0].ptr, tmp_values_read * stride0_size);
                 target_offset += tmp_values_read * stride0_size;
                 values_read += tmp_values_read;
                 rows_to_read -= tmp_values_read;
