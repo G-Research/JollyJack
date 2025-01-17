@@ -41,28 +41,27 @@ arrow::Status ReadColumn (int column_index
     if (target_column_indices.size() > 0)
       target_column = target_column_indices[column_index];
 
-    if (column_reader->descr()->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
+    const auto column_chunk_metadata = row_group_metadata->ColumnChunk(parquet_column);
+    for (const auto encoding : column_chunk_metadata->encodings())
     {
-      const auto column_chunk_metadata = row_group_metadata->ColumnChunk(parquet_column);
-      for (const auto encoding : column_chunk_metadata->encodings())
+      const char *unsupported_encoding = nullptr;
+
+      // Dictionary encoding causes problems for float16. 
+      // For other encodings it makes it impossible to detect null values, thus we bann it entirely.
+      if (encoding == parquet::Encoding::RLE_DICTIONARY)
       {
-        const char *unsupported_encoding = nullptr;
+        unsupported_encoding = "RLE_DICTIONARY";
+      }
 
-        if (encoding == parquet::Encoding::RLE_DICTIONARY)
-        {
-          unsupported_encoding = "RLE_DICTIONARY";
-        }
+      if (encoding == parquet::Encoding::PLAIN_DICTIONARY)
+      {
+        unsupported_encoding = "PLAIN_DICTIONARY";
+      }
 
-        if (encoding == parquet::Encoding::PLAIN_DICTIONARY)
-        {
-          unsupported_encoding = "PLAIN_DICTIONARY";
-        }
-
-        if (unsupported_encoding)
-        {
-          auto msg = std::string("Encoding '") + unsupported_encoding + "' is not supported when reading FIXED_LEN_BYTE_ARRAY(float16) data, column:" + std::to_string(parquet_column) + "!";
-          return arrow::Status::UnknownError(msg);
-        }
+      if (unsupported_encoding)
+      {
+        auto msg = std::string("Cannot read column=") + std::to_string(parquet_column) + " due to unsupported_encoding=" + unsupported_encoding + "!";
+        return arrow::Status::UnknownError(msg);
       }
     }
 

@@ -3,3 +3,4 @@ pandas
 palletjack>=2.4.0
 humanize
 numpy>=1.16.6
+parameterized
