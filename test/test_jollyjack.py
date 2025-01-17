@@ -20,7 +20,7 @@ n_row_groups = 2
 n_columns = 5
 n_rows = n_row_groups * chunk_size
 current_dir = os.path.dirname(os.path.realpath(__file__))
-supported_encodings = ['PLAIN', 'DELTA_BYTE_ARRAY', 'BYTE_STREAM_SPLIT']
+supported_encodings = ['PLAIN', 'BYTE_STREAM_SPLIT']
 
 os_name = platform.system()
 
@@ -188,7 +188,7 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(f"Column[0] ('column_0') has unsupported data type: 0!" in str(context.exception), context.exception)
 
     @parameterized.expand(itertools.product([pa.float16(), pa.float32(), pa.float64()]))
-    def test_read_unsupported_encodings(self, dtype):
+    def test_read_unsupported_encoding_dictionary(self, dtype):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -207,11 +207,27 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Cannot read column=0 due to unsupported_encoding=RLE_DICTIONARY!" in str(context.exception), context.exception)
 
+    def test_read_unsupported_encoding_delta_byte_array(self):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = chunk_size, n_columns = n_columns, data_type = pa.float16())
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, column_encoding='DELTA_BYTE_ARRAY')
+
+            # Create an array of zerosx
+            np_array = np.zeros((chunk_size, n_columns), dtype=pa.float16().to_pandas_dtype(), order='F')
+
+            with self.assertRaises(RuntimeError) as context:
+                jj.read_into_numpy (source = path
+                                    , metadata = None
+                                    , np_array = np_array
+                                    , row_group_indices = [0]
+                                    , column_indices = range(n_columns))
+
+            self.assertTrue(f"Cannot read column=0 due to unsupported_encoding=DELTA_BYTE_ARRAY!" in str(context.exception), context.exception)
+
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()], supported_encodings))
     def test_read_dtype_numpy(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
-
-        if (encoding == 'DELTA_BYTE_ARRAY' and dtype != pa.float16()):
-            return
 
         for (n_row_groups, n_columns, chunk_size) in [
                 (1, 1, 1),
@@ -254,9 +270,6 @@ class TestJollyJack(unittest.TestCase):
 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()], supported_encodings))
     def test_read_dtype_torch(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
-
-        if (encoding == 'DELTA_BYTE_ARRAY' and dtype != pa.float16()):
-            return
 
         for (n_row_groups, n_columns, chunk_size) in [
                 (1, 1, 1),
@@ -441,9 +454,6 @@ class TestJollyJack(unittest.TestCase):
 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()], supported_encodings))
     def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
-
-        if (encoding == 'DELTA_BYTE_ARRAY' and dtype != pa.float16()):
-            return
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -1013,5 +1023,5 @@ class TestJollyJack(unittest.TestCase):
         self.assertTrue(f"Row index = {n_rows} is not in the expected range [0, {n_rows})" in str(context.exception), context.exception)
 
 if __name__ == '__main__':
-    unittest.main()
-    #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_data_with_nulls'])
+    #unittest.main()
+    unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
