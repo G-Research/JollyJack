@@ -688,7 +688,7 @@ class TestJollyJack(unittest.TestCase):
                                 )
 
             self.assertTrue(np.min(np_array) == 0)
-            self.assertTrue(np.max(np_array) == n_rows -1)
+            self.assertTrue(np.max(np_array) == n_rows-1)
             pr.close()
 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
