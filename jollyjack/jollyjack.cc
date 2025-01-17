@@ -46,8 +46,8 @@ arrow::Status ReadColumn (int column_index
     {
       const char *unsupported_encoding = nullptr;
 
-      // Dictionary encoding causes problems for float16. 
-      // For other encodings it makes it impossible to detect null values, thus we bann it entirely.
+      // Dictionary encoding is not supported for float16 values since FLBA pointers reference non-contiguous memory.
+      // Additionally, dictionary encoding prevents proper null value detection across all data types, so we disable it entirely.
       if (encoding == parquet::Encoding::RLE_DICTIONARY)
       {
         unsupported_encoding = "RLE_DICTIONARY";

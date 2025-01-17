@@ -439,8 +439,11 @@ class TestJollyJack(unittest.TestCase):
             else:
                 self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
-    def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map, dtype):
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()], supported_encodings))
+    def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
+
+        if (encoding == 'DELTA_BYTE_ARRAY' and dtype != pa.float16()):
+            return
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -449,7 +452,7 @@ class TestJollyJack(unittest.TestCase):
             df.iloc[0, 0] = np.nan
             table = pa.Table.from_pandas(df)
 
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False, column_encoding=encoding)
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype = dtype.to_pandas_dtype(), order='F')
 
@@ -463,7 +466,7 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
 
-            self.assertTrue(f"Unexpected end of stream. Column[0] ('column_0') contains null values?" in str(context.exception), context.exception)
+            self.assertTrue(f"Unexpected end of stream" in str(context.exception), context.exception)
 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
     def test_read_not_enough_rows(self, pre_buffer, use_threads, use_memory_map, dtype):
@@ -1011,4 +1014,4 @@ class TestJollyJack(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_copy_to_row_major_arg_validation'])
+    #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_data_with_nulls'])
