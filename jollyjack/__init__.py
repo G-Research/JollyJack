@@ -1,23 +1,15 @@
 # Importing pyarrow is necessary to load the runtime libraries
 
 import pyarrow
-
-# package/__init__.py
-try:
-    from importlib.metadata import version, requires
-    __version__ = version(__package__)  # Uses package metadata
-    dependencies = requires(__package__)
-    print(dependencies)  # List of requirements strings
-
-except ImportError:
-    __version__ = "0.0.1"  # Fallback
-
+from importlib.metadata import version, requires
+__version__ = version(__package__)  # Uses package metadata
+dependencies = requires(__package__)
+pyarrow_req = next((r for r in dependencies if r.startswith('pyarrow')), '')
 
 try:
     from .jollyjack_cython import *
-        
 except ImportError as e:
     if "libarrow.so" in str(e):
-        raise ImportError(f"Unable to load libarrow.so. This version of {__package__}={__version__} is built against arrow  ensure you have pyarrow==17.x installed. Current pyarrow version: {pyarrow.__version__}")
+        raise ImportError(f"This version of {__package__}={__version__} is built against {pyarrow_req}, please ensure you have it installed. Current pyarrow version is {pyarrow.__version__}")
     else:
         raise
