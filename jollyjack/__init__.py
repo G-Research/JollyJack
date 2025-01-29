@@ -10,7 +10,7 @@ try:
     from .jollyjack_cython import *
 except ImportError as e:
     if any(x in str(e) for x in ['arrow', 'parquet']):
-        raise ImportError(f"This version of {__package__}={__version__} is built against {pyarrow_req}, please ensure you have it installed. Current pyarrow version is {pyarrow.__version__}")
+        raise ImportError(f"This version of {__package__}={__version__} is built against {pyarrow_req}, please ensure you have it installed. Current pyarrow version is {pyarrow.__version__}. ({str(e)})") from None
     else:
         raise
 
