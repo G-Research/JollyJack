@@ -149,41 +149,6 @@ jobs:
     steps:
       - run: echo "All required checks done"
 
-  benchmarks:
-    needs: build
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-      fail-fast: false
-
-    runs-on: ${{ matrix.os }}
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10"
-
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        pattern: dist-*
-        path: dist
-        merge-multiple: true
-
-    - name: Setup torch
-      run: |
-        python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-    - name: Run benchmarks
-      run: |
-        python3 -m pip install -r requirements.txt
-        # Keep in mind that if the local and remote versions are the same, the remote version will be installed
-        pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
-        # So now ensure that the local version is installed 
-        pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
-        python3 ./benchmarks/benchmark_jollyjack.py
-
   publish:
     if: ${{ !github.event.repository.fork && startsWith(github.ref, 'refs/tags/v') }}
     needs: [all-required-checks-done]
