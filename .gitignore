@@ -1,6 +1,7 @@
 *.parquet
 *.parquet.index
 /jollyjack/jollyjack_cython.cpp
+/jollyjack/package_metadata.py
 /*.egg-info
 /dist
 /build
@@ -9,4 +10,3 @@ __pycache__
 vcpkg_installed
 .vscode
 cython_debug
-/jollyjack/package_metadata.py
