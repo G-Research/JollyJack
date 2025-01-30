@@ -67,9 +67,9 @@ class GenerateMetadata(build_py):
          # Write metadata to the file
         with open(metadata_file, "w") as f:
             f.write("# Auto-generated package metadata\n")
-            f.write(f"PACKAGE_NAME = '{package_name}'\n")
-            f.write(f"PACKAGE_VERSION = '{package_version}'\n")
-            f.write(f"PACKAGE_DEPENDENCIES = {package_dependencies}\n")
+            f.write(f"__package__ = '{package_name}'\n")
+            f.write(f"__version__ = '{package_version}'\n")
+            f.write(f"__dependencies__ = {package_dependencies}\n")
 
         print(f"Generated metadata file: {metadata_file}")
         print (os.listdir(output_dir))
