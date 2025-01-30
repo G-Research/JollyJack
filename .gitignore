@@ -9,3 +9,4 @@ __pycache__
 vcpkg_installed
 .vscode
 cython_debug
+/jollyjack/package_metadata.py
