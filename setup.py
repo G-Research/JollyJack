@@ -2,7 +2,8 @@
 import os
 import sys
 
-from setuptools import setup
+from setuptools import setup, find_packages
+from setuptools.command.build_py import build_py
 from distutils.extension import Extension
 from Cython.Build import cythonize
 import pyarrow
@@ -41,13 +42,48 @@ extensions = cythonize(extensions, compiler_directives=compiler_directives, gdb_
 # Make default named pyarrow shared libs available.
 pyarrow.create_library_symlinks()
 
+
+# Custom build command to dynamically generate metadata file
+class GenerateMetadata(build_py):
+    def run(self):
+        # Call the original build_py command
+        super().run()
+
+        # Get the distribution object
+        dist = self.distribution
+
+        package_name = dist.get_name()
+        package_version = dist.get_version()
+        package_dependencies = dist.install_requires or []
+        
+        print (f"package_name = {package_name}")
+        print (f"package_version = {package_version}")
+        print (f"package_dependencies = {package_dependencies}")
+        
+        # Path to the generated file
+        output_dir = os.path.join(self.build_lib, package_name)
+        os.makedirs(output_dir, exist_ok=True)
+        metadata_file = os.path.join(output_dir, "package_metadata.py")
+
+         # Write metadata to the file
+        with open(metadata_file, "w") as f:
+            f.write("# Auto-generated package metadata\n")
+            f.write(f"PACKAGE_NAME = '{package_name}'\n")
+            f.write(f"PACKAGE_VERSION = '{package_version}'\n")
+            f.write(f"PACKAGE_DEPENDENCIES = {package_dependencies}\n")
+
+        print(f"Generated metadata file: {metadata_file}")
+        
 setup(
     packages=["jollyjack"],
     package_dir={"": "."},
     zip_safe=False,
     ext_modules=extensions,
     project_urls={
-        "Documentation": "https://github.com/G-Research/PalletJack",
-        "Source": "https://github.com/G-Research/PalletJack",
+        "Documentation": "https://github.com/marcin-krystianc/JollyJack",
+        "Source": "https://github.com/marcin-krystianc/JollyJack",
+    },
+    cmdclass={
+        "build_py": GenerateMetadata,  # Use the custom build command
     },
 )
