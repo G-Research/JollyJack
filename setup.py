@@ -60,8 +60,7 @@ class GenerateMetadata(build_py):
         print (f"package_version = {package_version}")
         print (f"package_dependencies = {package_dependencies}")
         
-        # Path to the generated file
-        output_dir = os.path.join(self.build_lib, package_name)
+        output_dir = os.path.join(package_name)
         os.makedirs(output_dir, exist_ok=True)
         metadata_file = os.path.join(output_dir, "package_metadata.py")
 
@@ -73,6 +72,7 @@ class GenerateMetadata(build_py):
             f.write(f"PACKAGE_DEPENDENCIES = {package_dependencies}\n")
 
         print(f"Generated metadata file: {metadata_file}")
+        print (os.listdir(output_dir))
         
 setup(
     packages=["jollyjack"],
