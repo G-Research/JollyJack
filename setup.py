@@ -42,7 +42,6 @@ extensions = cythonize(extensions, compiler_directives=compiler_directives, gdb_
 # Make default named pyarrow shared libs available.
 pyarrow.create_library_symlinks()
 
-
 # Custom build command to dynamically generate metadata file
 class GenerateMetadata(build_py):
     def run(self):
@@ -64,7 +63,7 @@ class GenerateMetadata(build_py):
         os.makedirs(output_dir, exist_ok=True)
         metadata_file = os.path.join(output_dir, "package_metadata.py")
 
-         # Write metadata to the file
+        # Write metadata to the file
         with open(metadata_file, "w") as f:
             f.write("# Auto-generated package metadata\n")
             f.write(f"__package__ = '{package_name}'\n")
