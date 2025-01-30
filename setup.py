@@ -53,7 +53,7 @@ class GenerateMetadata(build_py):
 
         package_name = dist.get_name()
         package_version = dist.get_version()
-        package_dependencies = dist.install_requires or []
+        package_dependencies = dist.install_requires
         
         print (f"package_name = {package_name}")
         print (f"package_version = {package_version}")
