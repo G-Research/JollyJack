@@ -1,4 +1,4 @@
-pyarrow~=19.0.0
+pyarrow~=20.0.0
 pandas
 palletjack>=2.5.0
 humanize
