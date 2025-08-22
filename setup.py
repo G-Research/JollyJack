@@ -45,20 +45,17 @@ pyarrow.create_library_symlinks()
 # Custom build command to dynamically generate metadata file
 class GenerateMetadata(build_py):
     def run(self):
-        # Call the original build_py command
-        super().run()
-
         # Get the distribution object
         dist = self.distribution
 
         package_name = dist.get_name()
         package_version = dist.get_version()
         package_dependencies = dist.install_requires
-        
+
         print (f"package_name = {package_name}")
         print (f"package_version = {package_version}")
         print (f"package_dependencies = {package_dependencies}")
-        
+
         output_dir = os.path.join(package_name)
         os.makedirs(output_dir, exist_ok=True)
         metadata_file = os.path.join(output_dir, "package_metadata.py")
@@ -72,7 +69,10 @@ class GenerateMetadata(build_py):
 
         print(f"Generated metadata file: {metadata_file}")
         print (os.listdir(output_dir))
-        
+
+        # Call the original build_py command
+        super().run()
+
 setup(
     packages=["jollyjack"],
     package_dir={"": "."},
