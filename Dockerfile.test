@@ -16,6 +16,9 @@ RUN ldd --version && \
 # Install and test with Python ${PYTHON_VERSION}
    /opt/python/${PYTHON_VERSION}/bin/pip install -r ./requirements.txt && \
 
+# Setup torch
+  /opt/python/${PYTHON_VERSION}/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu && \
+
 # Install the package from local dist directory
    /opt/python/${PYTHON_VERSION}/bin/pip install JollyJack --pre --find-links ./dist --only-binary=:all: && \
 
