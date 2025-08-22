@@ -194,7 +194,7 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Column[0] ('column_0') has unsupported data type: 0!" in str(context.exception), context.exception)
 
-    @parameterized.expand(itertools.product([pa.float16(), pa.float32(), pa.float64()]))
+    @parameterized.expand(itertools.product([pa.float16()]))
     def test_read_unsupported_encoding_dictionary(self, dtype):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -212,7 +212,7 @@ class TestJollyJack(unittest.TestCase):
                                     , row_group_indices = [0]
                                     , column_indices = range(n_columns))
 
-            self.assertTrue(f"Cannot read column=0 due to unsupported_encoding=RLE_DICTIONARY!" in str(context.exception), context.exception)
+            self.assertTrue(f"Cannot read fp16 column[0] due to unsupported_encoding=RLE_DICTIONARY!" in str(context.exception), context.exception)
 
     def test_read_unsupported_encoding_delta_byte_array(self):
 
@@ -231,7 +231,7 @@ class TestJollyJack(unittest.TestCase):
                                     , row_group_indices = [0]
                                     , column_indices = range(n_columns))
 
-            self.assertTrue(f"Cannot read column=0 due to unsupported_encoding=DELTA_BYTE_ARRAY!" in str(context.exception), context.exception)
+            self.assertTrue(f"Cannot read fp16 column[0] due to unsupported_encoding=DELTA_BYTE_ARRAY!" in str(context.exception), context.exception)
 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], supported_dtype_encodings))
     def test_read_dtype_numpy(self, pre_buffer, use_threads, use_memory_map, dtype_encoding):
