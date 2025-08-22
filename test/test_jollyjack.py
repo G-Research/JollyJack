@@ -479,7 +479,10 @@ class TestJollyJack(unittest.TestCase):
                 self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], supported_dtype_encodings))
-    def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
+    def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map, dtype_encoding):
+
+        dtype = dtype_encoding[0]
+        encoding = dtype_encoding[1]
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
