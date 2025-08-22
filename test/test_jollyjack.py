@@ -20,7 +20,14 @@ n_row_groups = 2
 n_columns = 5
 n_rows = n_row_groups * chunk_size
 current_dir = os.path.dirname(os.path.realpath(__file__))
-supported_encodings = ['PLAIN', 'BYTE_STREAM_SPLIT']
+
+supported_dtype_encodings = [
+    (pa.float16(), 'PLAIN'), (pa.float16(), 'BYTE_STREAM_SPLIT'),
+    (pa.float32(), 'PLAIN'), (pa.float32(), 'BYTE_STREAM_SPLIT'), (pa.float32(), 'RLE_DICTIONARY'),
+    (pa.float64(), 'PLAIN'), (pa.float64(), 'BYTE_STREAM_SPLIT'), (pa.float64(), 'RLE_DICTIONARY'), 
+    (pa.int32(), 'PLAIN'), (pa.int32(), 'BYTE_STREAM_SPLIT'), (pa.int32(), 'RLE_DICTIONARY'), (pa.int32(), 'DELTA_BINARY_PACKED'),
+    (pa.int64(), 'PLAIN'), (pa.int64(), 'BYTE_STREAM_SPLIT'), (pa.int64(), 'RLE_DICTIONARY'), (pa.int64(), 'DELTA_BINARY_PACKED'), 
+]
 
 os_name = platform.system()
 
@@ -226,8 +233,8 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Cannot read column=0 due to unsupported_encoding=DELTA_BYTE_ARRAY!" in str(context.exception), context.exception)
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()], supported_encodings))
-    def test_read_dtype_numpy(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], supported_dtype_encodings))
+    def test_read_dtype_numpy(self, pre_buffer, use_threads, use_memory_map, dtype_encoding):
 
         for (n_row_groups, n_columns, chunk_size) in [
                 (1, 1, 1),
@@ -243,12 +250,21 @@ class TestJollyJack(unittest.TestCase):
                 (1, 1, 10_000_001), # +1 to make sure it is not a result of multip,lication of a round number
             ]:
 
+            dtype = dtype_encoding[0]
+            encoding = dtype_encoding[1]
+
             with self.subTest((n_row_groups, n_columns, chunk_size, dtype, pre_buffer, use_threads, encoding)):
                 n_rows = n_row_groups * chunk_size
                 with tempfile.TemporaryDirectory() as tmpdirname:
                     path = os.path.join(tmpdirname, "my.parquet")
                     table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
-                    pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False, column_encoding = encoding)
+                    use_dictionary = False
+                    column_encoding = encoding
+                    if encoding in ['RLE_DICTIONARY', 'PLAIN_DICTIONARY']: 
+                        use_dictionary = True
+                        column_encoding = None
+
+                    pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=use_dictionary, write_statistics=False, store_schema=False, column_encoding = column_encoding)
 
                     # Create an empty array
                     np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
@@ -268,8 +284,8 @@ class TestJollyJack(unittest.TestCase):
                     self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
                     pr.close()
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()], supported_encodings))
-    def test_read_dtype_torch(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], supported_dtype_encodings))
+    def test_read_dtype_torch(self, pre_buffer, use_threads, use_memory_map, dtype_encoding):
 
         for (n_row_groups, n_columns, chunk_size) in [
                 (1, 1, 1),
@@ -284,13 +300,23 @@ class TestJollyJack(unittest.TestCase):
                 (1, 1, 1_000_001),
             ]:                
 
+            dtype = dtype_encoding[0]
+            encoding = dtype_encoding[1]
+
             with self.subTest((n_row_groups, n_columns, chunk_size, dtype, encoding)):
                 n_rows = n_row_groups * chunk_size
 
                 with tempfile.TemporaryDirectory() as tmpdirname:
                     path = os.path.join(tmpdirname, "my.parquet")
                     table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
-                    pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False, column_encoding = encoding)
+                    
+                    use_dictionary = False
+                    column_encoding = encoding
+                    if encoding in ['RLE_DICTIONARY', 'PLAIN_DICTIONARY']: 
+                        use_dictionary = True
+                        column_encoding = None
+                        
+                    pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=use_dictionary, write_statistics=False, store_schema=False, column_encoding = column_encoding)
 
                     tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
 
@@ -452,7 +478,7 @@ class TestJollyJack(unittest.TestCase):
             else:
                 self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()], supported_encodings))
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], supported_dtype_encodings))
     def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -462,7 +488,13 @@ class TestJollyJack(unittest.TestCase):
             df.iloc[0, 0] = np.nan
             table = pa.Table.from_pandas(df)
 
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False, column_encoding=encoding)
+            use_dictionary = False
+            column_encoding = encoding
+            if encoding in ['RLE_DICTIONARY', 'PLAIN_DICTIONARY']: 
+                use_dictionary = True
+                column_encoding = None
+
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=use_dictionary, write_statistics=False, store_schema=False, column_encoding=column_encoding)
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype = dtype.to_pandas_dtype(), order='F')
 
@@ -1024,4 +1056,4 @@ class TestJollyJack(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
+    # unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_dtype_numpy'])
