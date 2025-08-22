@@ -71,7 +71,7 @@ class TestJollyJack(unittest.TestCase):
             for rg in range(n_row_groups):
                 row_begin = row_end
                 row_end = row_begin + pr.metadata.row_group(rg).num_rows
-                subset_view = np_array1[row_begin:row_end, :] 
+                subset_view = np_array1[row_begin:row_end, :]
                 jj.read_into_numpy (source = path
                                     , metadata = None
                                     , np_array = subset_view
@@ -120,7 +120,7 @@ class TestJollyJack(unittest.TestCase):
 
                 row_begin = row_end
                 row_end = row_begin + metadata.num_rows
-                subset_view = np_array[row_begin:row_end, :] 
+                subset_view = np_array[row_begin:row_end, :]
                 jj.read_into_numpy (source = path
                                     , metadata = metadata
                                     , np_array = subset_view
@@ -226,7 +226,7 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Cannot read column=0 due to unsupported_encoding=DELTA_BYTE_ARRAY!" in str(context.exception), context.exception)
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()], supported_encodings))
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()], supported_encodings))
     def test_read_dtype_numpy(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
 
         for (n_row_groups, n_columns, chunk_size) in [
@@ -235,7 +235,7 @@ class TestJollyJack(unittest.TestCase):
                 (1, 1, 2),
                 (1, 1, 10),
                 (1, 1, 100),
-                (1, 1, 1_000), 
+                (1, 1, 1_000),
                 (1, 1, 10_000),
                 (1, 1, 100_000),
                 (1, 1, 1_000_000),
@@ -268,7 +268,7 @@ class TestJollyJack(unittest.TestCase):
                     self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
                     pr.close()
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()], supported_encodings))
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()], supported_encodings))
     def test_read_dtype_torch(self, pre_buffer, use_threads, use_memory_map, dtype, encoding):
 
         for (n_row_groups, n_columns, chunk_size) in [
@@ -277,12 +277,12 @@ class TestJollyJack(unittest.TestCase):
                 (1, 1, 2),
                 (1, 1, 10),
                 (1, 1, 100),
-                (1, 1, 1_000), 
+                (1, 1, 1_000),
                 (1, 1, 10_000),
                 (1, 1, 100_000),
                 (1, 1, 1_000_000),
                 (1, 1, 1_000_001),
-            ]:                
+            ]:
 
             with self.subTest((n_row_groups, n_columns, chunk_size, dtype, encoding)):
                 n_rows = n_row_groups * chunk_size
@@ -309,7 +309,7 @@ class TestJollyJack(unittest.TestCase):
                     self.assertTrue(np.array_equal(tensor.numpy(), expected_data), f"{tensor.numpy()}\n{expected_data}")
                     pr.close()
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()]))
     def test_read_numpy_column_names(self, pre_buffer, use_threads, use_memory_map, dtype):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -335,7 +335,7 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
             pr.close()
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()]))
     def test_read_torch_column_names(self, pre_buffer, use_threads, use_memory_map, dtype):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -383,7 +383,7 @@ class TestJollyJack(unittest.TestCase):
                                     , use_memory_map = use_memory_map)
 
             self.assertTrue(f"Column 'foo_bar_0' was not found!" in str(context.exception), context.exception)
-                
+
             with self.assertRaises(RuntimeError) as context:
                 jj.read_into_numpy (source = path
                                     , metadata = None
@@ -401,7 +401,7 @@ class TestJollyJack(unittest.TestCase):
 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
     def test_read_filesystem(self, pre_buffer, use_threads, use_memory_map, dtype):
-                
+
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
@@ -519,13 +519,13 @@ class TestJollyJack(unittest.TestCase):
                                 , pre_buffer = pre_buffer
                                 , use_threads = use_threads
                                 , use_memory_map = use_memory_map)
-        
+
             pr = pq.ParquetReader()
             pr.open(path)
             expected_data = pr.read_all().to_pandas().to_numpy()
             reversed_expected_data = expected_data[:, ::-1]
             self.assertTrue(np.array_equal(np_array, reversed_expected_data), f"\n{np_array}\n\n{reversed_expected_data}")
-            
+
             np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
             for c in range(n_columns):
                 jj.read_into_numpy (source = path
@@ -547,7 +547,7 @@ class TestJollyJack(unittest.TestCase):
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
-  
+
             # Create an empty array
             np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
             jj.read_into_numpy (source = path
@@ -564,7 +564,7 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all().to_pandas().to_numpy()
             reversed_expected_data = expected_data[:, ::-1]
             self.assertTrue(np.array_equal(np_array, reversed_expected_data), f"\n{np_array}\n\n{reversed_expected_data}")
-            
+
             np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
             for c in range(n_columns):
                 jj.read_into_numpy (source = path
@@ -771,7 +771,7 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(np_array, expected_data))
 
             pr.close()
- 
+
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
     def test_read_partial_table_with_slices(self, pre_buffer, use_threads, use_memory_map, dtype):
 
@@ -818,7 +818,7 @@ class TestJollyJack(unittest.TestCase):
             expected_array[chunk_size:] = expected_data[:chunk_size]
             row_ranges = [slice (chunk_size, 2 * chunk_size), slice(0, 1), slice (1, chunk_size), ]
             tensor = torch.zeros(n_columns, n_rows, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()]).transpose(0, 1)
-            
+
             jj.read_into_torch (source = path
                                 , metadata = None
                                 , tensor = tensor
@@ -843,7 +843,7 @@ class TestJollyJack(unittest.TestCase):
             pr.open(path)
 
             np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
-            
+
             with self.assertRaises(RuntimeError) as context:
                 jj.read_into_numpy (source = path
                                     , metadata = None
@@ -915,7 +915,7 @@ class TestJollyJack(unittest.TestCase):
                                     , use_memory_map = use_memory_map
                                     , row_ranges = [slice(chunk_size, chunk_size - 1)])
             self.assertTrue(f"Row range 'slice({chunk_size}, {chunk_size - 1}, None)' is not a valid range" in str(context.exception), context.exception)
-            
+
             with self.assertRaises(RuntimeError) as context:
                 jj.read_into_numpy (source = path
                                     , metadata = None
@@ -930,19 +930,19 @@ class TestJollyJack(unittest.TestCase):
 
             pr.close()
 
-    @parameterized.expand(itertools.product([pa.float16(), pa.float32(), pa.float64()], 
-                                            [(1, 1), (5,6),(8, 8), (16, 16), 
-                                             (32, 32), (32, 33), (33, 32), (64, 64), 
+    @parameterized.expand(itertools.product([pa.float16(), pa.float32(), pa.float64()],
+                                            [(1, 1), (5,6),(8, 8), (16, 16),
+                                             (32, 32), (32, 33), (33, 32), (64, 64),
                                              (65, 64), (64, 65), (100, 200), (1000, 2000)]))
     def test_copy_to_numpy_row_major(self, dtype, n_rows_n_columns):
 
         n_rows = n_rows_n_columns[0]
         n_columns = n_rows_n_columns[1]
-        
+
         src_array = get_table(n_rows, n_columns, data_type = dtype).to_pandas().to_numpy()
         dst_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
         expected_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
-        np.copyto(expected_array, src_array)                   
+        np.copyto(expected_array, src_array)
         jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = range(n_rows))
         self.assertTrue(np.array_equal(expected_array, dst_array), f"{expected_array}\n!=\n{dst_array}")
 
@@ -952,12 +952,12 @@ class TestJollyJack(unittest.TestCase):
         self.assertTrue(np.array_equal(expected_array, dst_array), f"{expected_array}\n!=\n{dst_array}")
 
         # Subsets
-        src_view = src_array[1:(n_rows - 1), 1:(n_columns - 1)] 
+        src_view = src_array[1:(n_rows - 1), 1:(n_columns - 1)]
         dst_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
-        dst_view = dst_array[1:(n_rows - 1), 1:(n_columns - 1)] 
+        dst_view = dst_array[1:(n_rows - 1), 1:(n_columns - 1)]
         expected_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='C')
         np.copyto(expected_array, src_array)
-        expected_array = expected_array[1:(n_rows - 1), 1:(n_columns - 1)]    
+        expected_array = expected_array[1:(n_rows - 1), 1:(n_columns - 1)]
         jj.copy_to_numpy_row_major(src_array = src_view, dst_array = dst_view, row_indices = range(n_rows - 2))
         self.assertTrue(np.array_equal(expected_array, dst_view), f"{expected_array}\n!=\n{dst_view}")
 
@@ -973,7 +973,7 @@ class TestJollyJack(unittest.TestCase):
 
         src_tensor = torch.tensor(get_table(n_rows, n_columns, data_type = dtype).to_pandas().to_numpy())
         dst_tensor = torch.zeros(n_rows, n_columns, dtype = numpy_to_torch_dtype_dict[dtype.to_pandas_dtype()])
-        expected_tensor = src_tensor.clone().contiguous()   
+        expected_tensor = src_tensor.clone().contiguous()
         jj.copy_to_torch_row_major(src_tensor = src_tensor, dst_tensor = dst_tensor, row_indices = range(n_rows))
         self.assertTrue(torch.equal(expected_tensor, dst_tensor), f"{expected_tensor}\n!=\n{dst_tensor}")
 
