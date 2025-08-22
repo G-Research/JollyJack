@@ -145,7 +145,6 @@ jobs:
           merge-multiple: true
   
       - name: Build and Run Docker Container for Tests
-        working-directory: ./python
         run: |
           # Build the Docker image with Python version as build arg
           docker build \
