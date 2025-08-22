@@ -141,7 +141,7 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           pattern: dist-*
-          path: python/dist
+          path: dist
           merge-multiple: true
   
       - name: Build and Run Docker Container for Tests
