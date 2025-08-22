@@ -51,7 +51,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        runner: [ubuntu-latest, windows-latest, ubuntu-22.04-arm64, macos-latest]
+        runner: [ubuntu-latest, windows-latest, macos-latest]
       fail-fast: false
 
     steps:
@@ -63,10 +63,10 @@ jobs:
       with:
         platforms: all
 
-    - name: Set up Python 3.10
+    - name: Set up Python 3.12
       uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: "3.12"
         
     - name: Install dependencies
       shell: bash
@@ -104,7 +104,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        runner: [ubuntu-latest, windows-latest, ubuntu-22.04-arm64, macos-latest]
+        runner: [ubuntu-latest, windows-latest, macos-latest]
       fail-fast: false
     steps:
     - uses: actions/checkout@v5
@@ -159,10 +159,10 @@ jobs:
           # Build the Docker image with Python version as build arg
           docker build \
             --build-arg PYTHON_VERSION=${{ matrix.python-version }} \
-            -t palletjack-test-py${{ matrix.python-version }} \
+            -t jollyjack-test-py${{ matrix.python-version }} \
             --progress plain \
             -f Dockerfile.test .
-          docker run palletjack-test-py${{ matrix.python-version }}
+          docker run jollyjack-test-py${{ matrix.python-version }}
 
   # Virtual job that can be configured as a required check before a PR can be merged.
   # As GitHub considers a check as successful if it is skipped, we need to check its status in
