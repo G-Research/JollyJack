@@ -51,6 +51,7 @@ manylinux-aarch64-image = "manylinux_2_28"
 
 ########################### cibuildwheel Linux #####################
 [tool.cibuildwheel.linux]
+# ODO: Use native arch64 runner once repo is moved to corporate GitHub org
 archs = ["auto", "aarch64",]
 
 repair-wheel-command = [
