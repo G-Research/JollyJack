@@ -83,7 +83,7 @@ arrow::Status ReadColumn (int column_index
 
     int64_t values_read = 0;
     char *base_ptr = (char *)buffer;
-
+    
     int64_t rows_to_read = num_rows;
     while (true)
     {
@@ -113,8 +113,8 @@ arrow::Status ReadColumn (int column_index
       size_t required_size = target_offset + rows_to_read * stride0_size;
 
       if (target_offset >= buffer_size)
-      {
-          auto msg = std::string("Buffer overrun error:")
+      {        
+          auto msg = std::string("Buffer overrun error:")          
             + " Attempted to read " + std::to_string(num_rows) + " rows into location [" + std::to_string(target_row)
             + ", " + std::to_string(target_column) + "], but that is beyond target's boundaries.";
 
@@ -124,7 +124,7 @@ arrow::Status ReadColumn (int column_index
       if (required_size > buffer_size)
       {
           auto left_space = (buffer_size - target_offset) / stride0_size;
-          auto msg = std::string("Buffer overrun error:")
+          auto msg = std::string("Buffer overrun error:")          
             + " Attempted to read " + std::to_string(num_rows) + " rows into location [" + std::to_string(target_row)
             + ", " + std::to_string(target_column) + "], but there was space available for only " + std::to_string(left_space) + " rows.";
 
@@ -177,7 +177,7 @@ arrow::Status ReadColumn (int column_index
         {
           if (stride0_size != column_reader->descr()->type_length())
           {
-            auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(column_reader->descr()->type_length()) +
+            auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(column_reader->descr()->type_length()) + 
               ", but the target value size is " + std::to_string(stride0_size) + "!");
             return arrow::Status::UnknownError(msg);
           }
@@ -255,7 +255,7 @@ arrow::Status ReadColumn (int column_index
           auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has unsupported data type: " + std::to_string(column_reader->descr()->physical_type()) + "!");
           return arrow::Status::UnknownError(msg);
         }
-      }
+      }      
 
       if (values_read == num_rows)
         break;
@@ -317,7 +317,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
       for (auto column_name : column_names)
       {
         auto column_index = schema->ColumnIndex(column_name);
-
+         
         if (column_index < 0)
         {
           auto msg = std::string("Column '") + column_name + "' was not found!";
@@ -359,7 +359,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 #endif
 
   auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
-            [&](int target_column) {
+            [&](int target_column) { 
               return ReadColumn(target_column
                 , target_row
                 , row_group_reader
@@ -480,20 +480,20 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
         {
             int src_col_limit = std::min(src_cols, block_col + BLOCK_SIZE);
             size_t src_offset_1 = src_offset_0;
-
+            
             for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE,
                   src_offset_1 += src_stride0_size * BLOCK_SIZE)
             {
                 int src_row_limit = std::min(src_rows, block_row + BLOCK_SIZE);
                 size_t src_offset_2 = src_offset_1;
-
+                
                 for (int src_row = block_row; src_row < src_row_limit; src_row++,
                       src_offset_2 += src_stride0_size)
                 {
                     int dst_row = row_indices[src_row];
                     size_t src_offset = src_offset_2;
                     size_t dst_offset = dst_stride0_size * dst_row + dst_offset_0;
-
+                    
                     // Process 4 elements at a time using SSE
                     for (int src_col = block_col; src_col <= src_col_limit - SSE_VECTOR_SIZE;
                           src_col += SSE_VECTOR_SIZE,
@@ -531,28 +531,28 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
 
       size_t src_offset_0 = 0;
       size_t dst_offset_0 = 0;
-      for (int block_col = 0; block_col < src_cols; block_col += BLOCK_SIZE,
-            src_offset_0 += src_stride1_size * BLOCK_SIZE,
+      for (int block_col = 0; block_col < src_cols; block_col += BLOCK_SIZE, 
+            src_offset_0 += src_stride1_size * BLOCK_SIZE, 
             dst_offset_0 += dst_stride1_size * BLOCK_SIZE)
       {
         int src_col_limit = std::min(src_cols, block_col + BLOCK_SIZE);
         size_t src_offset_1 = src_offset_0;
-
+        
         for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE,
               src_offset_1 += src_stride0_size * BLOCK_SIZE)
         {
             int src_row_limit = std::min(src_rows, block_row + BLOCK_SIZE);
             size_t src_offset_2 = src_offset_1;
-
+            
             for (int src_row = block_row; src_row < src_row_limit; src_row++,
                   src_offset_2 += src_stride0_size)
             {
                 int dst_row = row_indices[src_row];
                 size_t src_offset = src_offset_2;
                 size_t dst_offset = dst_stride0_size * dst_row + dst_offset_0;
-
+                
                 // Process 4 elements at a time using SSE
-                for (int src_col = block_col; src_col <= src_col_limit - SSE_VECTOR_SIZE;
+                for (int src_col = block_col; src_col <= src_col_limit - SSE_VECTOR_SIZE; 
                       src_col += SSE_VECTOR_SIZE,
                       dst_offset += dst_stride1_size * SSE_VECTOR_SIZE,
                       src_offset += src_stride1_size * SSE_VECTOR_SIZE)
@@ -572,7 +572,7 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
                     // Store the vector to destination (destination is contiguous in memory)
                     _mm_storeu_si128((__m128i*)&dst_ptr[dst_offset], v);
                 }
-
+                
                 // Handle remaining elements
                 for (int src_col = src_col_limit - (src_col_limit - block_col) % SSE_VECTOR_SIZE;
                       src_col < src_col_limit;
@@ -586,7 +586,7 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
         }
       }
     }
-    else
+    else 
     {
       // Fall back to original implementation for other sizes
       size_t src_offset_0 = 0;
@@ -597,20 +597,20 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
       {
         int src_col_limit = std::min(src_cols, block_col + BLOCK_SIZE);
         size_t src_offset_1 = src_offset_0;
-
+        
         for (int block_row = 0; block_row < src_rows; block_row += BLOCK_SIZE,
               src_offset_1 += src_stride0_size * BLOCK_SIZE)
         {
             int src_row_limit = std::min(src_rows, block_row + BLOCK_SIZE);
             size_t src_offset_2 = src_offset_1;
-
+            
             for (int src_row = block_row; src_row < src_row_limit; src_row++,
                   src_offset_2 += src_stride0_size)
             {
                 int dst_row = row_indices[src_row];
                 size_t src_offset = src_offset_2;
                 size_t dst_offset = dst_stride0_size * dst_row + dst_offset_0;
-
+                
                 for (int src_col = block_col; src_col < src_col_limit; src_col++,
                       dst_offset += dst_stride1_size,
                       src_offset += src_stride1_size)
