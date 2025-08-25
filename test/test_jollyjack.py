@@ -17,7 +17,7 @@ from parameterized import parameterized
 
 
 chunk_size = 3
-n_row_groups = 1
+n_row_groups = 2
 n_columns = 5
 n_rows = n_row_groups * chunk_size
 current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -510,6 +510,8 @@ class TestJollyJack(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype, with_nulls=True)
+            print("table")
+            print (table)
 
             use_dictionary = False
             column_encoding = encoding
@@ -522,6 +524,11 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros((n_rows, n_columns), dtype = dtype.to_pandas_dtype(), order='F')
 
             with self.assertRaises(RuntimeError) as context:
+                
+                read_df = pd.read_parquet(path)
+                print (read_df.dtypes)
+                print (read_df)
+                
                 jj.read_into_numpy (source = path
                                     , metadata = None
                                     , np_array = np_array
@@ -531,10 +538,7 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
                 np_array = np_array
-                read_df = pd.read_parquet(path)
-                print (table)
                 print (np_array)
-                print (read_df)
                 read_df = read_df
 
             self.assertTrue(f"Unexpected end of stream" in str(context.exception), context.exception)
