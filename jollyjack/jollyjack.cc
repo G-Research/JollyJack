@@ -41,6 +41,31 @@ arrow::Status ReadColumn (int column_index
     if (target_column_indices.size() > 0)
       target_column = target_column_indices[column_index];
 
+    const auto column_chunk_metadata = row_group_metadata->ColumnChunk(parquet_column);
+    for (const auto encoding : column_chunk_metadata->encodings())
+    {
+      bool unsupported_encoding = false;
+
+      // 1. Dictionary encoding is not supported for float16 values because FLBA pointers point to non-contiguous memory.
+      // 2. Dictionary encoding prevents proper null value detection across all data types, so we disable it entirely.
+      if (encoding == parquet::Encoding::RLE_DICTIONARY || encoding == parquet::Encoding::PLAIN_DICTIONARY)
+      {
+        unsupported_encoding = true;
+      }
+
+      // DELTA_BYTE_ARRAY encoding is not supported for float16 values because FLBA pointers reference non-contiguous memory.
+      if (encoding == parquet::Encoding::DELTA_BYTE_ARRAY)
+      {
+        unsupported_encoding = true;
+      }
+
+      if (unsupported_encoding)
+      {
+        auto msg = std::string("Cannot read column=") + std::to_string(parquet_column) + " due to unsupported_encoding=" + parquet::EncodingToString(encoding) + "!";
+        return arrow::Status::UnknownError(msg);
+      }
+    }
+
     #ifdef DEBUG
         std::cerr
             << " column_index:" << column_index
@@ -145,36 +170,6 @@ arrow::Status ReadColumn (int column_index
 
         case parquet::Type::FIXED_LEN_BYTE_ARRAY:
         {
-          const auto column_chunk_metadata = row_group_metadata->ColumnChunk(parquet_column);
-          for (const auto encoding : column_chunk_metadata->encodings())
-          {
-            const char *unsupported_encoding = nullptr;
-
-            // Dictionary encoding is not supported for float16 values because FLBA pointers point to non-contiguous memory.
-            // Additionally, dictionary encoding prevents proper null value detection across all data types, so we disable it entirely.
-            if (encoding == parquet::Encoding::RLE_DICTIONARY)
-            {
-              unsupported_encoding = "RLE_DICTIONARY";
-            }
-
-            if (encoding == parquet::Encoding::PLAIN_DICTIONARY)
-            {
-              unsupported_encoding = "PLAIN_DICTIONARY";
-            }
-
-            // DELTA_BYTE_ARRAY encoding is not supported for float16 values because FLBA pointers reference non-contiguous memory.
-            if (encoding == parquet::Encoding::DELTA_BYTE_ARRAY)
-            {
-              unsupported_encoding = "DELTA_BYTE_ARRAY";
-            }
-
-            if (unsupported_encoding)
-            {
-              auto msg = std::string("Cannot read fp16 column[") + std::to_string(parquet_column) + "] due to unsupported_encoding=" + unsupported_encoding + "!";
-              return arrow::Status::UnknownError(msg);
-            }
-          }
-
           if (stride0_size != column_reader->descr()->type_length())
           {
             auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(column_reader->descr()->type_length()) + 

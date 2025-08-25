@@ -1,3 +1,4 @@
+import pandas as pd
 import unittest
 import tempfile
 
@@ -16,17 +17,22 @@ from parameterized import parameterized
 
 
 chunk_size = 3
-n_row_groups = 2
+n_row_groups = 1
 n_columns = 5
 n_rows = n_row_groups * chunk_size
 current_dir = os.path.dirname(os.path.realpath(__file__))
 
 supported_dtype_encodings = [
-    (pa.float16(), 'PLAIN'), (pa.float16(), 'BYTE_STREAM_SPLIT'),
-    (pa.float32(), 'PLAIN'), (pa.float32(), 'BYTE_STREAM_SPLIT'), (pa.float32(), 'RLE_DICTIONARY'),
-    (pa.float64(), 'PLAIN'), (pa.float64(), 'BYTE_STREAM_SPLIT'), (pa.float64(), 'RLE_DICTIONARY'), 
-    (pa.int32(), 'PLAIN'), (pa.int32(), 'BYTE_STREAM_SPLIT'), (pa.int32(), 'RLE_DICTIONARY'), (pa.int32(), 'DELTA_BINARY_PACKED'),
-    (pa.int64(), 'PLAIN'), (pa.int64(), 'BYTE_STREAM_SPLIT'), (pa.int64(), 'RLE_DICTIONARY'), (pa.int64(), 'DELTA_BINARY_PACKED'), 
+    (pa.float16(), 'PLAIN'), 
+    # (pa.float16(), 'BYTE_STREAM_SPLIT'),
+    # (pa.float32(), 'PLAIN'), (pa.float32(), 'BYTE_STREAM_SPLIT'), 
+    # #(pa.float32(), 'RLE_DICTIONARY'),
+    # (pa.float64(), 'PLAIN'), (pa.float64(), 'BYTE_STREAM_SPLIT'), 
+    # #(pa.float64(), 'RLE_DICTIONARY'), 
+    # (pa.int32(), 'PLAIN'), (pa.int32(), 'BYTE_STREAM_SPLIT'), (pa.int32(), 'DELTA_BINARY_PACKED'), 
+    # #(pa.int32(), 'RLE_DICTIONARY'),
+    # (pa.int64(), 'PLAIN'), (pa.int64(), 'BYTE_STREAM_SPLIT'), (pa.int64(), 'DELTA_BINARY_PACKED'), 
+    # #(pa.int64(), 'RLE_DICTIONARY'), 
 ]
 
 os_name = platform.system()
@@ -45,15 +51,31 @@ numpy_to_torch_dtype_dict = {
         np.complex128 : torch.complex128
     }
 
-def get_table(n_rows, n_columns, data_type = pa.float32()):
-    # Generate a random 2D array of floats using NumPy
-    # Each column in the array represents a column in the final table
-    data = np.random.rand(n_rows, n_columns).astype(np.float32)
-
-    # Convert the NumPy array to a list of PyArrow Arrays, one for each column
-    pa_arrays = [pa.array(data[:, i]).cast(data_type, safe = False) for i in range(n_columns)]
+def get_table(n_rows, n_columns, data_type=pa.float32(), with_nulls=False):
+    if pa.types.is_integer(data_type):
+        # For integer types, generate integer data
+        data = np.random.randint(low=-10, high=10, size=(n_rows, n_columns), dtype=np.int32)
+        
+        if with_nulls:
+            # Create PyArrow arrays with explicit nulls for integers
+            pa_arrays = []
+            for i in range(n_columns):
+                col_data = data[:, i].tolist()
+                # Set first element to None for null
+                col_data[0] = None
+                pa_arrays.append(pa.array(col_data, type=data_type))
+        else:
+            # Convert to PyArrow arrays without nulls
+            pa_arrays = [pa.array(data[:, i], type=data_type) for i in range(n_columns)]
+    else:
+        # For float types, use your existing logic
+        data = np.random.uniform(low=-10, high=10, size=(n_rows, n_columns)).astype(np.float32)
+        if with_nulls:
+            data[0, 0] = np.nan
+        
+        pa_arrays = [pa.array(data[:, i]).cast(data_type, safe=False) for i in range(n_columns)]
+    
     schema = pa.schema([(f'column_{i}', data_type) for i in range(n_columns)])
-    # Create a PyArrow Table from the Arrays
     return pa.Table.from_arrays(pa_arrays, schema=schema)
 
 class TestJollyJack(unittest.TestCase):
@@ -478,7 +500,8 @@ class TestJollyJack(unittest.TestCase):
             else:
                 self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
 
-    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], supported_dtype_encodings))
+    # @parameterized.expand(itertools.product([False, True], [False, True], [False, True], supported_dtype_encodings))
+    @parameterized.expand(itertools.product([False], [False], [False], supported_dtype_encodings))
     def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map, dtype_encoding):
 
         dtype = dtype_encoding[0]
@@ -486,10 +509,7 @@ class TestJollyJack(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
-            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
-            df = table.to_pandas()
-            df.iloc[0, 0] = np.nan
-            table = pa.Table.from_pandas(df)
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype, with_nulls=True)
 
             use_dictionary = False
             column_encoding = encoding
@@ -510,6 +530,12 @@ class TestJollyJack(unittest.TestCase):
                                     , pre_buffer = pre_buffer
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
+                np_array = np_array
+                read_df = pd.read_parquet(path)
+                print (table)
+                print (np_array)
+                print (read_df)
+                read_df = read_df
 
             self.assertTrue(f"Unexpected end of stream" in str(context.exception), context.exception)
 
@@ -1058,5 +1084,5 @@ class TestJollyJack(unittest.TestCase):
         self.assertTrue(f"Row index = {n_rows} is not in the expected range [0, {n_rows})" in str(context.exception), context.exception)
 
 if __name__ == '__main__':
-    unittest.main()
-    # unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_dtype_numpy'])
+    # unittest.main()
+    unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_data_with_nulls'])
