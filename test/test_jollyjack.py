@@ -205,7 +205,7 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(f"Column[0] ('column_0') has unsupported data type: 0!" in str(context.exception), context.exception)
 
-    @parameterized.expand(itertools.product([pa.float16()]))
+    @parameterized.expand(itertools.product([pa.float16(), pa.float32(), pa.float64()]))
     def test_read_unsupported_encoding_dictionary(self, dtype):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -223,7 +223,7 @@ class TestJollyJack(unittest.TestCase):
                                     , row_group_indices = [0]
                                     , column_indices = range(n_columns))
 
-            self.assertTrue(f"Cannot read fp16 column[0] due to unsupported_encoding=RLE_DICTIONARY!" in str(context.exception), context.exception)
+            self.assertTrue(f"Cannot read column=0 due to unsupported_encoding=RLE_DICTIONARY!" in str(context.exception), context.exception)
 
     def test_read_unsupported_encoding_delta_byte_array(self):
 
@@ -517,7 +517,7 @@ class TestJollyJack(unittest.TestCase):
                 pr.open(path)
                 all_data = pr.read_all() 
                 self.assertTrue(all_data.columns[0].type, dtype)
-                
+
                 jj.read_into_numpy (source = path
                                     , metadata = None
                                     , np_array = np_array
@@ -558,7 +558,6 @@ class TestJollyJack(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
-
 
             pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
 
