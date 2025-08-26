@@ -26,10 +26,8 @@ supported_dtype_encodings = [
     (pa.float16(), 'PLAIN'), (pa.float16(), 'BYTE_STREAM_SPLIT'),
     (pa.float32(), 'PLAIN'), (pa.float32(), 'BYTE_STREAM_SPLIT'), 
     (pa.float64(), 'PLAIN'), (pa.float64(), 'BYTE_STREAM_SPLIT'), 
-    (pa.int32(), 'PLAIN'), 
-    (pa.int32(), 'BYTE_STREAM_SPLIT'), (pa.int32(), 'DELTA_BINARY_PACKED'), 
-    (pa.int64(), 'PLAIN'),
-    (pa.int64(), 'BYTE_STREAM_SPLIT'), (pa.int64(), 'DELTA_BINARY_PACKED'), 
+    (pa.int32(), 'PLAIN'), (pa.int32(), 'BYTE_STREAM_SPLIT'), (pa.int32(), 'DELTA_BINARY_PACKED'), 
+    (pa.int64(), 'PLAIN'), (pa.int64(), 'BYTE_STREAM_SPLIT'), (pa.int64(), 'DELTA_BINARY_PACKED'), 
 ]
 
 os_name = platform.system()
