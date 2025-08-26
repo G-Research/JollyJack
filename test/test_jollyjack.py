@@ -48,7 +48,7 @@ numpy_to_torch_dtype_dict = {
         np.complex128 : torch.complex128
     }
 
-def get_table(n_rows, n_columns, data_type=pa.float32(), with_nulls=False):
+def get_table_with_nulls(n_rows, n_columns, data_type=pa.float32()):
 
     nullable_types = {pa.float32() : 'Float32', pa.float16() :pa.float16().to_pandas_dtype(), pa.float64() : 'Float64',
                       pa.int16() : 'Int16', pa.int32() : 'Int32', pa.int64() : 'Int64',}
@@ -61,11 +61,19 @@ def get_table(n_rows, n_columns, data_type=pa.float32(), with_nulls=False):
 
     df = pd.DataFrame(data)
 
-    if with_nulls:
-        df.iloc[0, 0] = None
-
     # Convert to PyArrow Table
     return pa.Table.from_pandas(df)
+
+def get_table(n_rows, n_columns, data_type = pa.float32()):
+    # Generate a random 2D array of floats using NumPy
+    # Each column in the array represents a column in the final table
+    data = np.random.rand(n_rows, n_columns).astype(np.float32)
+
+    # Convert the NumPy array to a list of PyArrow Arrays, one for each column
+    pa_arrays = [pa.array(data[:, i]).cast(data_type, safe = False) for i in range(n_columns)]
+    schema = pa.schema([(f'column_{i}', data_type) for i in range(n_columns)])
+    # Create a PyArrow Table from the Arrays
+    return pa.Table.from_arrays(pa_arrays, schema=schema)
 
 class TestJollyJack(unittest.TestCase):
 
@@ -1076,4 +1084,4 @@ class TestJollyJack(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
+    #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_copy_to_numpy_row_major'])
