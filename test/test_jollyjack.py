@@ -505,7 +505,7 @@ class TestJollyJack(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
-            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype, with_nulls=True)
+            table = get_table_with_nulls(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
 
             use_dictionary = False
             column_encoding = encoding
