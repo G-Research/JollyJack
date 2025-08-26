@@ -60,6 +60,7 @@ def get_table_with_nulls(n_rows, n_columns, data_type=pa.float32()):
             data[f'column_{i}'] = pd.array(np.random.uniform(-100, 100, size = n_rows), dtype=nullable_types[data_type])
 
     df = pd.DataFrame(data)
+    df.iloc[0, 0] = None
 
     # Convert to PyArrow Table
     return pa.Table.from_pandas(df)
