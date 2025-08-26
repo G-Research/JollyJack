@@ -522,7 +522,8 @@ class TestJollyJack(unittest.TestCase):
 
                 pr = pq.ParquetReader()
                 pr.open(path)
-                all_data = pr.read_all() 
+                all_data = pr.read_all()
+                pr.close()
                 self.assertTrue(all_data.columns[0].type, dtype)
 
                 jj.read_into_numpy (source = path
