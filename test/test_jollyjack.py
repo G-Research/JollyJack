@@ -1083,4 +1083,4 @@ class TestJollyJack(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-    #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_copy_to_numpy_row_major'])
+    #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
