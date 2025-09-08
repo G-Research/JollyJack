@@ -158,7 +158,6 @@ cpdef void copy_to_numpy_row_major (cnp.ndarray src_array, cnp.ndarray dst_array
             , crow_indices);
         return
 
-
 cpdef get_io_uring_reader (source):
     cdef:
         c_string pathstr = source.encode("utf-8")

@@ -145,6 +145,5 @@ def copy_to_numpy_row_major (src_array, dst_array, row_indices):
    """
     return
 
-
 def get_io_uring_reader (source):
     return
