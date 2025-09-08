@@ -229,7 +229,7 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
         print(f"`numpy.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
 
     if sys.platform == "linux":
-        if os.environ.get(['GITHUB_ACTIONS']) != None:
+        if os.environ.get('GITHUB_ACTIONS') != None:
             print(f"TODO(marcink):Skipping io_uring benchamrks on athe github actions runner due to low performance!")
         else:
             print(f".")
