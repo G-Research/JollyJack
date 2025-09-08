@@ -10,10 +10,10 @@ import time
 import sys
 import os
 
-n_files = 2
+n_files = 10
 row_groups = 1
-n_columns = 200
-n_columns_to_read = 100
+n_columns = 7_000
+n_columns_to_read = 1_000
 chunk_size = 64_000
 n_rows = row_groups * chunk_size
 
@@ -63,13 +63,13 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype):
                            , use_threads = use_threads)
 
 def worker_jollyjack_uring_numpy(use_threads, pre_buffer, dtype):
-        
+
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
-    
+
     for f in range(n_files):
         pr = pq.ParquetReader()
         pr.open(f"{parquet_path}{f}")
-        
+
         with jj.get_io_uring_reader(f"{parquet_path}{f}") as ur:
             column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
             jj.read_into_numpy(source = ur
@@ -212,10 +212,28 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
         for pre_buffer in [False, True]:
             for use_threads in [False, True]:
                 print(f"`JollyJack.read_into_numpy` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
-    
-    if sys.platform == "linux":
-        print(f".")
+
+    print(f".")
+    for n_threads in [1, 2]:
+        for pre_buffer in [False, True]:
+            print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+
+    print(f".")
+    for jj_variant in [1, 2]:
+        os.environ["JJ_copy_to_row_major"] = str(jj_variant)
         for n_threads in [1, 2]:
-            for pre_buffer in [False, True]:
-                for use_threads in [False, True]:
-                    print(f"`JollyJack.jollyjack_uring_numpy` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_uring_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
+            print(f"`JollyJack.copy_to_numpy_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
+
+    print(f".")
+    for n_threads in [1, 2]:
+        print(f"`numpy.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype())):.2f} seconds")
+
+    if sys.platform == "linux":
+        if os.environ.get(['GITHUB_ACTIONS']) != None:
+            print(f"TODO(marcink):Skipping io_uring benchamrks on athe github actions runner due to low performance!")
+        else:
+            print(f".")
+            for n_threads in [1, 2]:
+                for pre_buffer in [False, True]:
+                    for use_threads in [False, True]:
+                        print(f"`JollyJack.jollyjack_uring_numpy` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda:worker_jollyjack_uring_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype())):.2f} seconds")
