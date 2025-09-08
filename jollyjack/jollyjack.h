@@ -24,3 +24,5 @@ void CopyToRowMajor (void* src_buffer,
     size_t dst_stride0_size,
     size_t dst_stride1_size,
     std::vector<int> row_indices);
+
+std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader(const std::string& filename);

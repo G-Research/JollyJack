@@ -1,6 +1,7 @@
 import pandas as pd
 import unittest
 import tempfile
+import sys
 
 import jollyjack as jj
 import palletjack as pj
@@ -12,7 +13,6 @@ import os
 import itertools
 import torch
 from pyarrow import fs
-from functools import wraps
 from parameterized import parameterized
 
 
@@ -469,6 +469,41 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all().to_pandas().to_numpy()
             self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
             pr.close()
+
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
+    def test_uring_reader(self, pre_buffer, use_threads, use_memory_map, dtype):
+           
+        if sys.platform != "linux":
+            self.skipTest("io_uring is available only on Linux")
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+
+            # Create an empty array
+            np_array = np.zeros((n_rows, n_columns), dtype = dtype.to_pandas_dtype(), order='F')
+
+            try:
+                with jj.get_io_uring_reader(path) as ur:
+                    jj.read_into_numpy (source = ur
+                                        , metadata = None
+                                        , np_array = np_array
+                                        , row_group_indices = range(n_row_groups)
+                                        , column_names = [f'column_{i}' for i in range(n_columns)]
+                                        , pre_buffer = pre_buffer
+                                        , use_threads = use_threads
+                                        , use_memory_map = use_memory_map)
+
+                pr = pq.ParquetReader()
+                pr.open(path)
+                expected_data = pr.read_all().to_pandas().to_numpy()
+                self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
+                pr.close()
+            except RuntimeError as e:
+                if 'Failed to initialize io_uring' in str(e):
+                    self.skipTest('Failed to initialize io_uring')
+                raise 
 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
     def test_read_invalid_row_group(self, pre_buffer, use_threads, use_memory_map, dtype):

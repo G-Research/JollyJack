@@ -18,18 +18,32 @@ print ("library_dirs=", library_dirs)
 extra_compile_args = []
 extra_link_args = []
 debug = False,
+files = ["jollyjack/jollyjack_cython.pyx", "jollyjack/jollyjack.cc"]
+libraries = ["arrow", "parquet"]
+cython_compile_time_env = {}
 
 if os.getenv('DEBUG', '') == 'ON':
-    extra_compile_args = ["-O0", '-DDEBUG']
-    extra_link_args = ["-debug:full"]
-    debug = True,
+    print("Building with DEBUG information!")
+    extra_compile_args.extend(["-O0", '-DDEBUG'])
+    extra_link_args.extend(["-debug:full"])
+    debug = True
+    
+if os.getenv('ASAN', '') == 'ON':
+    print("Building with ASan!")
+    extra_compile_args.extend(["-fsanitize=address", "-O1", "-fno-omit-frame-pointer"])
+    extra_link_args.extend(["-fsanitize=address"])
+
+if sys.platform == "linux":
+    files.extend(["jollyjack/io_uring_random_access_file.cc"])
+    libraries.extend(["uring"])
+    extra_compile_args.extend(["-DWITH_IO_URING"])
 
 # Define your extension
 extensions = [
-    Extension( "jollyjack.jollyjack_cython", ["jollyjack/jollyjack_cython.pyx", "jollyjack/jollyjack.cc"],
+    Extension( "jollyjack.jollyjack_cython", files,
         include_dirs = include_dirs,  
         library_dirs = library_dirs,
-        libraries=["arrow", "parquet"], 
+        libraries = libraries, 
         language = "c++",
         extra_compile_args = extra_compile_args + (['/std:c++17'] if sys.platform.startswith('win') else ['-std=c++17']),
         extra_link_args = extra_link_args,

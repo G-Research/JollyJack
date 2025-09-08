@@ -12,7 +12,7 @@ from libcpp.vector cimport vector
 from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
-from pyarrow.lib cimport (get_reader)
+from pyarrow.lib cimport (get_reader, NativeFile)
 from collections.abc import Iterable
 
 def is_iterable_of_iterables(obj):
@@ -92,7 +92,9 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran (column-major) order"
 
     cdef int64_t cexpected_rows = np_array.shape[0]
+
     cdef shared_ptr[CRandomAccessFile] rd_handle
+    cdef NativeFile nf
     get_reader(source, use_memory_map, &rd_handle)
 
     with nogil:
@@ -155,3 +157,17 @@ cpdef void copy_to_numpy_row_major (cnp.ndarray src_array, cnp.ndarray dst_array
             , cdst_stride1
             , crow_indices);
         return
+
+
+cpdef get_io_uring_reader (source):
+    cdef:
+        c_string pathstr = source.encode("utf-8")
+        NativeFile stream = NativeFile()
+        shared_ptr[CRandomAccessFile] in_handle
+
+    with nogil:
+        in_handle = cjollyjack.GetIOUringReader (pathstr)
+
+    stream.set_random_access_file(in_handle)
+    stream.is_readable = True
+    return stream

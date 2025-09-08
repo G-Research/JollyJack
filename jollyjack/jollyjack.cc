@@ -298,10 +298,12 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     throw std::logic_error("target_row_ranges must contain pairs of [start, end) indices");
   }
 
-  arrow::io::RandomAccessFile *random_access_file = nullptr;
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
-
+  ::arrow::io::CacheOptions cacheOptions = ::arrow::io::CacheOptions::Defaults();
+  cacheOptions.lazy = false;
+  cacheOptions.prefetch_limit = 32; // TODO(marcink) - set the right limit - configurable via variable or What?
+  arrowReaderProperties.set_cache_options(cacheOptions);
   std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::Open(source, reader_properties, file_metadata);
   file_metadata = parquet_reader->metadata();
 
@@ -325,7 +327,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
   if (pre_buffer)
   {
-    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), arrowReaderProperties.cache_options());
+    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), cacheOptions);
   }
 
   int64_t target_row = 0;
@@ -626,3 +628,25 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
 #endif
 
 }
+
+#ifdef WITH_IO_URING
+#include "io_uring_random_access_file.h"
+std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader(const std::string& filename)
+{
+  // TODO(marcink) - How to determine an optimal queue depth?
+  const int queue_depth = 64;
+  auto result = IoUringRandomAccessFile::Open(filename, queue_depth);
+  
+  if (!result.ok())
+  {
+    throw std::runtime_error(result.status().ToString()); 
+  }
+
+  return result.ValueOrDie();
+}
+#else
+std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader(const std::string& filename)
+{
+  throw std::runtime_error("io_uring is not available on this platform!"); 
+}
+#endif

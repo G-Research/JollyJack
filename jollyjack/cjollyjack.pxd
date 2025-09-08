@@ -30,3 +30,5 @@ cdef extern from "jollyjack.h":
         size_t dst_stride0_size,
         size_t dst_stride1_size,
         vector[int] row_indices) except + nogil
+
+    cdef shared_ptr[CRandomAccessFile] GetIOUringReader (const string& path) except + nogil

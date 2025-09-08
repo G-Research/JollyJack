@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jollyjack"
-version = "0.17.0"
+version = "0.17.1"
 description = "Read parquet data directly into numpy array"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -56,6 +56,10 @@ archs = ["auto", "aarch64",]
 
 repair-wheel-command = [
  "auditwheel repair --exclude libarrow.so.2100 --exclude libparquet.so.2100 -w {dest_dir} {wheel}",
+]
+
+before-all = [
+  "yum -y install liburing-devel",
 ]
 
 ########################### cibuildwheel Windows ###################

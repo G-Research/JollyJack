@@ -43,6 +43,7 @@ jobs:
 
     - name: Test with pytest
       run: |
+        sudo apt-get install liburing-dev
         pip install --editable .
         pytest
 
