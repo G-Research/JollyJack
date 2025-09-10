@@ -100,7 +100,10 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
 
     cdef CCacheOptions c_cache_options
     if cache_options is not None:
-        c_cache_options = cache_options.unwrap() 
+        c_cache_options = cache_options.unwrap()
+    else:
+        c_cache_options = CCacheOptions.LazyDefaults()
+
 
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle
@@ -116,7 +119,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , ctarget_column_indices
             , cpre_buffer
             , cuse_threads
-            , cexpected_rows)
+            , cexpected_rows
+            , c_cache_options)
         return
 
 cpdef void copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):

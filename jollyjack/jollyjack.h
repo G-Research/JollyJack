@@ -1,5 +1,6 @@
 #include "parquet/arrow/reader.h"
 
+
 void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , std::shared_ptr<parquet::FileMetaData> file_metadata
     , void* buffer
@@ -13,7 +14,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<int> &target_column_indices
     , bool pre_buffer
     , bool use_threads
-    , int64_t expected_rows);
+    , int64_t expected_rows
+    , arrow::io::CacheOptions cache_options);
 
 void CopyToRowMajor (void* src_buffer,
     size_t src_stride0_size,

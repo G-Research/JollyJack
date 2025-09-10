@@ -1,6 +1,6 @@
 import jollyjack as jj
 
-def read_into_torch (source, metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
+def read_into_torch (source, metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, cache_options = None):
     """
     Read parquet data directly into a tensor.
 
@@ -28,6 +28,7 @@ def read_into_torch (source, metadata, tensor, row_group_indices, column_indices
     pre_buffer : bool, default False
     use_threads : bool, default True
     use_memory_map : bool, default False
+    cache_options : arrow::io::CacheOptions, default None -> CCacheOptions.LazyDefaults()
 
     Notes:
     -----
@@ -49,7 +50,7 @@ def read_into_torch (source, metadata, tensor, row_group_indices, column_indices
                      )
     return
 
-def read_into_numpy (source, metadata, np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
+def read_into_numpy (source, metadata, np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, cache_options = None):
     """
     Read parquet data directly into a numpy array.
     NumPy array needs to be in a Fortran-style (column-major) order.
@@ -78,6 +79,7 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, row_ranges =
     pre_buffer : bool, default False
     use_threads : bool, default True
     use_memory_map : bool, default False
+    cache_options : arrow::io::CacheOptions, default None -> CCacheOptions.LazyDefaults()
 
     Notes:
     -----
@@ -96,6 +98,7 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, row_ranges =
                      , pre_buffer
                      , use_threads
                      , use_memory_map
+                     , cache_options
                      )
     return
 

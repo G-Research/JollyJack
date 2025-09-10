@@ -291,7 +291,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<int> &target_column_indices
     , bool pre_buffer
     , bool use_threads
-    , int64_t expected_rows)
+    , int64_t expected_rows
+    , arrow::io::CacheOptions cache_options)
 {
   if (target_row_ranges.size() % 2 != 0)
   {
@@ -325,7 +326,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
   if (pre_buffer)
   {
-    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), arrowReaderProperties.cache_options());
+    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), cache_options);
   }
 
   int64_t target_row = 0;

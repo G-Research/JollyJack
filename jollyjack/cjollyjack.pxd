@@ -19,6 +19,7 @@ cdef extern from "jollyjack.h":
         , bool pre_buffer
         , bool use_threads
         , int64_t expected_rows
+        , CCacheOptions cache_options
         ) except + nogil
 
     cdef void CopyToRowMajor (void* src_buffer,
