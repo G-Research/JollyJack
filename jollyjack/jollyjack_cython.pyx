@@ -12,13 +12,15 @@ from libcpp.vector cimport vector
 from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
-from pyarrow.lib cimport (get_reader)
+from pyarrow.lib cimport (CacheOptions, get_reader)
+from pyarrow.lib import (CacheOptions)
+from pyarrow.includes.libarrow cimport (CCacheOptions)
 from collections.abc import Iterable
 
 def is_iterable_of_iterables(obj):
     return isinstance(obj, Iterable) and isinstance(obj[0], Iterable) and not isinstance(obj[0], str)
 
-cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
+cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None):
 
     import torch
 
@@ -32,11 +34,12 @@ cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_gr
         , pre_buffer = pre_buffer
         , use_threads = use_threads
         , use_memory_map = use_memory_map
+        , cache_options = cache_options
     )
 
     return
 
-cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
+cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None):
 
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices
@@ -94,6 +97,10 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef int64_t cexpected_rows = np_array.shape[0]
     cdef shared_ptr[CRandomAccessFile] rd_handle
     get_reader(source, use_memory_map, &rd_handle)
+
+    cdef CCacheOptions c_cache_options
+    if cache_options is not None:
+        c_cache_options = cache_options.unwrap() 
 
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle
