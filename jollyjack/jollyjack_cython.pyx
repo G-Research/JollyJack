@@ -13,8 +13,6 @@ from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 from pyarrow.lib cimport (CacheOptions, get_reader)
-from pyarrow.lib import (CacheOptions)
-from pyarrow.includes.libarrow cimport (CCacheOptions)
 from collections.abc import Iterable
 
 def is_iterable_of_iterables(obj):
