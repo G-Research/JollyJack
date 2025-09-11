@@ -104,7 +104,6 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     else:
         c_cache_options = CCacheOptions.LazyDefaults()
 
-
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle
             , c_metadata
