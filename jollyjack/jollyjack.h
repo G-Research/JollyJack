@@ -1,6 +1,5 @@
 #include "parquet/arrow/reader.h"
 
-
 void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , std::shared_ptr<parquet::FileMetaData> file_metadata
     , void* buffer
