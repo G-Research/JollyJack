@@ -13,12 +13,13 @@ from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
 from pyarrow.lib cimport (get_reader, NativeFile)
+from pyarrow.lib cimport (CacheOptions, get_reader)
 from collections.abc import Iterable
 
 def is_iterable_of_iterables(obj):
     return isinstance(obj, Iterable) and isinstance(obj[0], Iterable) and not isinstance(obj[0], str)
 
-cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
+cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None):
 
     import torch
 
@@ -32,11 +33,12 @@ cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_gr
         , pre_buffer = pre_buffer
         , use_threads = use_threads
         , use_memory_map = use_memory_map
+        , cache_options = cache_options
     )
 
     return
 
-cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False):
+cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None):
 
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices
@@ -97,6 +99,12 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef NativeFile nf
     get_reader(source, use_memory_map, &rd_handle)
 
+    cdef CCacheOptions c_cache_options
+    if cache_options is not None:
+        c_cache_options = cache_options.unwrap()
+    else:
+        c_cache_options = CCacheOptions.LazyDefaults()
+
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle
             , c_metadata
@@ -111,7 +119,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , ctarget_column_indices
             , cpre_buffer
             , cuse_threads
-            , cexpected_rows)
+            , cexpected_rows
+            , c_cache_options)
         return
 
 cpdef void copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
