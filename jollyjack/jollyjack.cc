@@ -16,7 +16,7 @@ using arrow::Status;
 
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
-    , std::shared_ptr<parquet::RowGroupReader> row_group_reader
+    , std::shared_ptr<parquet::ColumnReader> column_reader
     , parquet::RowGroupMetaData *row_group_metadata
     , void* buffer
     , size_t buffer_size
@@ -26,7 +26,7 @@ arrow::Status ReadColumn (int column_index
     , const std::vector<int> &target_column_indices
     , const std::vector<int64_t> &target_row_ranges
     , size_t target_row_ranges_idx
-    ) noexcept
+    )
 {
   std::string column_name;
   const auto num_rows = row_group_metadata->num_rows();
@@ -34,7 +34,6 @@ arrow::Status ReadColumn (int column_index
 
   try
   {
-    const auto column_reader = row_group_reader->Column(parquet_column);
     column_name = column_reader->descr()->name();
 
     int target_column = column_index;
@@ -356,19 +355,28 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
   auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
             [&](int target_column) { 
-              return ReadColumn(target_column
-                , target_row
-                , row_group_reader
-                , row_group_metadata.get()
-                , buffer
-                , buffer_size
-                , stride0_size
-                , stride1_size
-                , column_indices
-                , target_column_indices
-                , target_row_ranges
-                , target_row_ranges_idx);
-              });
+
+              try
+              {
+                auto column_reader = row_group_reader->Column(column_indices[target_column]);
+                return ReadColumn(target_column
+                  , target_row
+                  , column_reader
+                  , row_group_metadata.get()
+                  , buffer
+                  , buffer_size
+                  , stride0_size
+                  , stride1_size
+                  , column_indices
+                  , target_column_indices
+                  , target_row_ranges
+                  , target_row_ranges_idx);
+              }
+              catch(const parquet::ParquetException& e)
+              {
+                return arrow::Status::UnknownError(e.what());
+              }});
+
     if (result != arrow::Status::OK())
     {
       throw std::logic_error(result.message());

@@ -9,8 +9,13 @@ import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
+import sys
+import os
 
 from pyarrow import fs
+
+if os.environ.get('JJ_experimental_io_uring_mode') != None:
+    sys.exit()
 
 chunk_size = 3
 n_row_groups = 2

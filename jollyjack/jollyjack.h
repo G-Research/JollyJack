@@ -25,3 +25,17 @@ void CopyToRowMajor (void* src_buffer,
     size_t dst_stride0_size,
     size_t dst_stride1_size,
     std::vector<int> row_indices);
+
+arrow::Status ReadColumn (int column_index
+    , int64_t target_row
+    , std::shared_ptr<parquet::ColumnReader> column_reader
+    , parquet::RowGroupMetaData *row_group_metadata
+    , void* buffer
+    , size_t buffer_size
+    , size_t stride0_size
+    , size_t stride1_size
+    , const std::vector<int> &column_indices
+    , const std::vector<int> &target_column_indices
+    , const std::vector<int64_t> &target_row_ranges
+    , size_t target_row_ranges_idx
+    );

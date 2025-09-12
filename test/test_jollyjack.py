@@ -1,6 +1,7 @@
 import pandas as pd
 import unittest
 import tempfile
+import sys
 
 import jollyjack as jj
 import palletjack as pj
@@ -12,7 +13,6 @@ import os
 import itertools
 import torch
 from pyarrow import fs
-from functools import wraps
 from parameterized import parameterized
 
 
@@ -376,6 +376,7 @@ class TestJollyJack(unittest.TestCase):
             pr = pq.ParquetReader()
             pr.open(path)
             expected_data = pr.read_all().to_pandas().to_numpy()
+
             self.assertTrue(np.array_equal(np_array, expected_data), f"{np_array}\n{expected_data}")
             pr.close()
 
@@ -438,14 +439,16 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
 
-            if pre_buffer:
-                self.assertTrue(f"The file only has {n_columns} columns, requested metadata for column: {n_columns}" in str(context.exception), context.exception)
-            else:
-                self.assertTrue(f"Trying to read column index {n_columns} but row group metadata has only {n_columns} columns" in str(context.exception), context.exception)
-
+            ss = [f"The file only has {n_columns} columns, requested metadata for column: {n_columns}", 
+                  f"Trying to read column index {n_columns} but row group metadata has only {n_columns} columns" ]
+            self.assertTrue(any(s in str(context.exception) for s in ss), context.exception)
+            
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
     def test_read_filesystem(self, pre_buffer, use_threads, use_memory_map, dtype):
-                
+
+        if os.environ.get('JJ_experimental_io_uring_mode') != None:
+            self.skipTest("io_uring is enabled but this test is not compatible with io_uring")
+
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows = n_rows, n_columns = n_columns, data_type = dtype)
@@ -491,11 +494,10 @@ class TestJollyJack(unittest.TestCase):
                                     , use_threads = use_threads
                                     , use_memory_map = use_memory_map)
 
-            if pre_buffer:
-                self.assertTrue(f"The file only has {n_row_groups} row groups, requested metadata for row group: {n_row_groups}" in str(context.exception), context.exception)
-            else:
-                self.assertTrue(f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" in str(context.exception), context.exception)
-
+            ss = [f"The file only has {n_row_groups} row groups, requested metadata for row group: {n_row_groups}", 
+                  f"Trying to read row group {n_row_groups} but file only has {n_row_groups} row groups" ]
+            self.assertTrue(any(s in str(context.exception) for s in ss), context.exception)
+ 
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], supported_dtype_encodings))
     def test_read_data_with_nulls(self, pre_buffer, use_threads, use_memory_map, dtype_encoding):
 
@@ -585,7 +587,7 @@ class TestJollyJack(unittest.TestCase):
             expected_data = pr.read_all().to_pandas().to_numpy()
             reversed_expected_data = expected_data[:, ::-1]
             self.assertTrue(np.array_equal(np_array, reversed_expected_data), f"\n{np_array}\n\n{reversed_expected_data}")
-            
+
             np_array = np.zeros((n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order='F')
             for c in range(n_columns):
                 jj.read_into_numpy (source = path

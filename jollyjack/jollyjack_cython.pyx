@@ -1,5 +1,6 @@
 # distutils: include_dirs = .
 
+import os
 import cython
 import pyarrow.parquet as pq
 cimport numpy as cnp
@@ -12,7 +13,7 @@ from libcpp.vector cimport vector
 from libcpp cimport bool
 from libc.stdint cimport uint32_t
 from pyarrow._parquet cimport *
-from pyarrow.lib cimport (CacheOptions, get_reader)
+from pyarrow.lib cimport (CacheOptions, NativeFile, get_reader)
 from collections.abc import Iterable
 
 def is_iterable_of_iterables(obj):
@@ -93,8 +94,6 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran (column-major) order"
 
     cdef int64_t cexpected_rows = np_array.shape[0]
-    cdef shared_ptr[CRandomAccessFile] rd_handle
-    get_reader(source, use_memory_map, &rd_handle)
 
     cdef CCacheOptions c_cache_options
     if cache_options is not None:
@@ -102,23 +101,46 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     else:
         c_cache_options = CCacheOptions.LazyDefaults()
 
-    with nogil:
-        cjollyjack.ReadIntoMemory (rd_handle
-            , c_metadata
-            , np_array.data
-            , cbuffer_size
-            , cstride0_size
-            , cstride1_size
-            , ccolumn_indices
-            , crow_group_indices
-            , ctarget_row_ranges
-            , ccolumn_names
-            , ctarget_column_indices
-            , cpre_buffer
-            , cuse_threads
-            , cexpected_rows
-            , c_cache_options)
-        return
+    cdef shared_ptr[CRandomAccessFile] rd_handle
+    cdef c_string pathstr
+    io_uring_mode = os.environ.get("JJ_experimental_io_uring_mode")
+    if io_uring_mode is None:
+        get_reader(source, use_memory_map, &rd_handle)
+        with nogil:
+            cjollyjack.ReadIntoMemory (rd_handle
+                , c_metadata
+                , np_array.data
+                , cbuffer_size
+                , cstride0_size
+                , cstride1_size
+                , ccolumn_indices
+                , crow_group_indices
+                , ctarget_row_ranges
+                , ccolumn_names
+                , ctarget_column_indices
+                , cpre_buffer
+                , cuse_threads
+                , cexpected_rows
+                , c_cache_options)
+            return
+    else:
+        pathstr = source.encode("utf-8")
+        with nogil:
+            cjollyjack.ReadIntoMemory_io_uring (pathstr
+                , c_metadata
+                , np_array.data
+                , cbuffer_size
+                , cstride0_size
+                , cstride1_size
+                , ccolumn_indices
+                , crow_group_indices
+                , ctarget_row_ranges
+                , ccolumn_names
+                , ctarget_column_indices
+                , cpre_buffer
+                , cuse_threads
+                , cexpected_rows)
+            return
 
 cpdef void copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
     import torch
