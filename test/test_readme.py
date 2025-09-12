@@ -11,11 +11,12 @@ import pyarrow as pa
 import numpy as np
 import sys
 import os
-
+import unittest
 from pyarrow import fs
 
 if os.environ.get('JJ_experimental_io_uring_mode') != None:
-    sys.exit()
+  unittest.skipTest("io_uring is enabled but this test is not compatible with io_uring")
+
 
 chunk_size = 3
 n_row_groups = 2
