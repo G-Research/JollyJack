@@ -9,13 +9,13 @@ import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import numpy as np
-import sys
+import pytest
 import os
 import unittest
 from pyarrow import fs
 
 if os.environ.get('JJ_experimental_io_uring_mode') != None:
-  unittest.SkipTest("io_uring is enabled but this test is not compatible with io_uring")
+  pytest.skip("io_uring is enabled but this test is not compatible with io_uring")
 
 
 chunk_size = 3
