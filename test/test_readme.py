@@ -15,7 +15,7 @@ import unittest
 from pyarrow import fs
 
 if os.environ.get('JJ_experimental_io_uring_mode') != None:
-  unittest.skipTest("io_uring is enabled but this test is not compatible with io_uring")
+  unittest.SkipTest("io_uring is enabled but this test is not compatible with io_uring")
 
 
 chunk_size = 3
