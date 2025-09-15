@@ -50,6 +50,9 @@ jobs:
   test_io_uring:
     if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.pull_request.head.repo.id != github.event.pull_request.base.repo.id
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mode: [ReadIntoMemoryIOUring, IOUringReader1, IOUringReader2]
     steps:
     - uses: actions/checkout@v5
     - name: Set up Python 3.12
@@ -78,7 +81,7 @@ jobs:
         pip install --editable .
         pytest
       env:
-        JJ_experimental_io_uring_mode : '1'
+        JJ_experimental_io_uring_mode : ${{ matrix.mode }}
 
   build-wheels:
     if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.pull_request.head.repo.id != github.event.pull_request.base.repo.id
