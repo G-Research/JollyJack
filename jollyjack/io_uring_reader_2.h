@@ -59,13 +59,13 @@ class ARROW_EXPORT IoUringReader2 : public arrow::io::RandomAccessFile {
   
   // Async request management
   std::atomic<uint64_t> next_request_id_;
-  std::mutex requests_mutex_;
-  std::unordered_map<uint64_t, std::unique_ptr<AsyncReadRequest>> pending_requests_;
-  std::queue<std::unique_ptr<AsyncReadRequest>> submission_queue_;
+  std::atomic<bool> should_stop_;
   std::condition_variable submission_cv_;
+  std::mutex requests_mutex_;
+  std::queue<std::unique_ptr<AsyncReadRequest>> submission_queue_;
+  std::unordered_map<uint64_t, std::unique_ptr<AsyncReadRequest>> pending_requests_;
   
   // Background thread for processing completions
   std::thread completion_thread_;
-  std::atomic<bool> should_stop_;
   arrow::Status completion_thread_status;
 };
