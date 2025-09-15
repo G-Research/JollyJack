@@ -27,14 +27,14 @@ if os.getenv('DEBUG', '') == 'ON':
     extra_compile_args.extend(["-O0", '-DDEBUG'])
     extra_link_args.extend(["-debug:full"])
     debug = True
-    
+
 if os.getenv('ASAN', '') == 'ON':
     print("Building with ASan!")
     extra_compile_args.extend(["-fsanitize=address", "-O1", "-fno-omit-frame-pointer"])
     extra_link_args.extend(["-fsanitize=address"])
 
 if sys.platform == "linux":
-    files.extend(["jollyjack/jollyjack_io_uring.cc"])
+    files.extend(["jollyjack/read_into_memory_io_uring.cc","jollyjack/io_uring_reader_1.cc", "jollyjack/io_uring_reader_2.cc"])
     libraries.extend(["uring"])
     extra_compile_args.extend(["-DWITH_IO_URING"])
 

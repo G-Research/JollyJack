@@ -298,10 +298,12 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     throw std::logic_error("target_row_ranges must contain pairs of [start, end) indices");
   }
 
-  arrow::io::RandomAccessFile *random_access_file = nullptr;
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
-
+  ::arrow::io::CacheOptions cacheOptions = ::arrow::io::CacheOptions::Defaults();
+  cacheOptions.lazy = false;
+  cacheOptions.prefetch_limit = 32; // TODO(marcink) - set the right limit - configurable via variable or What?
+  arrowReaderProperties.set_cache_options(cacheOptions);
   std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::Open(source, reader_properties, file_metadata);
   file_metadata = parquet_reader->metadata();
 
@@ -398,22 +400,22 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     }
   }
 
-    if (target_row_ranges.size() > 0)
+  if (target_row_ranges.size() > 0)
+  {
+    if (target_row_ranges_idx != target_row_ranges.size())
     {
-      if (target_row_ranges_idx != target_row_ranges.size())
-      {
-        auto msg = std::string("Expected to read ") + std::to_string(target_row_ranges.size() / 2) + " row ranges, but read only " + std::to_string(target_row_ranges_idx / 2) + "!";
-        throw std::logic_error(msg);
-      }
+      auto msg = std::string("Expected to read ") + std::to_string(target_row_ranges.size() / 2) + " row ranges, but read only " + std::to_string(target_row_ranges_idx / 2) + "!";
+      throw std::logic_error(msg);
     }
-    else
+  }
+  else
+  {
+    if (target_row != expected_rows)
     {
-      if (target_row != expected_rows)
-      {
-        auto msg = std::string("Expected to read ") + std::to_string(expected_rows) + " rows, but read only " + std::to_string(target_row) + "!";
-        throw std::logic_error(msg);
-      }
+      auto msg = std::string("Expected to read ") + std::to_string(expected_rows) + " rows, but read only " + std::to_string(target_row) + "!";
+      throw std::logic_error(msg);
     }
+  }
 }
 
 void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_stride1_size, int src_rows, int src_cols,
@@ -637,8 +639,35 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
 }
 
 #ifdef WITH_IO_URING
+#include "io_uring_reader_1.h"
+std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename)
+{
+   return std::make_shared<IoUringReader1>(filename);
+}
 #else
-void ReadIntoMemory_io_uring (const std::string& path
+std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename)
+{
+  throw std::runtime_error("io_uring is not available on this platform!"); 
+}
+#endif
+
+#ifdef WITH_IO_URING
+#include "io_uring_reader_2.h"
+std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader2(const std::string& filename)
+{
+  // TODO(marcink) - How to determine an optimal queue depth?
+  return IoUringReader2::Open(filename, 64).ValueOrDie();
+}
+#else
+std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader2(const std::string& filename)
+{
+  throw std::runtime_error("io_uring is not available on this platform!"); 
+}
+#endif
+
+#ifdef WITH_IO_URING
+#else
+void ReadIntoMemoryIOUring (const std::string& path
     , std::shared_ptr<parquet::FileMetaData> file_metadata
     , void* buffer
     , size_t buffer_size

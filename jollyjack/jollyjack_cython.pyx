@@ -106,27 +106,10 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     io_uring_mode = os.environ.get("JJ_experimental_io_uring_mode")
     if io_uring_mode is None:
         get_reader(source, use_memory_map, &rd_handle)
-        with nogil:
-            cjollyjack.ReadIntoMemory (rd_handle
-                , c_metadata
-                , np_array.data
-                , cbuffer_size
-                , cstride0_size
-                , cstride1_size
-                , ccolumn_indices
-                , crow_group_indices
-                , ctarget_row_ranges
-                , ccolumn_names
-                , ctarget_column_indices
-                , cpre_buffer
-                , cuse_threads
-                , cexpected_rows
-                , c_cache_options)
-            return
-    else:
+    elif io_uring_mode == 'ReadIntoMemoryIOUring':
         pathstr = source.encode("utf-8")
         with nogil:
-            cjollyjack.ReadIntoMemory_io_uring (pathstr
+            cjollyjack.ReadIntoMemoryIOUring (pathstr
                 , c_metadata
                 , np_array.data
                 , cbuffer_size
@@ -141,6 +124,30 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
                 , cuse_threads
                 , cexpected_rows)
             return
+    elif io_uring_mode == 'IOUringReader1':
+        rd_handle = cjollyjack.GetIOUringReader1 (source.encode("utf-8"))
+    elif io_uring_mode == 'IOUringReader2':
+        rd_handle = cjollyjack.GetIOUringReader2 (source.encode("utf-8"))
+    else:
+        raise ValueError(f"Unsupprted JJ_experimental_io_uring_mode={io_uring_mode}")
+
+    with nogil:
+        cjollyjack.ReadIntoMemory (rd_handle
+            , c_metadata
+            , np_array.data
+            , cbuffer_size
+            , cstride0_size
+            , cstride1_size
+            , ccolumn_indices
+            , crow_group_indices
+            , ctarget_row_ranges
+            , ccolumn_names
+            , ctarget_column_indices
+            , cpre_buffer
+            , cuse_threads
+            , cexpected_rows
+            , c_cache_options)
+        return
 
 cpdef void copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
     import torch

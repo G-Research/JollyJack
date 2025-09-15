@@ -32,8 +32,12 @@ cdef extern from "jollyjack.h":
         size_t dst_stride1_size,
         vector[int] row_indices) except + nogil
 
+    cdef shared_ptr[CRandomAccessFile] GetIOUringReader1 (const string& path) except + nogil
+
+    cdef shared_ptr[CRandomAccessFile] GetIOUringReader2 (const string& path) except + nogil
+
 cdef extern from "jollyjack_io_uring.h":
-    cdef void ReadIntoMemory_io_uring (const string& path
+    cdef void ReadIntoMemoryIOUring (const string& path
         , shared_ptr[CFileMetaData] file_metadata
         , void* buffer
         , size_t buffer_size

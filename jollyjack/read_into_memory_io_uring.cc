@@ -17,7 +17,7 @@
 
 using arrow::Status;
 
-void ReadIntoMemory_io_uring (const std::string& path
+void ReadIntoMemoryIOUring (const std::string& path
     , std::shared_ptr<parquet::FileMetaData> file_metadata
     , void* buffer
     , size_t buffer_size
