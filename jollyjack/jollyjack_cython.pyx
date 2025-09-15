@@ -103,6 +103,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
 
     cdef shared_ptr[CRandomAccessFile] rd_handle
     cdef c_string pathstr
+
+    # Please note that the `JJ_experimental_io_uring_mode` variable is experimental and may be changed or removed in future versions
     io_uring_mode = os.environ.get("JJ_experimental_io_uring_mode")
     if io_uring_mode is None:
         get_reader(source, use_memory_map, &rd_handle)
