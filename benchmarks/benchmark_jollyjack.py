@@ -178,9 +178,8 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
 
     print(f".")
     for n_threads in [1, 2]:
-        for pre_buffer in [False, True]:
-            for use_threads in [False, True]:
-                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads=use_threads, path = path)):.2f} seconds")
+        for use_threads in [False, True]:
+            print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads=use_threads, path = path)):.2f} seconds")
 
     print(f".")
     for n_threads in [1, 2]:
