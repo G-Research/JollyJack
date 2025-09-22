@@ -34,10 +34,10 @@ def get_table(n_rows, n_columns, data_type = pa.float32()):
     # Create a PyArrow Table from the Arrays
     return pa.Table.from_arrays(pa_arrays, schema=schema)
 
-def worker_arrow_row_group(use_threads, path):
+def worker_arrow_row_group(use_threads, pre_buffer, path):
 
     pr = pq.ParquetReader()
-    pr.open(path)
+    pr.open(path, pre_buffer = pre_buffer)
 
     column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
     table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
@@ -178,8 +178,9 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
 
     print(f".")
     for n_threads in [1, 2]:
-        for use_threads in [False, True]:
-            print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads=use_threads, path = path)):.2f} seconds")
+        for pre_buffer in [False, True]:
+            for use_threads in [False, True]:
+                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path)):.2f} seconds")
 
     print(f".")
     for n_threads in [1, 2]:
