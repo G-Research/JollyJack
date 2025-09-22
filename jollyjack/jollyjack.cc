@@ -300,10 +300,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
   auto arrowReaderProperties = parquet::default_arrow_reader_properties();
-  ::arrow::io::CacheOptions cacheOptions = ::arrow::io::CacheOptions::Defaults();
-  cacheOptions.lazy = false;
-  cacheOptions.prefetch_limit = 32; // TODO(marcink) - set the right limit - configurable via variable or What?
-  arrowReaderProperties.set_cache_options(cacheOptions);
+
   std::unique_ptr<parquet::ParquetFileReader> parquet_reader = parquet::ParquetFileReader::Open(source, reader_properties, file_metadata);
   file_metadata = parquet_reader->metadata();
 
