@@ -1,6 +1,7 @@
 import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
+import pandas as pd
 import numpy as np
 import concurrent.futures
 import platform
@@ -14,7 +15,6 @@ row_groups = 1
 n_columns = 7_000
 n_columns_to_read = 1_000
 chunk_size = 64_000
-n_rows = row_groups * chunk_size
 
 n_threads = 2
 
@@ -23,16 +23,46 @@ jollyjack_numpy = None
 arrow_numpy = None
 os_name = platform.system()
 
-def get_table(n_rows, n_columns, data_type = pa.float32()):
-    # Generate a random 2D array of floats using NumPy
-    # Each column in the array represents a column in the final table
-    data = np.random.rand(n_rows, n_columns).astype(np.float32)
 
-    # Convert the NumPy array to a list of PyArrow Arrays, one for each column
-    pa_arrays = [pa.array(data[:, i]).cast(data_type, safe = False) for i in range(n_columns)]
-    schema = pa.schema([(f'column_{i}', data_type) for i in range(n_columns)])
-    # Create a PyArrow Table from the Arrays
-    return pa.Table.from_arrays(pa_arrays, schema=schema)
+def generate_random_parquet(
+    filename: str,
+    n_columns: int,
+    n_row_groups: int,
+    chunk_size: int,
+    dtype = pa.float32(),
+    compression = None,
+):
+    print(f"Generating a Parquet file: {filename}, cols: {n_columns}, row_groups:{n_row_groups}, chunk_size:{chunk_size}, compression={compression}, dtype={dtype}")
+
+    writer = None
+    schema = pa.schema([ pa.field(f"col_{i}", dtype) for i in range(n_columns) ] )
+    try:
+        for i in range(n_row_groups):
+            print(f"  Generating row group {i+1}/{n_row_groups}...")
+            data = {f"col_{j}": np.random.uniform(-100, 100, size=chunk_size) for j in range(n_columns) }
+
+            df = pd.DataFrame(data)
+            table = pa.Table.from_pandas(df, schema=schema)
+
+            if writer is None:
+                writer = pq.ParquetWriter(filename, schema, use_dictionary=False, compression=compression, write_statistics=False, store_schema=False )
+
+            print("  writing...:")
+            writer.write_table(table)
+
+        print("Parquet file generated successfully!")
+    finally:
+        if writer:
+            writer.close()
+
+def genrate_data(n_columns, n_row_groups, path, compression, dtype):
+
+    t = time.time()
+    generate_random_parquet (filename = path, n_columns = n_columns, n_row_groups = n_row_groups, chunk_size = chunk_size, compression = compression, dtype = dtype)
+    parquet_size = os.stat(path).st_size
+
+    dt = time.time() - t
+    print(f"finished writing parquet file in {dt:.2f} seconds, size={humanize.naturalsize(parquet_size)}")
 
 def worker_arrow_row_group(use_threads, pre_buffer, path):
 
@@ -130,20 +160,6 @@ def worker_jollyjack_torch(pre_buffer, dtype, path):
                         , pre_buffer = pre_buffer
                         , use_threads = False)
 
-def genrate_data(n_rows, n_columns, path, compression, dtype):
-
-    table = get_table(n_rows, n_columns, dtype)
-
-    t = time.time()
-    print(f"writing parquet file:{path}, columns={n_columns}, row_groups={row_groups}, rows={n_rows}, compression={compression}, dtype={dtype}")
-    
-    pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, compression=compression, store_schema=False)
-    parquet_size = os.stat(path).st_size
-    print(f"Parquet size={humanize.naturalsize(parquet_size)}")
-
-    dt = time.time() - t
-    print(f"finished writing parquet file in {dt:.2f} seconds")
-
 def measure_reading(max_workers, worker):
 
     def dummy_worker():
@@ -174,7 +190,7 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     print(f".")
     for f in range(n_files):
         path = f"{parquet_path}{f}"
-        genrate_data(n_rows, n_columns, path = path, compression = compression, dtype = dtype)
+        genrate_data(path = path, n_row_groups = row_groups, n_columns = n_columns, compression = compression, dtype = dtype)
 
     print(f".")
     for n_threads in [1, n_threads]:
