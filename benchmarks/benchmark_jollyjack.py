@@ -10,9 +10,13 @@ import time
 import sys
 import os
 
+# n_files = 2
+# n_repeats = 10
+
+n_files = 20
+n_repeats = 1
+
 n_threads = 2
-n_files = 2
-n_repeats = 10
 row_groups = 2
 n_columns = 7_000
 n_columns_to_read = 3_000
