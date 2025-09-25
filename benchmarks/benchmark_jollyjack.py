@@ -17,7 +17,7 @@ row_groups = 2
 n_columns = 7_000
 n_columns_to_read = 3_000
 chunk_size = 32_000
-parquet_path = "my.parquet" if sys.platform.startswith('win') else ["/tmp/my.parquet"]
+parquet_path = "my.parquet" if sys.platform.startswith('win') else "/tmp/my.parquet"
 
 def generate_random_parquet(
     filename: str,
@@ -27,6 +27,7 @@ def generate_random_parquet(
     dtype = pa.float32(),
     compression = None,
 ):
+    print(".")
     print(f"Generating a Parquet file: {filename}, cols: {n_columns}, row_groups:{n_row_groups}, chunk_size:{chunk_size}, compression={compression}, dtype={dtype}")
 
     writer = None
@@ -177,7 +178,7 @@ def measure_reading(max_workers, worker):
         # Submit the work
         t = time.time()
         work_results = []
-        for _ in n_repeats:
+        for _ in range(n_repeats):
             work_results.extend([pool.submit(worker, path = f"{parquet_path}{i}") for i in range(0, n_files)])
 
         for work_result in work_results:
