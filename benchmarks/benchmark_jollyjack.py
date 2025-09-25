@@ -10,11 +10,18 @@ import time
 import sys
 import os
 
-# n_files = 2
-# n_repeats = 10
+benchmark_mode = os.getenv("JJ_benchmark_mode", "CPU")
 
-n_files = 20
-n_repeats = 1
+if benchmark_mode == "FILE_SYSTEM":    
+    # FILE_SYSTEM, unable to fit everything into page cache, no repeats
+    n_files = 20
+    n_repeats = 1
+elif benchmark_mode == "CPU":
+    # "CPU" -> one file, goes into page cache, many repeats
+    n_files = 1
+    n_repeats = 20
+else:
+    raise RuntimeError(f"Ivalid JJ_benchmark_mode:{benchmark_mode}")
 
 n_threads = 2
 row_groups = 2
@@ -192,6 +199,15 @@ def measure_reading(max_workers, worker):
         tt.append(time.time() - t)
 
     return min (tt)
+
+print (f"benchmark_mode={benchmark_mode}")
+print (f"n_threads={n_threads}")
+print (f"row_groups={row_groups}")
+print (f"n_columns={n_columns}")
+print (f"chunk_size={chunk_size}")
+
+print (f"pyarrow.version = {pa.__version__}")
+print (f"jollyjack.version = {jj.__version__}")
 
 for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None, pa.float16())]:
     
