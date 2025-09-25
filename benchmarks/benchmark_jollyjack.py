@@ -4,25 +4,20 @@ import pyarrow as pa
 import pandas as pd
 import numpy as np
 import concurrent.futures
-import platform
 import humanize
 import random
 import time
+import sys
 import os
 
-n_files = 10
-row_groups = 1
-n_columns = 7_000
-n_columns_to_read = 1_000
-chunk_size = 64_000
-
 n_threads = 2
-
-parquet_path = "my.parquet"
-jollyjack_numpy = None
-arrow_numpy = None
-os_name = platform.system()
-
+n_files = 2
+n_repeats = 10
+row_groups = 2
+n_columns = 7_000
+n_columns_to_read = 3_000
+chunk_size = 32_000
+parquet_path = "my.parquet" if sys.platform.startswith('win') else ["/tmp/my.parquet"]
 
 def generate_random_parquet(
     filename: str,
@@ -69,8 +64,9 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
     pr = pq.ParquetReader()
     pr.open(path, pre_buffer = pre_buffer)
 
-    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
-    table = pr.read_row_groups([row_groups-1], column_indices = column_indices_to_read, use_threads=use_threads)
+    row_groups_to_read = random.sample(range(row_groups), 1)
+    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
+    table = pr.read_row_groups(row_groups = row_groups_to_read, column_indices = column_indices_to_read, use_threads=use_threads)
 
 def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
         
@@ -79,11 +75,12 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
     pr = pq.ParquetReader()
     pr.open(path)
 
-    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
+    row_groups_to_read = random.sample(range(row_groups), 1)
+    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_numpy(source = path
                         , metadata = pr.metadata
                         , np_array = np_array
-                        , row_group_indices = [row_groups-1]
+                        , row_group_indices = row_groups_to_read
                         , column_indices = column_indices_to_read
                         , pre_buffer = pre_buffer
                         , use_threads = use_threads)
@@ -97,12 +94,13 @@ def worker_jollyjack_copy_to_row_major(dtype, path):
 
     pr = pq.ParquetReader()
     pr.open(path)
-
-    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
+    
+    row_groups_to_read = random.sample(range(row_groups), 1)
+    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_numpy(source = path
                         , metadata = pr.metadata
                         , np_array = np_array
-                        , row_group_indices = [row_groups-1]
+                        , row_group_indices = row_groups_to_read
                         , column_indices = column_indices_to_read
                         , pre_buffer = True
                         , use_threads = False)
@@ -117,11 +115,12 @@ def worker_numpy_copy_to_row_major(dtype, path):
     pr = pq.ParquetReader()
     pr.open(path)
 
-    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
+    row_groups_to_read = random.sample(range(row_groups), 1)
+    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_numpy(source = path
                         , metadata = pr.metadata
                         , np_array = np_array
-                        , row_group_indices = [row_groups-1]
+                        , row_group_indices = row_groups_to_read
                         , column_indices = column_indices_to_read
                         , pre_buffer = True
                         , use_threads = False)
@@ -149,13 +148,14 @@ def worker_jollyjack_torch(pre_buffer, dtype, path):
     tensor = torch.zeros(n_columns_to_read, chunk_size, dtype = numpy_to_torch_dtype_dict[dtype]).transpose(0, 1)
 
     pr = pq.ParquetReader()
-    pr.open(path)
-    
-    column_indices_to_read = random.sample(range(0, n_columns), n_columns_to_read)
+    pr.open(path)    
+
+    row_groups_to_read = random.sample(range(row_groups), 1)
+    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_torch(source = path
                         , metadata = pr.metadata
                         , tensor = tensor
-                        , row_group_indices = [row_groups-1]
+                        , row_group_indices = row_groups_to_read
                         , column_indices = column_indices_to_read
                         , pre_buffer = pre_buffer
                         , use_threads = False)
@@ -176,7 +176,10 @@ def measure_reading(max_workers, worker):
 
         # Submit the work
         t = time.time()
-        work_results = [pool.submit(worker, path = f"{parquet_path}{i}") for i in range(0, n_files)]
+        work_results = []
+        for _ in n_repeats:
+            work_results.extend([pool.submit(worker, path = f"{parquet_path}{i}") for i in range(0, n_files)])
+
         for work_result in work_results:
             work_result.result()
 
