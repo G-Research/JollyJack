@@ -351,13 +351,27 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         << " stride1_size:" << stride1_size
         << std::endl;
 #endif
+  std::vector<std::shared_ptr<parquet::ColumnReader>> column_readers;
+  column_readers.resize(column_indices.size());
+  char *env_value = getenv("JJ_experimental_column_reader");
+
+  // Experimental code path, to check if in some circumstances it is more efficient to create all column readers at once (this involves reading the file content).
+  if (env_value != NULL)
+  {
+    for (size_t target_column = 0; target_column < column_indices.size(); target_column++)
+    {
+      column_readers[target_column] = row_group_reader->Column(column_indices[target_column]);
+    }
+  }
 
   auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
             [&](int target_column) { 
-
               try
-              {
-                auto column_reader = row_group_reader->Column(column_indices[target_column]);
+              {        
+                auto column_reader = column_readers[target_column];
+                if (column_reader == nullptr)
+                  column_reader = row_group_reader->Column(column_indices[target_column]);
+
                 return ReadColumn(target_column
                   , target_row
                   , column_reader
