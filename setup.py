@@ -34,7 +34,8 @@ if os.getenv('ASAN', '') == 'ON':
     extra_link_args.extend(["-fsanitize=address"])
 
 if sys.platform == "linux":
-    files.extend(["jollyjack/read_into_memory_io_uring.cc","jollyjack/io_uring_reader_1.cc", "jollyjack/io_uring_reader_2.cc"])
+    files.extend(["jollyjack/read_into_memory_io_uring.cc","jollyjack/io_uring_reader_1.cc", "jollyjack/io_uring_reader_2.cc"
+                  , "jollyjack/read_into_memory_benchmark1.cc", "jollyjack/read_into_memory_benchmark2.cc"])
     libraries.extend(["uring"])
     extra_compile_args.extend(["-DWITH_IO_URING"])
 

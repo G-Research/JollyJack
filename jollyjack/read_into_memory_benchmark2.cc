@@ -20,7 +20,7 @@
 
 using arrow::Status;
 
-void ReadIntoMemory_benchmark1(
+void ReadIntoMemory_benchmark2(
   const std::string& path,
   std::shared_ptr<parquet::FileMetaData> file_metadata,
   void* buffer,
@@ -46,28 +46,13 @@ void ReadIntoMemory_benchmark1(
   auto parquet_reader = parquet::ParquetFileReader::OpenFile(path, false, reader_properties, file_metadata);
 
   std::vector<int> single_row_group(1);
-  std::vector<int> single_column(1);
-  std::vector<::arrow::io::ReadRange> read_ranges;
-  read_ranges.reserve(column_indices.size()); // reserve enough memory to avoid reallocations
 
   // Process each row group separately to maintain target_row tracking
   for (int row_group : row_groups) {
-    size_t read_range_idx = 0;
     auto row_group_reader = parquet_reader->RowGroup(row_group);
     std::shared_ptr<parquet::RowGroupMetaData> row_group_metadata = file_metadata->RowGroup(row_group);
     single_row_group[0] = row_group;
-
-    for (size_t c_idx = 0; c_idx < column_indices.size(); c_idx++) {
-      single_column[0] = column_indices[c_idx];
-      
-      auto &read_range = read_ranges[read_range_idx++];
-      auto ranges = parquet_reader->GetReadRanges(
-        single_row_group, single_column, 0, 1
-      ).ValueOrDie();
-
-      read_range.length = ranges[0].length;
-      read_range.offset = ranges[1].length;
-    }
+    auto read_ranges = parquet_reader->GetReadRanges(single_row_group, column_indices, cache_options.hole_size_limit, cache_options.range_size_limit).ValueOrDie();
 
     auto result = ::arrow::internal::OptionalParallelFor(use_threads, read_ranges.size(),
             [&](int target_column) { 
