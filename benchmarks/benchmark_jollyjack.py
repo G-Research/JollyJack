@@ -238,14 +238,14 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
                 print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
 
     print(f".")
-    for jj_uring in [None] if sys.platform.startswith('win') else [None, 'ReadIntoMemoryIOUring', 'IOUringReader1']:
+    for jj_uring in [None] if sys.platform.startswith('win') else [None, 'ReadIntoMemoryIOUring', 'ReadIntoMemory_benchmark1', 'ReadIntoMemory_benchmark2', 'ReadIntoMemory_benchmark3']:
         if jj_uring is None:
             os.environ.pop("JJ_experimental_io_uring_mode", None)
         else:
             os.environ["JJ_experimental_io_uring_mode"] = jj_uring
         print(f".")
         for n_threads in [1, n_threads]:
-            for pre_buffer in [False, True]:
+            for pre_buffer in [False]:
                 for use_threads in [False, True]:
                     print(f"`JollyJack.read_into_numpy` jj_uring:{jj_uring}, n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))} seconds")
 
