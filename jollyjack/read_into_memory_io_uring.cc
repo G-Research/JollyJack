@@ -447,7 +447,7 @@ void ProcessCompletion(
     }
   }
   
-  request.buffer = nullptr;
+  request.buffer.reset();
 }
 
 // Wait for and process all io_uring completions
