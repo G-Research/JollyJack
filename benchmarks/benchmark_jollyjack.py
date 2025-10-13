@@ -236,18 +236,3 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
             for pre_buffer in [False]:
                 for use_threads in [False, True]:
                     print(f"`JollyJack.read_into_numpy` jj_uring:{jj_uring}, n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))} seconds")
-
-    print(f".")
-    for n_threads in [1, n_threads]:
-        for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}")
-
-    print(f".")
-    for jj_variant in [1, 2]:
-        os.environ["JJ_copy_to_row_major"] = str(jj_variant)
-        for n_threads in [1, n_threads]:
-            print(f"`JollyJack.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}")
-
-    print(f".")
-    for n_threads in [1, n_threads]:
-        print(f"`numpy.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}")
