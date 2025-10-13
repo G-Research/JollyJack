@@ -187,7 +187,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     elif io_uring_mode == 'ReadIntoMemory_benchmark4':
         pathstr = source.encode("utf-8")
         with nogil:
-            cjollyjack.ReadIntoMemory_benchmar4 (pathstr
+            cjollyjack.ReadIntoMemory_benchmark4 (pathstr
                 , c_metadata
                 , np_array.data
                 , cbuffer_size
