@@ -44,6 +44,7 @@ void ReadIntoMemory_benchmark4(
   int64_t expected_rows, 
   arrow::io::CacheOptions cache_options)
 {
+  std::atomic<size_t> read_bytes(0);
   int fd = open(path.c_str(), O_RDONLY);
   if (fd < 0) {
     throw std::logic_error("Failed to open file: " + path + " - " + strerror(errno));
@@ -52,7 +53,6 @@ void ReadIntoMemory_benchmark4(
   auto reader_properties = parquet::default_reader_properties();
   auto parquet_reader = parquet::ParquetFileReader::OpenFile(path, false, reader_properties, file_metadata);
 
-  
   // Initialize io_uring
   struct io_uring ring = {};
   int ret = io_uring_queue_init(column_indices.size(), &ring, 0);
@@ -65,7 +65,7 @@ void ReadIntoMemory_benchmark4(
   std::vector<int> single_row_group(1);
   std::vector<int> single_column(1);
   std::vector<Request> requests;
-  requests.reserve(column_indices.size()); // reserve enough memory to avoid reallocations
+  requests.resize(column_indices.size()); // reserve enough memory to avoid reallocations
 
   // Process each row group separately to maintain target_row tracking
   for (int row_group : row_groups) {
@@ -135,8 +135,10 @@ void ReadIntoMemory_benchmark4(
       size_t request_idx = reinterpret_cast<size_t>(io_uring_cqe_get_data(cqe));
       auto& request = requests[request_idx];
       request.buffer.reset();
+      read_bytes.fetch_add(cqe->res);
     }
   }
 
   close(fd);
+  std::cerr << "ReadIntoMemory_benchmark4::Read_bytes:" << std::to_string(read_bytes.fetch_add(0)) << "bytes" << std::endl;
 }

@@ -37,6 +37,7 @@ void ReadIntoMemory_benchmark3(
   int64_t expected_rows, 
   arrow::io::CacheOptions cache_options)
 {
+  std::atomic<size_t> read_bytes(0);
   int fd = open(path.c_str(), O_RDONLY);
   if (fd < 0) {
     throw std::logic_error("Failed to open file: " + path + " - " + strerror(errno));
@@ -48,7 +49,7 @@ void ReadIntoMemory_benchmark3(
   std::vector<int> single_row_group(1);
   std::vector<int> single_column(1);
   std::vector<::arrow::io::ReadRange> read_ranges;
-  read_ranges.reserve(column_indices.size()); // reserve enough memory to avoid reallocations
+  read_ranges.resize(column_indices.size()); // reserve enough memory to avoid reallocations
 
   // Process each row group separately to maintain target_row tracking
   for (int row_group : row_groups) {
@@ -64,7 +65,7 @@ void ReadIntoMemory_benchmark3(
       ).ValueOrDie();
 
       read_range.length = ranges[0].length;
-      read_range.offset = ranges[1].length;
+      read_range.offset = ranges[0].offset;
     }
 
     // Sort column ranges by offset for better IO predicability s?!
@@ -73,6 +74,7 @@ void ReadIntoMemory_benchmark3(
         return a.offset < b.offset;
       });
 
+    std::atomic<size_t> read_bytes(0);
     auto result = ::arrow::internal::OptionalParallelFor(use_threads, read_ranges.size(),
             [&](int target_column) { 
               try
@@ -83,6 +85,7 @@ void ReadIntoMemory_benchmark3(
                 if (result != read_range.length )
                   return arrow::Status::IOError("");
 
+                read_bytes.fetch_add(result);
                 return arrow::Status::OK();
               }
               catch(const parquet::ParquetException& e)
@@ -96,4 +99,5 @@ void ReadIntoMemory_benchmark3(
   }
 
   close(fd);
+  std::cerr << "ReadIntoMemory_benchmark3::Read_bytes:" << std::to_string(read_bytes.fetch_add(0)) << "bytes" << std::endl;
 }

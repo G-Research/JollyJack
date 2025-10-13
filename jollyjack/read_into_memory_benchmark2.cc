@@ -37,6 +37,7 @@ void ReadIntoMemory_benchmark2(
   int64_t expected_rows, 
   arrow::io::CacheOptions cache_options)
 {
+  std::atomic<size_t> read_bytes(0);
   int fd = open(path.c_str(), O_RDONLY);
   if (fd < 0) {
     throw std::logic_error("Failed to open file: " + path + " - " + strerror(errno));
@@ -66,6 +67,7 @@ void ReadIntoMemory_benchmark2(
                 if (result != read_range.length )
                   return arrow::Status::IOError("");
 
+                read_bytes.fetch_add(result);
                 return arrow::Status::OK();
               }
               catch(const parquet::ParquetException& e)
@@ -79,4 +81,5 @@ void ReadIntoMemory_benchmark2(
   }
 
   close(fd);
+  std::cerr << "ReadIntoMemory_benchmark2::Read_bytes:" << std::to_string(read_bytes.fetch_add(0)) << "bytes" << std::endl;
 }
