@@ -97,6 +97,6 @@ void ReadIntoMemory_benchmark3(
     }
   }
 
-  close(fd);  
+  close(fd);
   *(float*)buffer = (float)read_bytes.fetch_add(0);
 }
