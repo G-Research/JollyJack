@@ -124,7 +124,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
                 , ctarget_column_indices
                 , cpre_buffer
                 , cuse_threads
-                , cexpected_rows)
+                , cexpected_rows
+                , c_cache_options)
             return
     elif io_uring_mode == 'IOUringReader1':
         rd_handle = cjollyjack.GetIOUringReader1 (source.encode("utf-8"))
