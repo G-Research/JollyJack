@@ -51,12 +51,14 @@ void ReadIntoMemory_benchmark2(
   // Process each row group separately to maintain target_row tracking
   for (int row_group : row_groups) {
     single_row_group[0] = row_group;
+    auto read_ranges = parquet_reader->GetReadRanges(single_row_group, column_indices, cache_options.hole_size_limit, cache_options.range_size_limit).ValueOrDie();
+    /*
     auto start = std::chrono::system_clock::now();
     auto read_ranges = parquet_reader->GetReadRanges(single_row_group, column_indices, cache_options.hole_size_limit, cache_options.range_size_limit).ValueOrDie();
     auto end = std::chrono::system_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cerr << "ReadIntoMemory_benchmark2::GetReadRanges:" << std::to_string(elapsed.count()) << "ms, read_ranges.size()=" << std::to_string(read_ranges.size()) << std::endl;
-
+  */
     auto result = ::arrow::internal::OptionalParallelFor(use_threads, read_ranges.size(),
             [&](int target_column) { 
               try
