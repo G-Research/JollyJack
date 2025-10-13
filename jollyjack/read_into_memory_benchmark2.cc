@@ -49,8 +49,6 @@ void ReadIntoMemory_benchmark2(
 
   // Process each row group separately to maintain target_row tracking
   for (int row_group : row_groups) {
-    auto row_group_reader = parquet_reader->RowGroup(row_group);
-    std::shared_ptr<parquet::RowGroupMetaData> row_group_metadata = file_metadata->RowGroup(row_group);
     single_row_group[0] = row_group;
     auto read_ranges = parquet_reader->GetReadRanges(single_row_group, column_indices, cache_options.hole_size_limit, cache_options.range_size_limit).ValueOrDie();
 
