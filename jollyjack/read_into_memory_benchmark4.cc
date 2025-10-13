@@ -83,7 +83,7 @@ void ReadIntoMemory_benchmark4(
       ).ValueOrDie();
 
       request.length = ranges[0].length;
-      request.offset = ranges[1].length;
+      request.offset = ranges[0].offset;
     }
 
     for (size_t i = 0; i < requests.size(); i++) {
@@ -140,5 +140,6 @@ void ReadIntoMemory_benchmark4(
   }
 
   close(fd);
+  *(float*)buffer = (float)read_bytes.fetch_add(0);
   std::cerr << "ReadIntoMemory_benchmark4::Read_bytes:" << std::to_string(read_bytes.fetch_add(0)) << "bytes" << std::endl;
 }

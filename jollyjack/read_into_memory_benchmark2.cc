@@ -81,5 +81,5 @@ void ReadIntoMemory_benchmark2(
   }
 
   close(fd);
-  std::cerr << "ReadIntoMemory_benchmark2::Read_bytes:" << std::to_string(read_bytes.fetch_add(0)) << "bytes" << std::endl;
+  *(float*)buffer = (float)read_bytes.fetch_add(0);
 }

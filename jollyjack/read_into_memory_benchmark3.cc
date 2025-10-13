@@ -74,7 +74,6 @@ void ReadIntoMemory_benchmark3(
         return a.offset < b.offset;
       });
 
-    std::atomic<size_t> read_bytes(0);
     auto result = ::arrow::internal::OptionalParallelFor(use_threads, read_ranges.size(),
             [&](int target_column) { 
               try
@@ -98,6 +97,6 @@ void ReadIntoMemory_benchmark3(
     }
   }
 
-  close(fd);
-  std::cerr << "ReadIntoMemory_benchmark3::Read_bytes:" << std::to_string(read_bytes.fetch_add(0)) << "bytes" << std::endl;
+  close(fd);  
+  *(float*)buffer = (float)read_bytes.fetch_add(0);
 }
