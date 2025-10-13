@@ -172,14 +172,6 @@ def worker_jollyjack_torch(pre_buffer, dtype, path):
                         , pre_buffer = pre_buffer
                         , use_threads = False)
 
-def worker_fs_read(path, chunk_size = 65_536):
-
-    with open(path, 'rb') as f: # Use 'rb' for binary read for consistent behavior
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-
 def measure_reading(max_workers, worker):
 
     def dummy_worker():
@@ -226,10 +218,6 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     for f in range(n_files):
         path = f"{parquet_path}{f}"
         genrate_data(path = path, n_row_groups = row_groups, n_columns = n_columns, compression = compression, dtype = dtype)
-
-    print(f".")
-    for n_threads in [1, n_threads]:
-        print(f"`file_read` n_threads:{n_threads}, duration:{measure_reading(n_threads, lambda path:worker_fs_read(path = path))}")
 
     print(f".")
     for n_threads in [1, n_threads]:
