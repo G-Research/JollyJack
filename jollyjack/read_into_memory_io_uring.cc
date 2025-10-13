@@ -600,8 +600,10 @@ void ReadIntoMemoryIOUring(
     ValidateResults(row_groups, file_metadata, target_row_ranges, expected_rows);
   } catch (...) {
     io_uring_queue_exit(&ring);
+    close(fd);
     throw;
   }
 
   io_uring_queue_exit(&ring);
+  close(fd);
 }
