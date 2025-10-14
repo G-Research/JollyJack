@@ -14,12 +14,12 @@ benchmark_mode = os.getenv("JJ_benchmark_mode", "CPU")
 
 if benchmark_mode == "FILE_SYSTEM":    
     # FILE_SYSTEM, unable to fit everything into page cache, no repeats
-    n_files = 10
+    n_files = 12
     n_repeats = 1
 elif benchmark_mode == "CPU":
     # "CPU" -> one file, goes into page cache, many repeats
     n_files = 1
-    n_repeats = 10
+    n_repeats = 12
 else:
     raise RuntimeError(f"Ivalid JJ_benchmark_mode:{benchmark_mode}")
 
