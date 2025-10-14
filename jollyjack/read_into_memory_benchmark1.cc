@@ -20,6 +20,8 @@
 
 using arrow::Status;
 
+// pread, no coalescing
+
 void ReadIntoMemory_benchmark1(
   const std::string& path,
   std::shared_ptr<parquet::FileMetaData> file_metadata,
@@ -45,6 +47,11 @@ void ReadIntoMemory_benchmark1(
 
   auto reader_properties = parquet::default_reader_properties();
   auto parquet_reader = parquet::ParquetFileReader::OpenFile(path, false, reader_properties, file_metadata);
+
+  if (pre_buffer)
+  {
+    parquet_reader->PreBuffer(row_groups, column_indices, arrow::io::default_io_context(), cache_options);
+  }
 
   std::vector<int> single_row_group(1);
   std::vector<int> single_column(1);

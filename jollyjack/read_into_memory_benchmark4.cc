@@ -27,6 +27,7 @@ struct Request {
   std::shared_ptr<arrow::Buffer> buffer;
 };
 
+// io_uring, no coalescing
 void ReadIntoMemory_benchmark4(
   const std::string& path,
   std::shared_ptr<parquet::FileMetaData> file_metadata,
@@ -52,6 +53,11 @@ void ReadIntoMemory_benchmark4(
 
   auto reader_properties = parquet::default_reader_properties();
   auto parquet_reader = parquet::ParquetFileReader::OpenFile(path, false, reader_properties, file_metadata);
+
+  if (pre_buffer)
+  {
+    parquet_reader->PreBuffer(row_groups, column_indices, arrow::io::default_io_context(), cache_options);
+  }
 
   // Initialize io_uring
   struct io_uring ring = {};

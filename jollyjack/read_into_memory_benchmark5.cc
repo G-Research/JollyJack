@@ -24,6 +24,7 @@
 
 using arrow::Status;
 
+// arrow::LocalFileReader, no coalescing, with sorting
 void ReadIntoMemory_benchmark5(
   const std::string& path,
   std::shared_ptr<parquet::FileMetaData> file_metadata,
@@ -48,6 +49,11 @@ void ReadIntoMemory_benchmark5(
   auto reader_properties = parquet::default_reader_properties();
   auto parquet_reader = parquet::ParquetFileReader::OpenFile(path, false, reader_properties, file_metadata);
 
+  if (pre_buffer)
+  {
+    parquet_reader->PreBuffer(row_groups, column_indices, arrow::io::default_io_context(), cache_options);
+  }
+
   std::vector<int> single_row_group(1);
   std::vector<int> single_column(1);
   std::vector<::arrow::io::ReadRange> read_ranges;
@@ -60,7 +66,7 @@ void ReadIntoMemory_benchmark5(
 
     for (size_t c_idx = 0; c_idx < column_indices.size(); c_idx++) {
       single_column[0] = column_indices[c_idx];
-      
+
       auto &read_range = read_ranges[read_range_idx++];
       auto ranges = parquet_reader->GetReadRanges(
         single_row_group, single_column, 0, 1

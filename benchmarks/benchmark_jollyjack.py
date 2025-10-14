@@ -233,6 +233,6 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
             os.environ["JJ_experimental_io_uring_mode"] = jj_uring
         print(f".")
         for n_threads in [1, n_threads]:
-            for pre_buffer in [False]:
+            for pre_buffer in [False, True]:
                 for use_threads in [False, True]:
                     print(f"`JollyJack.read_into_numpy` jj_uring:{jj_uring}, n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))} seconds")
