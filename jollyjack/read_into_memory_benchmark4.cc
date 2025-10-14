@@ -142,9 +142,11 @@ void ReadIntoMemory_benchmark4(
       auto& request = requests[request_idx];
       request.buffer.reset();
       read_bytes.fetch_add(cqe->res);
+      io_uring_cqe_seen(&ring, cqe);
     }
   }
 
-  close(fd);
+  close(fd);  
+  io_uring_queue_exit(&ring);
   *(float*)buffer = (float)read_bytes.fetch_add(0);
 }
