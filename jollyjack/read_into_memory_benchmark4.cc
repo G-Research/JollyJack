@@ -20,7 +20,7 @@
 
 using arrow::Status;
 
-// Represents a coalesced I/O request that may serve multiple columns
+
 struct Request {
   int64_t offset;
   int64_t length;

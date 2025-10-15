@@ -27,7 +27,7 @@ struct Request {
   std::shared_ptr<arrow::Buffer> buffer;
 };
 
-// io_uring, no coalescing
+// io_uring, no coalescing, io_uring_for_each_cqe
 void ReadIntoMemory_benchmark6(
   const std::string& path,
   std::shared_ptr<parquet::FileMetaData> file_metadata,
@@ -141,5 +141,6 @@ void ReadIntoMemory_benchmark6(
   }
 
   close(fd);
+  io_uring_queue_exit(&ring);
   *(float*)buffer = (float)read_bytes.fetch_add(0);
 }
