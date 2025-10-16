@@ -168,7 +168,7 @@ void ValidateTargetRowRanges(const std::vector<int64_t>& target_row_ranges) {
 std::tuple<int, std::shared_ptr<FantomReader>, std::unique_ptr<parquet::ParquetFileReader>>
 OpenParquetFile(const std::string& path, std::shared_ptr<parquet::FileMetaData> file_metadata) 
 {
-  int fd = open(path.c_str(), O_RDONLY);
+  int fd = open(path.c_str(), O_RDONLY | O_DIRECT);
   if (fd < 0) {
     throw std::logic_error("Failed to open file: " + path + " - " + strerror(errno));
   }
@@ -572,10 +572,6 @@ void ReadIntoMemoryIOUring(
 
   auto [fd, fantom_reader, parquet_reader] = OpenParquetFile(path, file_metadata);
   file_metadata = parquet_reader->metadata();
-  if (pre_buffer)
-  {
-    parquet_reader->PreBuffer(row_groups, column_indices, arrow::io::default_io_context(), cache_options);
-  }
 
   ResolveColumnIndices(column_indices, column_names, file_metadata);
 
