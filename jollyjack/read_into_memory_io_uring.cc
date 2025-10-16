@@ -169,7 +169,7 @@ void ValidateTargetRowRanges(const std::vector<int64_t>& target_row_ranges) {
 std::tuple<int, std::shared_ptr<FantomReader>, std::unique_ptr<parquet::ParquetFileReader>>
 OpenParquetFile(const std::string& path, std::shared_ptr<parquet::FileMetaData> file_metadata) 
 {
-  int fd = open(path.c_str(), O_RDONLY | O_DIRECT);
+  int fd = open(path.c_str(), O_RDONLY);
   if (fd < 0) {
     throw std::logic_error("Failed to open file: " + path + " - " + strerror(errno));
   }
