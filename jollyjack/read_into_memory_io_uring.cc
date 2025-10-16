@@ -141,6 +141,7 @@ void FantomReader::SetBuffer(long offset, std::shared_ptr<arrow::Buffer> buffer)
 struct ColumnRead {
   int column_counter;
   int column_index;
+  std::shared_ptr<parquet::ColumnReader> column_reader;
 };
 
 // Represents a coalesced I/O request that may serve multiple columns
@@ -419,18 +420,13 @@ void ProcessCompletion(
 ) {    
   size_t target_row_ranges_idx = CalculateTargetRowRangesIndex(request.row_group, row_groups, file_metadata, target_row_ranges);
 
-  // Set the buffer once for all columns in this request
-  fantom_reader->SetBuffer(request.offset, request.buffer);
-  
   // Process each column covered by this coalesced read
   for (const auto& column_read : request.column_reads) 
   {
-    auto column_reader = request.row_group_reader->Column(column_read.column_index);
-
     auto status = ReadColumn(
       column_read.column_counter,
       request.target_row,
-      column_reader,
+      column_read.column_reader,
       request.row_group_metadata.get(), 
       buffer,
       buffer_size,
@@ -463,7 +459,8 @@ void ProcessCompletions(
   void* buffer,
   size_t buffer_size,
   size_t stride0_size,
-  size_t stride1_size
+  size_t stride1_size,
+  bool use_threads
 ) {
   size_t completed = 0;
   
@@ -497,15 +494,38 @@ void ProcessCompletions(
         throw std::logic_error("Read failed - incomplete: " + std::to_string(cqe->res) + " != " + std::to_string(request.length)
       );
     }
-
-    io_uring_cqe_seen(&ring, cqe);
-
-    ProcessCompletion(
-      request, fantom_reader, file_metadata, row_groups,
-      column_indices, target_row_ranges, target_column_indices,
-      buffer, buffer_size, stride0_size, stride1_size
-    );
   }
+  io_uring_cq_advance(&ring, requests.size());
+
+  for (auto &request: requests)
+  {
+    // Set the buffer once for all columns in this request
+    fantom_reader->SetBuffer(request.offset, request.buffer);
+
+    // Process each column covered by this coalesced read
+    for (auto& column_read : request.column_reads) 
+    {
+      column_read.column_reader = request.row_group_reader->Column(column_read.column_index);
+    }
+  }
+
+  // Now process all completed requests in parallel
+  auto status = ::arrow::internal::OptionalParallelFor(
+    use_threads, // use_threads
+    static_cast<int>(requests.size()),
+    [&](int i) -> Status {
+      try {
+        ProcessCompletion(
+          requests[i], fantom_reader, file_metadata, row_groups,
+          column_indices, target_row_ranges, target_column_indices,
+          buffer, buffer_size, stride0_size, stride1_size
+        );
+        return Status::OK();
+      } catch (const std::exception& e) {
+        return Status::UnknownError("Processing completion failed: " + std::string(e.what()));
+      }
+    }
+  );
 }
 
 // Validate final row counts
@@ -594,7 +614,7 @@ void ReadIntoMemoryIOUring(
       ring, coalesced_requests, fantom_reader, file_metadata,
       row_groups, column_indices, target_row_ranges,
       target_column_indices, buffer, buffer_size,
-      stride0_size, stride1_size
+      stride0_size, stride1_size, use_threads
     );
 
     ValidateResults(row_groups, file_metadata, target_row_ranges, expected_rows);
