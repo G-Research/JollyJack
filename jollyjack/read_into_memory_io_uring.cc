@@ -572,6 +572,10 @@ void ReadIntoMemoryIOUring(
 
   auto [fd, fantom_reader, parquet_reader] = OpenParquetFile(path, file_metadata);
   file_metadata = parquet_reader->metadata();
+  if (pre_buffer)
+  {
+    parquet_reader->PreBuffer(row_groups, column_indices, arrow::io::default_io_context(), cache_options);
+  }
 
   ResolveColumnIndices(column_indices, column_names, file_metadata);
 
