@@ -427,10 +427,11 @@ void WaitForIOCompletionsAndSetupReaders(
         " bytes, got " + std::to_string(completion_entry->res)
       );
     }
+
+    io_uring_cqe_seen(&io_ring, completion_entry);
   }
   
   // Mark all completions as processed
-  io_uring_cq_advance(&io_ring, io_requests.size());
 
   // Set up cached buffers and column readers for all completed requests
   for (auto& request : io_requests) {
