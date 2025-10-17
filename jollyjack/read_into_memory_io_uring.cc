@@ -318,14 +318,14 @@ std::vector<CoalescedIORequest> CreateCoalescedIORequests(
 
 // Submit all coalesced I/O requests to io_uring for parallel execution
 void SubmitIORequests(
-  struct io_uring& io_ring,
+  struct io_uring& ring,
   std::vector<CoalescedIORequest>& io_requests,
   int fd
 ) {
   for (size_t request_index = 0; request_index < io_requests.size(); request_index++) {
     auto& request = io_requests[request_index];
     
-    struct io_uring_sqe* submission_entry = io_uring_get_sqe(&io_ring);
+    struct io_uring_sqe* submission_entry = io_uring_get_sqe(&ring);
     if (!submission_entry) {
       throw std::logic_error("Failed to get submission queue entry from io_uring");
     }
@@ -345,7 +345,7 @@ void SubmitIORequests(
     io_uring_sqe_set_data(submission_entry, reinterpret_cast<void*>(request_index));
   }
 
-  int submitted_count = io_uring_submit(&io_ring);
+  int submitted_count = io_uring_submit(&ring);
   if (submitted_count < 0) {
     throw std::logic_error("Failed to submit io_uring operations: " + std::string(strerror(-submitted_count)));
   }
@@ -391,7 +391,7 @@ void ProcessSingleIOCompletion(
 
 // Wait for io_uring completions and setup column readers
 void WaitForIOCompletionsAndSetupReaders(
-  struct io_uring& io_ring,
+  struct io_uring& ring,
   std::vector<CoalescedIORequest>& io_requests,
   const std::shared_ptr<FantomReader>& fantom_reader,
   parquet::RowGroupReader* row_group_reader
@@ -401,7 +401,7 @@ void WaitForIOCompletionsAndSetupReaders(
   // Wait for all I/O operations to complete
   while (completed_operations < io_requests.size()) {
     struct io_uring_cqe* completion_entry;
-    int wait_result = io_uring_wait_cqe_timeout(&io_ring, &completion_entry, NULL);
+    int wait_result = io_uring_wait_cqe_timeout(&ring, &completion_entry, NULL);
     
     if (wait_result == -ETIME || wait_result == -EINTR) {
       continue; // Timeout or interrupted, retry
@@ -428,7 +428,7 @@ void WaitForIOCompletionsAndSetupReaders(
       );
     }
 
-    io_uring_cqe_seen(&io_ring, completion_entry);
+    io_uring_cqe_seen(&ring, completion_entry);
   }
   
   // Mark all completions as processed
@@ -447,7 +447,7 @@ void WaitForIOCompletionsAndSetupReaders(
 
 // Process all completed I/O requests, optionally in parallel
 void ProcessAllCompletedRequests(
-  struct io_uring& io_ring,
+  struct io_uring& ring,
   std::vector<CoalescedIORequest>& io_requests,
   const std::shared_ptr<FantomReader>& fantom_reader,
   int64_t current_target_row,
@@ -464,7 +464,7 @@ void ProcessAllCompletedRequests(
   size_t target_row_ranges_index
 ) {
   // Wait for all I/O operations and setup readers
-  WaitForIOCompletionsAndSetupReaders(io_ring, io_requests, fantom_reader, row_group_reader);
+  WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader);
 
   // Process all requests, potentially in parallel
   auto processing_status = ::arrow::internal::OptionalParallelFor(
@@ -516,8 +516,8 @@ void ReadIntoMemoryIOUring(
   ResolveColumnNameToIndices(column_indices, column_names, file_metadata);
 
   // Initialize io_uring with enough capacity for all columns
-  struct io_uring io_ring = {};
-  int initialization_result = io_uring_queue_init(column_indices.size(), &io_ring, 0);
+  struct io_uring ring = {};
+  int initialization_result = io_uring_queue_init(column_indices.size(), &ring, 0);
   if (initialization_result < 0) {
     throw std::logic_error(
       "Failed to initialize io_uring: " + std::string(strerror(-initialization_result))
@@ -540,11 +540,11 @@ void ReadIntoMemoryIOUring(
       );
 
       // Submit all I/O requests asynchronously
-      SubmitIORequests(io_ring, coalesced_requests, fd);
+      SubmitIORequests(ring, coalesced_requests, fd);
 
       // Wait for completions and process all columns
       ProcessAllCompletedRequests(
-        io_ring, coalesced_requests, fantom_reader, current_target_row, 
+        ring, coalesced_requests, fantom_reader, current_target_row, 
         row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
         target_column_indices, out, buffer_size,
         stride0_size, stride1_size, use_threads, target_row_ranges_index
@@ -583,11 +583,11 @@ void ReadIntoMemoryIOUring(
       }
     }
   } catch (...) {
-    io_uring_queue_exit(&io_ring);
+    io_uring_queue_exit(&ring);
     close(fd);
     throw;
   }
 
-  io_uring_queue_exit(&io_ring);
+  io_uring_queue_exit(&ring);
   close(fd);
 }
