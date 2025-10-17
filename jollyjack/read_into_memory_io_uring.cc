@@ -387,9 +387,6 @@ void ProcessSingleIOCompletion(
       throw std::logic_error("Column read failed: " + read_status.message());
     }
   }
-  
-  // Release the buffer to free memory
-  completed_request.read_buffer.reset();
 }
 
 // Wait for io_uring completions and setup column readers
