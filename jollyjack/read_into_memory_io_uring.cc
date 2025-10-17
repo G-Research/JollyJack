@@ -485,6 +485,11 @@ void ProcessCompletions(
       }
     }
   );
+
+  if (status != arrow::Status::OK())
+  {
+    throw std::logic_error(status.message());
+  }
 }
 
 void ReadIntoMemoryIOUring(
