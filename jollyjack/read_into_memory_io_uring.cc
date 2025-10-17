@@ -517,10 +517,10 @@ void ReadIntoMemoryIOUring(
 
   // Initialize io_uring with enough capacity for all columns
   struct io_uring ring = {};
-  int initialization_result = io_uring_queue_init(column_indices.size(), &ring, 0);
-  if (initialization_result < 0) {
+  int ret = io_uring_queue_init(column_indices.size(), &ring, 0);
+  if (ret < 0) {
     throw std::logic_error(
-      "Failed to initialize io_uring: " + std::string(strerror(-initialization_result))
+      "Failed to initialize io_uring: " + std::string(strerror(-ret))
     );
   }
 
