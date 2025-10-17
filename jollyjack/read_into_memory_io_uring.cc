@@ -150,8 +150,6 @@ struct CoalescedRequest {
   int64_t offset;
   int64_t length;
   int64_t target_row;
-  std::shared_ptr<parquet::RowGroupMetaData> row_group_metadata;
-  std::shared_ptr<parquet::RowGroupReader> row_group_reader;
   std::shared_ptr<arrow::Buffer> buffer;
   std::vector<ColumnRead> column_reads;
 };
@@ -240,12 +238,14 @@ struct ColumnRangeInfo {
 std::vector<CoalescedRequest> CreateCoalescedRequests(
   parquet::ParquetFileReader* parquet_reader,
   const std::shared_ptr<parquet::FileMetaData>& file_metadata,
-  const std::vector<int>& row_groups,
+  int row_group,
+  parquet::RowGroupReader* row_group_reader,
+  parquet::RowGroupMetaData* row_group_metadata, 
   const std::vector<int>& column_indices, 
   const arrow::io::CacheOptions& cache_options
 ) {
   std::vector<CoalescedRequest> coalesced_requests;
-  coalesced_requests.reserve(column_indices.size() * row_groups.size()); // reserve enough memory to avoid reallocations
+  coalesced_requests.reserve(column_indices.size()); // reserve enough memory to avoid reallocations
 
   int64_t current_target_row = 0;
   
@@ -253,77 +253,70 @@ std::vector<CoalescedRequest> CreateCoalescedRequests(
   std::vector<int> single_column(1);
   
   // Process each row group separately to maintain target_row tracking
-  for (int row_group : row_groups) {
-    auto row_group_reader = parquet_reader->RowGroup(row_group);
-    std::shared_ptr<parquet::RowGroupMetaData> row_group_metadata = file_metadata->RowGroup(row_group);
+  std::shared_ptr<parquet::RowGroupMetaData> row_group_metadata = file_metadata->RowGroup(row_group);
 
-    single_row_group[0] = row_group;
+  single_row_group[0] = row_group;
 
-    // Get individual read ranges for each column - O(columns)
-    std::vector<ColumnRangeInfo> column_ranges;
-    column_ranges.resize(column_indices.size());
+  // Get individual read ranges for each column - O(columns)
+  std::vector<ColumnRangeInfo> column_ranges;
+  column_ranges.resize(column_indices.size());
 
-    for (size_t c_idx = 0; c_idx < column_indices.size(); c_idx++) {
-      single_column[0] = column_indices[c_idx];
+  for (size_t c_idx = 0; c_idx < column_indices.size(); c_idx++) {
+    single_column[0] = column_indices[c_idx];
 
-      auto ranges = parquet_reader->GetReadRanges(
-        single_row_group, single_column, 0, 1
-      ).ValueOrDie();
+    auto ranges = parquet_reader->GetReadRanges(
+      single_row_group, single_column, 0, 1
+    ).ValueOrDie();
 
-      ColumnRangeInfo &info = column_ranges[c_idx];
-      info.offset = ranges[0].offset;
-      info.length = ranges[0].length;
-      info.column_idx = c_idx;
-    }
+    ColumnRangeInfo &info = column_ranges[c_idx];
+    info.offset = ranges[0].offset;
+    info.length = ranges[0].length;
+    info.column_idx = c_idx;
+  }
 
-    // Sort column ranges by offset for efficient matching - O(columns * log(columns))
-    std::sort(column_ranges.begin(), column_ranges.end(),
-      [](const ColumnRangeInfo& a, const ColumnRangeInfo& b) {
-        return a.offset < b.offset;
-      });
+  // Sort column ranges by offset for efficient matching - O(columns * log(columns))
+  std::sort(column_ranges.begin(), column_ranges.end(),
+    [](const ColumnRangeInfo& a, const ColumnRangeInfo& b) {
+      return a.offset < b.offset;
+    });
 
-    auto coalesced_ranges = parquet_reader->GetReadRanges(single_row_group, column_indices, cache_options.hole_size_limit, cache_options.range_size_limit).ValueOrDie();
+  auto coalesced_ranges = parquet_reader->GetReadRanges(single_row_group, column_indices, cache_options.hole_size_limit, cache_options.range_size_limit).ValueOrDie();
+  
+  // Match column ranges to coalesced ranges using two pointers - O(coalesced + columns)
+  size_t col_idx = 0;
+  
+  for (const auto& coalesced_range : coalesced_ranges) {
+    coalesced_requests.emplace_back();
+    CoalescedRequest &request = coalesced_requests[coalesced_requests.size() - 1];
+
+    request.offset = coalesced_range.offset;
+    request.length = coalesced_range.length;
+    request.row_group = row_group;
+    request.target_row = current_target_row;
+
+    int64_t coalesced_end = coalesced_range.offset + coalesced_range.length;
     
-    // Match column ranges to coalesced ranges using two pointers - O(coalesced + columns)
-    size_t col_idx = 0;
-    
-    for (const auto& coalesced_range : coalesced_ranges) {
-      coalesced_requests.emplace_back();
-      CoalescedRequest &request = coalesced_requests[coalesced_requests.size() - 1];
-
-      request.offset = coalesced_range.offset;
-      request.length = coalesced_range.length;
-      request.row_group = row_group;
-      request.target_row = current_target_row;
-      request.row_group_reader = row_group_reader;
-      request.row_group_metadata = row_group_metadata;   
-
-      int64_t coalesced_end = coalesced_range.offset + coalesced_range.length;
+    // Find all column ranges that overlap with this coalesced range
+    // Start from where we left off (columns are sorted)
+    // Scan forward to find all overlapping columns
+    for (size_t i = col_idx; i < column_ranges.size(); i++) {
+      const auto& col_range = column_ranges[i];
       
-      // Find all column ranges that overlap with this coalesced range
-      // Start from where we left off (columns are sorted)
-      // Scan forward to find all overlapping columns
-      for (size_t i = col_idx; i < column_ranges.size(); i++) {
-        const auto& col_range = column_ranges[i];
+      // If this column starts after the coalesced range ends, we're done
+      if (col_range.offset >= coalesced_end) {
+        break;
+      }
+      
+      // Check for overlap
+      if (col_range.offset < coalesced_end && 
+          col_range.end() > coalesced_range.offset) {
         
-        // If this column starts after the coalesced range ends, we're done
-        if (col_range.offset >= coalesced_end) {
-          break;
-        }
-        
-        // Check for overlap
-        if (col_range.offset < coalesced_end && 
-            col_range.end() > coalesced_range.offset) {
-          
-          request.column_reads.emplace_back();
-          ColumnRead &column_read = request.column_reads[request.column_reads.size() - 1];
-          column_read.column_counter = col_range.column_idx;
-          column_read.column_index = column_indices[col_range.column_idx];
-        }
+        request.column_reads.emplace_back();
+        ColumnRead &column_read = request.column_reads[request.column_reads.size() - 1];
+        column_read.column_counter = col_range.column_idx;
+        column_read.column_index = column_indices[col_range.column_idx];
       }
     }
-
-    current_target_row += row_group_metadata->num_rows();
   }
   
   return coalesced_requests;
@@ -408,17 +401,16 @@ size_t CalculateTargetRowRangesIndex(
 void ProcessCompletion(
   CoalescedRequest& request,
   const std::shared_ptr<FantomReader>& fantom_reader,
-  const std::shared_ptr<parquet::FileMetaData>& file_metadata,
-  const std::vector<int>& row_groups,
+  parquet::RowGroupMetaData* row_group_metadata,
   const std::vector<int>& column_indices,
   const std::vector<int64_t>& target_row_ranges,
   const std::vector<int>& target_column_indices,
   void* buffer,
   size_t buffer_size,
   size_t stride0_size,
-  size_t stride1_size
+  size_t stride1_size,
+  size_t target_row_ranges_idx
 ) {    
-  size_t target_row_ranges_idx = CalculateTargetRowRangesIndex(request.row_group, row_groups, file_metadata, target_row_ranges);
 
   // Process each column covered by this coalesced read
   for (const auto& column_read : request.column_reads) 
@@ -427,7 +419,7 @@ void ProcessCompletion(
       column_read.column_counter,
       request.target_row,
       column_read.column_reader,
-      request.row_group_metadata.get(), 
+      row_group_metadata, 
       buffer,
       buffer_size,
       stride0_size,
@@ -452,7 +444,9 @@ void ProcessCompletions(
   std::vector<CoalescedRequest>& requests,
   const std::shared_ptr<FantomReader>& fantom_reader,
   const std::shared_ptr<parquet::FileMetaData>& file_metadata,
-  const std::vector<int>& row_groups,
+  int row_group,
+  parquet::RowGroupReader* row_group_reader,
+  parquet::RowGroupMetaData* row_group_metadata,
   const std::vector<int>& column_indices,
   const std::vector<int64_t>& target_row_ranges,
   const std::vector<int>& target_column_indices,
@@ -460,7 +454,8 @@ void ProcessCompletions(
   size_t buffer_size,
   size_t stride0_size,
   size_t stride1_size,
-  bool use_threads
+  bool use_threads,
+  size_t target_row_ranges_idx
 ) {
   size_t completed = 0;
   
@@ -505,7 +500,7 @@ void ProcessCompletions(
     // Process each column covered by this coalesced read
     for (auto& column_read : request.column_reads) 
     {
-      column_read.column_reader = request.row_group_reader->Column(column_read.column_index);
+      column_read.column_reader = row_group_reader->Column(column_read.column_index);
     }
   }
 
@@ -516,9 +511,9 @@ void ProcessCompletions(
     [&](int i) -> Status {
       try {
         ProcessCompletion(
-          requests[i], fantom_reader, file_metadata, row_groups,
+          requests[i], fantom_reader, row_group_metadata,
           column_indices, target_row_ranges, target_column_indices,
-          buffer, buffer_size, stride0_size, stride1_size
+          buffer, buffer_size, stride0_size, stride1_size, target_row_ranges_idx
         );
         return Status::OK();
       } catch (const std::exception& e) {
@@ -595,12 +590,9 @@ void ReadIntoMemoryIOUring(
 
   ResolveColumnIndices(column_indices, column_names, file_metadata);
 
-  // Create coalesced requests (fewer I/O operations than columns)
-  auto coalesced_requests = CreateCoalescedRequests(parquet_reader.get(), file_metadata, row_groups, column_indices, cache_options);
-
   // Initialize io_uring
   struct io_uring ring = {};
-  int ret = io_uring_queue_init(coalesced_requests.size(), &ring, 0);
+  int ret = io_uring_queue_init(column_indices.size(), &ring, 0);
   if (ret < 0) {
     throw std::logic_error(
       "Failed to initialize io_uring: " + std::string(strerror(-ret))
@@ -608,16 +600,31 @@ void ReadIntoMemoryIOUring(
   }
 
   try {
-    SubmitCoalescedRequests(ring, coalesced_requests, fd);
+    int64_t target_row = 0;
+    size_t target_row_ranges_idx = 0;
+    for (int row_group : row_groups)
+    {
+      const auto row_group_reader = parquet_reader->RowGroup(row_group);
+      const auto row_group_metadata = file_metadata->RowGroup(row_group);
+      const auto num_rows = row_group_metadata->num_rows();
 
-    ProcessCompletions(
-      ring, coalesced_requests, fantom_reader, file_metadata,
-      row_groups, column_indices, target_row_ranges,
-      target_column_indices, buffer, buffer_size,
-      stride0_size, stride1_size, use_threads
-    );
+      // Create coalesced requests (fewer I/O operations than columns)
+      auto coalesced_requests = CreateCoalescedRequests(parquet_reader.get(), file_metadata, row_group, row_group_reader.get(), row_group_metadata.get(), column_indices, cache_options);
 
-    ValidateResults(row_groups, file_metadata, target_row_ranges, expected_rows);
+      SubmitCoalescedRequests(ring, coalesced_requests, fd);
+
+      size_t target_row_ranges_idx = CalculateTargetRowRangesIndex(row_group, row_groups, file_metadata, target_row_ranges);
+
+      ProcessCompletions(
+        ring, coalesced_requests, fantom_reader, file_metadata,
+        row_group, row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
+        target_column_indices, buffer, buffer_size,
+        stride0_size, stride1_size, use_threads, target_row_ranges_idx
+      );
+
+      ValidateResults(row_groups, file_metadata, target_row_ranges, expected_rows);
+    }
+
   } catch (...) {
     io_uring_queue_exit(&ring);
     close(fd);
