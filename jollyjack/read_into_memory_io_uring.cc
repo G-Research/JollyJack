@@ -568,19 +568,20 @@ void ReadIntoMemoryIOUring(
     }
   
     // Validate that we processed the expected amount of data
-    if (!target_row_ranges.empty()) {
-      if (target_row_ranges_index != target_row_ranges.size()) {
-        auto error_message = std::string("Expected to process ") + 
-          std::to_string(target_row_ranges.size() / 2) + " row ranges, but processed only " + 
-          std::to_string(target_row_ranges_index / 2);
-        throw std::logic_error(error_message);
+    if (target_row_ranges.size() > 0)
+    {
+      if (target_row_ranges_index != target_row_ranges.size())
+      {
+        auto msg = std::string("Expected to read ") + std::to_string(target_row_ranges.size() / 2) + " row ranges, but read only " + std::to_string(target_row_ranges_index / 2) + "!";
+        throw std::logic_error(msg);
       }
-    } else {
-      if (current_target_row != expected_total_rows) {
-        auto error_message = std::string("Expected to read ") + 
-          std::to_string(expected_total_rows) + " rows, but read only " + 
-          std::to_string(current_target_row);
-        throw std::logic_error(error_message);
+    }
+    else
+    {
+      if (current_target_row != expected_total_rows)
+      {
+        auto msg = std::string("Expected to read ") + std::to_string(expected_total_rows) + " rows, but read only " + std::to_string(current_target_row) + "!";
+        throw std::logic_error(msg);
       }
     }
   } catch (...) {
