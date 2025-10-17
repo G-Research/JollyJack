@@ -26,7 +26,7 @@ using arrow::Status;
  */
 class FantomReader : public arrow::io::RandomAccessFile {
  public:
-  explicit FantomReader(int file_descriptor);
+  explicit FantomReader(int fd);
   ~FantomReader() override;
 
   arrow::Result<int64_t> ReadAt(
@@ -48,17 +48,17 @@ class FantomReader : public arrow::io::RandomAccessFile {
   void SetBuffer(int64_t buffer_offset, std::shared_ptr<arrow::Buffer> buffer);
   
  private:
-  int file_descriptor_;
+  int fd_;
   int64_t current_position_ = 0;
   int64_t file_size_ = 0;
   std::shared_ptr<arrow::Buffer> cached_buffer_;
   int64_t cached_buffer_offset_ = 0;
 };
 
-FantomReader::FantomReader(int file_descriptor)
-    : file_descriptor_(file_descriptor), current_position_(0), file_size_(0) {
+FantomReader::FantomReader(int fd)
+    : fd_(fd), current_position_(0), file_size_(0) {
   struct stat file_stats;
-  if (fstat(file_descriptor_, &file_stats) < 0) {
+  if (fstat(fd_, &file_stats) < 0) {
     throw std::runtime_error("Failed to get file statistics with fstat");
   }
 
@@ -82,7 +82,7 @@ arrow::Result<int64_t> FantomReader::GetSize() {
 }
 
 arrow::Result<int64_t> FantomReader::ReadAt(int64_t position, int64_t num_bytes, void* output_buffer) {
-  return pread(file_descriptor_, output_buffer, num_bytes, position);
+  return pread(fd_, output_buffer, num_bytes, position);
 }
 
 arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::ReadAt(int64_t position, int64_t num_bytes) {
@@ -180,16 +180,16 @@ void ValidateRowRangePairs(const std::vector<int64_t>& row_ranges) {
 // Open Parquet file and create necessary readers
 std::tuple<int, std::shared_ptr<FantomReader>, std::unique_ptr<parquet::ParquetFileReader>>
 OpenParquetFileForReading(const std::string& file_path, std::shared_ptr<parquet::FileMetaData> metadata) {
-  int file_descriptor = open(file_path.c_str(), O_RDONLY);
-  if (file_descriptor < 0) {
+  int fd = open(file_path.c_str(), O_RDONLY);
+  if (fd < 0) {
     throw std::logic_error("Failed to open file: " + file_path + " - " + strerror(errno));
   }
 
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
-  auto fantom_reader = std::make_shared<FantomReader>(file_descriptor);
+  auto fantom_reader = std::make_shared<FantomReader>(fd);
   auto parquet_reader = parquet::ParquetFileReader::Open(fantom_reader, reader_properties, metadata);
 
-  return {file_descriptor, fantom_reader, std::move(parquet_reader)};
+  return {fd, fantom_reader, std::move(parquet_reader)};
 }
 
 // Convert column names to column indices using schema lookup
@@ -320,7 +320,7 @@ std::vector<CoalescedIORequest> CreateCoalescedIORequests(
 void SubmitIORequests(
   struct io_uring& io_ring,
   std::vector<CoalescedIORequest>& io_requests,
-  int file_descriptor
+  int fd
 ) {
   for (size_t request_index = 0; request_index < io_requests.size(); request_index++) {
     auto& request = io_requests[request_index];
@@ -339,7 +339,7 @@ void SubmitIORequests(
 
     // Prepare read operation for io_uring
     io_uring_prep_read(
-      submission_entry, file_descriptor, request.read_buffer->mutable_data(),
+      submission_entry, fd, request.read_buffer->mutable_data(),
       request.read_length, request.file_offset
     );
     io_uring_sqe_set_data(submission_entry, reinterpret_cast<void*>(request_index));
@@ -509,7 +509,7 @@ void ReadIntoMemoryIOUring(
 {
   ValidateRowRangePairs(target_row_ranges);
 
-  auto [file_descriptor, fantom_reader, parquet_reader] = 
+  auto [fd, fantom_reader, parquet_reader] = 
     OpenParquetFileForReading(parquet_file_path, file_metadata);
   file_metadata = parquet_reader->metadata();
 
@@ -540,7 +540,7 @@ void ReadIntoMemoryIOUring(
       );
 
       // Submit all I/O requests asynchronously
-      SubmitIORequests(io_ring, coalesced_requests, file_descriptor);
+      SubmitIORequests(io_ring, coalesced_requests, fd);
 
       // Wait for completions and process all columns
       ProcessAllCompletedRequests(
@@ -584,10 +584,10 @@ void ReadIntoMemoryIOUring(
     }
   } catch (...) {
     io_uring_queue_exit(&io_ring);
-    close(file_descriptor);
+    close(fd);
     throw;
   }
 
   io_uring_queue_exit(&io_ring);
-  close(file_descriptor);
+  close(fd);
 }
