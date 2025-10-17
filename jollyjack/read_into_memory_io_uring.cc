@@ -416,7 +416,7 @@ void WaitForIOCompletionsAndSetupReaders(
     // Validate the completion
     size_t request_index = reinterpret_cast<size_t>(io_uring_cqe_get_data(completion_entry));
     CoalescedIORequest& completed_request = io_requests[request_index];
-
+ 
     if (completion_entry->res < 0) {
       throw std::logic_error("I/O operation failed: " + std::string(strerror(-completion_entry->res)));
     }
@@ -428,21 +428,16 @@ void WaitForIOCompletionsAndSetupReaders(
       );
     }
 
-    io_uring_cqe_seen(&ring, completion_entry);
-  }
-  
-  // Mark all completions as processed
-
-  // Set up cached buffers and column readers for all completed requests
-  for (auto& request : io_requests) {
-    // Set the buffer for efficient subsequent reads
-    fantom_reader->SetBuffer(request.file_offset, request.read_buffer);
+    fantom_reader->SetBuffer(completed_request.file_offset, completed_request.read_buffer);
 
     // Create column readers for each column in this request
-    for (auto& column_operation : request.column_operations) {
+    for (auto& column_operation : completed_request.column_operations) {
       column_operation.column_reader = row_group_reader->Column(column_operation.parquet_column_index);
     }
+
+    io_uring_cqe_seen(&ring, completion_entry);
   }
+
 }
 
 // Process all completed I/O requests, optionally in parallel
