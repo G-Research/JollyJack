@@ -30,10 +30,10 @@ class FantomReader : public arrow::io::RandomAccessFile {
   ~FantomReader() override;
 
   arrow::Result<int64_t> ReadAt(
-    int64_t position, int64_t num_bytes, void* output_buffer
+    int64_t position, int64_t nbytes, void* output_buffer
   ) override;
   arrow::Result<std::shared_ptr<arrow::Buffer>> ReadAt(
-    int64_t position, int64_t num_bytes
+    int64_t position, int64_t nbytes
   ) override;
   arrow::Result<int64_t> GetSize() override;
   
@@ -41,8 +41,8 @@ class FantomReader : public arrow::io::RandomAccessFile {
   arrow::Status Seek(int64_t position) override;  
   arrow::Status Close() override;
   arrow::Result<int64_t> Tell() const override;
-  arrow::Result<int64_t> Read(int64_t num_bytes, void* output_buffer) override;
-  arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t num_bytes) override;
+  arrow::Result<int64_t> Read(int64_t nbytes, void* output_buffer) override;
+  arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override;
   
   // Set a pre-loaded buffer for a specific file offset range
   void SetBuffer(int64_t buffer_offset, std::shared_ptr<arrow::Buffer> buffer);
@@ -81,16 +81,16 @@ arrow::Result<int64_t> FantomReader::GetSize() {
   return file_size_;
 }
 
-arrow::Result<int64_t> FantomReader::ReadAt(int64_t position, int64_t num_bytes, void* output_buffer) {
-  return pread(fd_, output_buffer, num_bytes, position);
+arrow::Result<int64_t> FantomReader::ReadAt(int64_t position, int64_t nbytes, void* output_buffer) {
+  return pread(fd_, output_buffer, nbytes, position);
 }
 
-arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::ReadAt(int64_t position, int64_t num_bytes) {
+arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::ReadAt(int64_t position, int64_t nbytes) {
   // Check if the request can be served from the cached buffer
   if (cached_buffer_ != nullptr && 
       position >= cached_buffer_offset_ && 
-      cached_buffer_offset_ + cached_buffer_->size() >= position + num_bytes) {
-    return arrow::SliceBuffer(cached_buffer_, position - cached_buffer_offset_, num_bytes);
+      cached_buffer_offset_ + cached_buffer_->size() >= position + nbytes) {
+    return arrow::SliceBuffer(cached_buffer_, position - cached_buffer_offset_, nbytes);
   }
 
   // If we have a cached buffer but can't serve the request, throw an error
@@ -99,17 +99,17 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::ReadAt(int64_t posit
           "Buffer offset=" + std::to_string(cached_buffer_offset_) + 
           ", buffer size=" + std::to_string(cached_buffer_->size()) + 
           ", requested position=" + std::to_string(position) + 
-          ", requested bytes=" + std::to_string(num_bytes);
+          ", requested bytes=" + std::to_string(nbytes);
     return arrow::Status::UnknownError(error_message);
   }
 
   // Allocate new buffer and read from file
-  ARROW_ASSIGN_OR_RAISE(auto buffer, arrow::AllocateResizableBuffer(num_bytes));
-  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read, ReadAt(position, num_bytes, buffer->mutable_data()));
+  ARROW_ASSIGN_OR_RAISE(auto buffer, arrow::AllocateResizableBuffer(nbytes));
+  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read, ReadAt(position, nbytes, buffer->mutable_data()));
 
-  if (bytes_read != num_bytes) {
+  if (bytes_read != nbytes) {
     throw std::logic_error(
-      "Incomplete read: expected " + std::to_string(num_bytes) + 
+      "Incomplete read: expected " + std::to_string(nbytes) + 
       " bytes, but read " + std::to_string(bytes_read) + " bytes"
     );
   }
@@ -126,15 +126,15 @@ arrow::Result<int64_t> FantomReader::Tell() const {
   return current_position_;
 }
 
-arrow::Result<int64_t> FantomReader::Read(int64_t num_bytes, void* output_buffer) {
-  ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, num_bytes));
+arrow::Result<int64_t> FantomReader::Read(int64_t nbytes, void* output_buffer) {
+  ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, nbytes));
   memcpy(output_buffer, buffer->data(), buffer->size());
   current_position_ += buffer->size();
   return buffer->size();
 }
 
-arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::Read(int64_t num_bytes) {
-  ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, num_bytes));
+arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::Read(int64_t nbytes) {
+  ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, nbytes));
   current_position_ += buffer->size();
   return buffer;
 }
