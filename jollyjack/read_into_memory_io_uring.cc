@@ -209,7 +209,7 @@ void ResolveColumnNameToIndices(
     int column_index = schema->ColumnIndex(column_name);
     
     if (column_index < 0) {
-      throw std::logic_error("Column '" + column_name + "' not found in Parquet schema");
+      throw std::logic_error("Column '" + column_name + "' was not found!");
     }
 
     resolved_column_indices.push_back(column_index);
