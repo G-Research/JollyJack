@@ -146,10 +146,8 @@ struct ColumnRead {
 
 // Represents a coalesced I/O request that may serve multiple columns
 struct CoalescedRequest {
-  int row_group;
   int64_t offset;
   int64_t length;
-  int64_t target_row;
   std::shared_ptr<arrow::Buffer> buffer;
   std::vector<ColumnRead> column_reads;
 };
@@ -288,8 +286,6 @@ std::vector<CoalescedRequest> CreateCoalescedRequests(
 
     request.offset = coalesced_range.offset;
     request.length = coalesced_range.length;
-    request.row_group = row_group;
-    request.target_row = current_target_row;
 
     int64_t coalesced_end = coalesced_range.offset + coalesced_range.length;
     
@@ -365,6 +361,7 @@ void SubmitCoalescedRequests(
 
 // Process all columns covered by a coalesced request
 void ProcessCompletion(
+  int64_t target_row,
   CoalescedRequest& request,
   const std::shared_ptr<FantomReader>& fantom_reader,
   parquet::RowGroupMetaData* row_group_metadata,
@@ -383,7 +380,7 @@ void ProcessCompletion(
   {
     auto status = ReadColumn(
       column_read.column_counter,
-      request.target_row,
+      target_row,
       column_read.column_reader,
       row_group_metadata, 
       buffer,
@@ -411,6 +408,7 @@ void ProcessCompletions(
   const std::shared_ptr<FantomReader>& fantom_reader,
   const std::shared_ptr<parquet::FileMetaData>& file_metadata,
   int row_group,
+  int target_row,
   parquet::RowGroupReader* row_group_reader,
   parquet::RowGroupMetaData* row_group_metadata,
   const std::vector<int>& column_indices,
@@ -477,7 +475,7 @@ void ProcessCompletions(
     [&](int i) -> Status {
       try {
         ProcessCompletion(
-          requests[i], fantom_reader, row_group_metadata,
+          target_row, requests[i], fantom_reader, row_group_metadata,
           column_indices, target_row_ranges, target_column_indices,
           buffer, buffer_size, stride0_size, stride1_size, target_row_ranges_idx
         );
@@ -538,7 +536,7 @@ void ReadIntoMemoryIOUring(
 
       ProcessCompletions(
         ring, coalesced_requests, fantom_reader, file_metadata,
-        row_group, row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
+        row_group, target_row, row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
         target_column_indices, buffer, buffer_size,
         stride0_size, stride1_size, use_threads, target_row_ranges_idx
       );
