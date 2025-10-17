@@ -30,7 +30,7 @@ class FantomReader : public arrow::io::RandomAccessFile {
   ~FantomReader() override;
 
   arrow::Result<int64_t> ReadAt(
-    int64_t position, int64_t nbytes, void* output_buffer
+    int64_t position, int64_t nbytes, void* out
   ) override;
   arrow::Result<std::shared_ptr<arrow::Buffer>> ReadAt(
     int64_t position, int64_t nbytes
@@ -41,7 +41,7 @@ class FantomReader : public arrow::io::RandomAccessFile {
   arrow::Status Seek(int64_t position) override;  
   arrow::Status Close() override;
   arrow::Result<int64_t> Tell() const override;
-  arrow::Result<int64_t> Read(int64_t nbytes, void* output_buffer) override;
+  arrow::Result<int64_t> Read(int64_t nbytes, void* out) override;
   arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override;
   
   // Set a pre-loaded buffer for a specific file offset range
@@ -81,8 +81,8 @@ arrow::Result<int64_t> FantomReader::GetSize() {
   return file_size_;
 }
 
-arrow::Result<int64_t> FantomReader::ReadAt(int64_t position, int64_t nbytes, void* output_buffer) {
-  return pread(fd_, output_buffer, nbytes, position);
+arrow::Result<int64_t> FantomReader::ReadAt(int64_t position, int64_t nbytes, void* out) {
+  return pread(fd_, out, nbytes, position);
 }
 
 arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::ReadAt(int64_t position, int64_t nbytes) {
@@ -126,9 +126,9 @@ arrow::Result<int64_t> FantomReader::Tell() const {
   return current_position_;
 }
 
-arrow::Result<int64_t> FantomReader::Read(int64_t nbytes, void* output_buffer) {
+arrow::Result<int64_t> FantomReader::Read(int64_t nbytes, void* out) {
   ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, nbytes));
-  memcpy(output_buffer, buffer->data(), buffer->size());
+  memcpy(out, buffer->data(), buffer->size());
   current_position_ += buffer->size();
   return buffer->size();
 }
@@ -360,7 +360,7 @@ void ProcessSingleIOCompletion(
   const std::vector<int>& column_indices,
   const std::vector<int64_t>& target_row_ranges,
   const std::vector<int>& target_column_indices,
-  void* output_buffer,
+  void* out,
   size_t buffer_size,
   size_t stride0_size,
   size_t stride1_size,
@@ -373,7 +373,7 @@ void ProcessSingleIOCompletion(
       current_target_row,
       column_operation.column_reader,
       row_group_metadata, 
-      output_buffer,
+      out,
       buffer_size,
       stride0_size,
       stride1_size,
@@ -456,7 +456,7 @@ void ProcessAllCompletedRequests(
   const std::vector<int>& column_indices,
   const std::vector<int64_t>& target_row_ranges,
   const std::vector<int>& target_column_indices,
-  void* output_buffer,
+  void* out,
   size_t buffer_size,
   size_t stride0_size,
   size_t stride1_size,
@@ -475,7 +475,7 @@ void ProcessAllCompletedRequests(
         ProcessSingleIOCompletion(
           current_target_row, io_requests[request_index], fantom_reader, row_group_metadata,
           column_indices, target_row_ranges, target_column_indices,
-          output_buffer, buffer_size, stride0_size, stride1_size, target_row_ranges_index
+          out, buffer_size, stride0_size, stride1_size, target_row_ranges_index
         );
         return Status::OK();
       } catch (const std::exception& error) {
@@ -493,7 +493,7 @@ void ProcessAllCompletedRequests(
 void ReadIntoMemoryIOUring(
   const std::string& parquet_file_path,
   std::shared_ptr<parquet::FileMetaData> file_metadata,
-  void* output_buffer,
+  void* out,
   size_t buffer_size,
   size_t stride0_size,
   size_t stride1_size,
@@ -546,7 +546,7 @@ void ReadIntoMemoryIOUring(
       ProcessAllCompletedRequests(
         io_ring, coalesced_requests, fantom_reader, current_target_row, 
         row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
-        target_column_indices, output_buffer, buffer_size,
+        target_column_indices, out, buffer_size,
         stride0_size, stride1_size, use_threads, target_row_ranges_index
       );
 
