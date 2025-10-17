@@ -252,9 +252,6 @@ std::vector<CoalescedRequest> CreateCoalescedRequests(
   std::vector<int> single_row_group(1);
   std::vector<int> single_column(1);
   
-  // Process each row group separately to maintain target_row tracking
-  std::shared_ptr<parquet::RowGroupMetaData> row_group_metadata = file_metadata->RowGroup(row_group);
-
   single_row_group[0] = row_group;
 
   // Get individual read ranges for each column - O(columns)
@@ -364,37 +361,6 @@ void SubmitCoalescedRequests(
   auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
   std::cerr << " io_uring_submit:" << std::to_string(elapsed.count()) << "ms, submitted=" << std::to_string(submitted) << std::endl;
   */
-}
-
-// Calculate target_row_ranges_idx for a specific row group
-size_t CalculateTargetRowRangesIndex(
-  int target_row_group,
-  const std::vector<int>& row_groups,
-  const std::shared_ptr<parquet::FileMetaData>& file_metadata,
-  const std::vector<int64_t>& target_row_ranges
-) 
-{
-  if (target_row_ranges.empty()) {
-    return 0;
-  }
-
-  size_t idx = 0;
-  for (int row_group : row_groups) {
-    if (row_group == target_row_group) {
-      break;
-    }
-    
-    auto metadata = file_metadata->RowGroup(row_group);
-    int64_t rows = metadata->num_rows();
-    
-    while (rows > 0) {
-      int64_t range_rows = target_row_ranges[idx + 1] - target_row_ranges[idx];
-      idx += 2;
-      rows -= range_rows;
-    }
-  }
-  
-  return idx;
 }
 
 // Process all columns covered by a coalesced request
@@ -523,49 +489,6 @@ void ProcessCompletions(
   );
 }
 
-// Validate final row counts
-void ValidateResults(
-  const std::vector<int>& row_groups,
-  const std::shared_ptr<parquet::FileMetaData>& file_metadata,
-  const std::vector<int64_t>& target_row_ranges,
-  int64_t expected_rows
-) {
-  int64_t total_rows = 0;
-  size_t range_idx = 0;
-  
-  for (int row_group : row_groups) {
-    auto metadata = file_metadata->RowGroup(row_group);
-    total_rows += metadata->num_rows();
-    
-    if (!target_row_ranges.empty()) {
-      int64_t rows = metadata->num_rows();
-      while (rows > 0) {
-        int64_t range_rows = 
-          target_row_ranges[range_idx + 1] - target_row_ranges[range_idx];
-        range_idx += 2;
-        rows -= range_rows;
-      }
-    }
-  }
-
-  if (!target_row_ranges.empty()) {
-    if (range_idx != target_row_ranges.size()) {
-      throw std::logic_error("Expected to read " + 
-        std::to_string(target_row_ranges.size() / 2) +
-        " row ranges, but read only " + 
-        std::to_string(range_idx / 2) + "!"
-      );
-    }
-  } else {
-    if (total_rows != expected_rows) {
-      throw std::logic_error(
-        "Expected to read " + std::to_string(expected_rows) +
-        " rows, but read only " + std::to_string(total_rows) + "!"
-      );
-    }
-  }
-}
-
 void ReadIntoMemoryIOUring(
   const std::string& path,
   std::shared_ptr<parquet::FileMetaData> file_metadata,
@@ -613,8 +536,6 @@ void ReadIntoMemoryIOUring(
 
       SubmitCoalescedRequests(ring, coalesced_requests, fd);
 
-      size_t target_row_ranges_idx = CalculateTargetRowRangesIndex(row_group, row_groups, file_metadata, target_row_ranges);
-
       ProcessCompletions(
         ring, coalesced_requests, fantom_reader, file_metadata,
         row_group, row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
@@ -622,9 +543,39 @@ void ReadIntoMemoryIOUring(
         stride0_size, stride1_size, use_threads, target_row_ranges_idx
       );
 
-      ValidateResults(row_groups, file_metadata, target_row_ranges, expected_rows);
-    }
 
+      target_row += num_rows;
+      if (target_row_ranges.size() > 0)
+      {
+        auto rows = num_rows;
+        while (true)
+        {
+          auto range_rows = target_row_ranges[target_row_ranges_idx + 1] - target_row_ranges[target_row_ranges_idx];
+          target_row_ranges_idx += 2;
+          if (rows == range_rows)
+            break;
+
+          rows -= range_rows;
+        }
+      }
+    }
+  
+    if (target_row_ranges.size() > 0)
+    {
+      if (target_row_ranges_idx != target_row_ranges.size())
+      {
+        auto msg = std::string("Expected to read ") + std::to_string(target_row_ranges.size() / 2) + " row ranges, but read only " + std::to_string(target_row_ranges_idx / 2) + "!";
+        throw std::logic_error(msg);
+      }
+    }
+    else
+    {
+      if (target_row != expected_rows)
+      {
+        auto msg = std::string("Expected to read ") + std::to_string(expected_rows) + " rows, but read only " + std::to_string(target_row) + "!";
+        throw std::logic_error(msg);
+      }
+    }
   } catch (...) {
     io_uring_queue_exit(&ring);
     close(fd);
