@@ -460,7 +460,7 @@ void ProcessAllCompletedRequests(
   size_t buffer_size,
   size_t stride0_size,
   size_t stride1_size,
-  bool use_parallel_processing,
+  bool use_threads,
   size_t target_row_ranges_index
 ) {
   // Wait for all I/O operations and setup readers
@@ -468,7 +468,7 @@ void ProcessAllCompletedRequests(
 
   // Process all requests, potentially in parallel
   auto processing_status = ::arrow::internal::OptionalParallelFor(
-    use_parallel_processing,
+    use_threads,
     static_cast<int>(io_requests.size()),
     [&](int request_index) -> Status {
       try {
@@ -503,7 +503,7 @@ void ReadIntoMemoryIOUring(
   const std::vector<std::string>& column_names,
   const std::vector<int>& target_column_indices,
   bool pre_buffer,  // Currently unused but kept for API compatibility
-  bool use_parallel_processing,
+  bool use_threads,
   int64_t expected_total_rows, 
   arrow::io::CacheOptions cache_options)
 {
@@ -547,7 +547,7 @@ void ReadIntoMemoryIOUring(
         io_ring, coalesced_requests, fantom_reader, current_target_row, 
         row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
         target_column_indices, output_buffer, buffer_size,
-        stride0_size, stride1_size, use_parallel_processing, target_row_ranges_index
+        stride0_size, stride1_size, use_threads, target_row_ranges_index
       );
 
       current_target_row += rows_in_group;
