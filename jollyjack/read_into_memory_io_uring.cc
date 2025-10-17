@@ -287,7 +287,7 @@ void MatchColumnsToCoalescedRanges(
       }
     }
     
-    coalesced_requests.push_back(std::move(request));
+    coalesced_requests.push_back(request);
   }
 }
 
