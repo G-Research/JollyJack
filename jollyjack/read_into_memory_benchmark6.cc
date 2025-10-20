@@ -118,7 +118,7 @@ void ReadIntoMemory_benchmark6(
       io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(i));
     }
 
-    auto submitted = io_uring_submit(&ring);
+    io_uring_submit(&ring);
 
     size_t completed = 0;
     while (completed < requests.size()) {

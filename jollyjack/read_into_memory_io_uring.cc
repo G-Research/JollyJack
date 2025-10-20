@@ -46,11 +46,12 @@ class FantomReader : public arrow::io::RandomAccessFile {
   
   // Set a pre-loaded buffer for a specific file offset range
   void SetBuffer(int64_t buffer_offset, std::shared_ptr<arrow::Buffer> buffer);
-  
+  int64_t GetBlockSize();
  private:
   int fd_;
   int64_t current_position_ = 0;
   int64_t file_size_ = 0;
+  int64_t block_size_ = 0;
   std::shared_ptr<arrow::Buffer> cached_buffer_;
   int64_t cached_buffer_offset_ = 0;
 };
@@ -63,6 +64,7 @@ FantomReader::FantomReader(int fd)
   }
 
   file_size_ = file_stats.st_size;
+  block_size_ = file_stats.st_blksize;
 }
 
 FantomReader::~FantomReader() {
@@ -103,18 +105,31 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::ReadAt(int64_t posit
     return arrow::Status::UnknownError(error_message);
   }
 
-  // Allocate new buffer and read from file
-  ARROW_ASSIGN_OR_RAISE(auto buffer, arrow::AllocateResizableBuffer(nbytes));
-  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read, ReadAt(position, nbytes, buffer->mutable_data()));
+  // Allocate buffer for this coalesced request
+  // Calculate aligned offset and length using bit hacks
+  int64_t align_down_mask = ~(block_size_ - 1);
+  // Mask for checking alignment, or effectively for aligning up with offset
+  // This is not directly used as a mask for 'align up' in the same way as 'align down'
+  int64_t aligned_start_offset = position & align_down_mask;
+  int64_t original_end_offset = position + nbytes;
+  // Align up for the end offset: (val + align - 1) & ~(align - 1)
+  int64_t aligned_end_offset = (original_end_offset + block_size_ - 1) & align_down_mask;
+  int64_t aligned_read_length = aligned_end_offset - aligned_start_offset;
 
-  if (bytes_read != nbytes) {
+  int64_t updated_nbytes = nbytes + (position - aligned_start_offset);
+
+  // Allocate new buffer and read from file
+  ARROW_ASSIGN_OR_RAISE(auto buffer, arrow::AllocateResizableBuffer(aligned_read_length, block_size_));
+  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read, ReadAt(aligned_start_offset, aligned_read_length, buffer->mutable_data()));
+
+  if (bytes_read < updated_nbytes) {
     throw std::logic_error(
       "Incomplete read: expected " + std::to_string(nbytes) + 
       " bytes, but read " + std::to_string(bytes_read) + " bytes"
     );
   }
 
-  return std::shared_ptr<arrow::Buffer>(std::move(buffer));
+  return arrow::SliceBuffer(std::move(buffer), (position - aligned_start_offset), nbytes);
 }
 
 arrow::Status FantomReader::Seek(int64_t position) {
@@ -144,6 +159,10 @@ void FantomReader::SetBuffer(int64_t buffer_offset, std::shared_ptr<arrow::Buffe
   cached_buffer_offset_ = buffer_offset;
 }
 
+int64_t FantomReader::GetBlockSize() {
+  return block_size_;
+}
+
 // Represents a single column that needs to be read
 struct ColumnReadOperation {
   int column_array_index;     // Index in the output column array
@@ -155,7 +174,7 @@ struct ColumnReadOperation {
 struct CoalescedIORequest {
   int64_t file_offset;
   int64_t read_length;
-  std::shared_ptr<arrow::Buffer> read_buffer;
+  std::shared_ptr<arrow::ResizableBuffer> read_buffer;
   std::vector<ColumnReadOperation> column_operations;
 };
 
@@ -180,7 +199,7 @@ void ValidateRowRangePairs(const std::vector<int64_t>& row_ranges) {
 // Open Parquet file and create necessary readers
 std::tuple<int, std::shared_ptr<FantomReader>, std::unique_ptr<parquet::ParquetFileReader>>
 OpenParquetFileForReading(const std::string& file_path, std::shared_ptr<parquet::FileMetaData> metadata) {
-  int fd = open(file_path.c_str(), O_RDONLY);
+  int fd = open(file_path.c_str(), O_RDONLY | O_DIRECT);
   if (fd < 0) {
     throw std::logic_error("Failed to open file: " + file_path + " - " + strerror(errno));
   }
@@ -320,7 +339,8 @@ std::vector<CoalescedIORequest> CreateCoalescedIORequests(
 void SubmitIORequests(
   struct io_uring& ring,
   std::vector<CoalescedIORequest>& io_requests,
-  int fd
+  int fd,
+  int64_t block_size
 ) {
   for (size_t request_index = 0; request_index < io_requests.size(); request_index++) {
     auto& request = io_requests[request_index];
@@ -331,7 +351,21 @@ void SubmitIORequests(
     }
 
     // Allocate buffer for this coalesced request
-    auto buffer_result = arrow::AllocateBuffer(request.read_length);
+    // Calculate aligned offset and length using bit hacks
+    int64_t align_down_mask = ~(block_size - 1);
+    // Mask for checking alignment, or effectively for aligning up with offset
+    // This is not directly used as a mask for 'align up' in the same way as 'align down'
+    int64_t aligned_start_offset = request.file_offset & align_down_mask;
+    int64_t original_end_offset = request.file_offset + request.read_length;
+    // Align up for the end offset: (val + align - 1) & ~(align - 1)
+    int64_t aligned_end_offset = (original_end_offset + block_size - 1) & align_down_mask;
+    int64_t aligned_read_length = aligned_end_offset - aligned_start_offset;
+
+    // allign file offset + bump the read_lengtrh
+    request.read_length = request.read_length + request.file_offset - aligned_start_offset;
+    request.file_offset = aligned_start_offset;
+
+    auto buffer_result = arrow::AllocateResizableBuffer(aligned_read_length, block_size);
     if (!buffer_result.ok()) {
       throw std::logic_error("Failed to allocate buffer: " + buffer_result.status().message());
     }
@@ -340,7 +374,7 @@ void SubmitIORequests(
     // Prepare read operation for io_uring
     io_uring_prep_read(
       submission_entry, fd, request.read_buffer->mutable_data(),
-      request.read_length, request.file_offset
+      aligned_read_length, aligned_start_offset
     );
     io_uring_sqe_set_data(submission_entry, reinterpret_cast<void*>(request_index));
   }
@@ -396,7 +430,7 @@ void WaitForIOCompletionsAndSetupReaders(
   const std::shared_ptr<FantomReader>& fantom_reader,
   parquet::RowGroupReader* row_group_reader,
   std::vector<size_t>* completed_requests,
-  const size_t* requests_to_complete,
+  size_t* const requests_to_complete,
   bool use_threads
 ) {
   size_t min_completed_requests = use_threads ? 128 : 1;
@@ -408,12 +442,8 @@ void WaitForIOCompletionsAndSetupReaders(
 
     if (completed_requests->size() < min_completed_requests)
     {
-      int wait_result = io_uring_wait_cqe_timeout(&ring, &completion_entry, NULL);
-      
-      if (wait_result == -ETIME || wait_result == -EINTR) {
-        continue; // Timeout or interrupted, retry
-      }
-      
+      int wait_result = io_uring_wait_cqe(&ring, &completion_entry);
+
       if (wait_result < 0) {
         throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
       }
@@ -424,24 +454,25 @@ void WaitForIOCompletionsAndSetupReaders(
         return;
     }
 
-    *requests_to_complete--;
+    (*requests_to_complete)--;
 
     // Validate the completion
     size_t request_index = reinterpret_cast<size_t>(io_uring_cqe_get_data(completion_entry));
     CoalescedIORequest& completed_request = io_requests[request_index];
     completed_requests->push_back(request_index);
-     
+
     if (completion_entry->res < 0) {
       throw std::logic_error("I/O operation failed: " + std::string(strerror(-completion_entry->res)));
     }
-    
-    if (completion_entry->res != completed_request.read_length) {
+
+    if (completion_entry->res < completed_request.read_length) {
       throw std::logic_error(
         "Incomplete read: expected " + std::to_string(completed_request.read_length) + 
         " bytes, got " + std::to_string(completion_entry->res)
       );
     }
 
+    completed_request.read_buffer->Resize(completed_request.read_length);
     fantom_reader->SetBuffer(completed_request.file_offset, completed_request.read_buffer);
 
     // Create column readers for each column in this request
@@ -553,7 +584,7 @@ void ReadIntoMemoryIOUring(
       );
 
       // Submit all I/O requests asynchronously
-      SubmitIORequests(ring, coalesced_requests, fd);
+      SubmitIORequests(ring, coalesced_requests, fd, fantom_reader->GetBlockSize());
 
       // Wait for completions and process all columns
       ProcessAllCompletedRequests(
