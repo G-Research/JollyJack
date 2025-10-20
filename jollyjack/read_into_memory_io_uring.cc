@@ -49,7 +49,7 @@ class FantomReader : public arrow::io::RandomAccessFile {
   int64_t GetBlockSize();
  private:
   int fd_;
-  int64_t current_position_ = 0;
+  int64_t pos_= 0;
   int64_t file_size_ = 0;
   int64_t block_size_ = 0;
   std::shared_ptr<arrow::Buffer> cached_buffer_;
@@ -133,7 +133,7 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::ReadAt(int64_t posit
 }
 
 arrow::Status FantomReader::Seek(int64_t position) {
-  current_position_ = position;
+  pos_= position;
   return arrow::Status::OK();
 }
 
@@ -144,13 +144,13 @@ arrow::Result<int64_t> FantomReader::Tell() const {
 arrow::Result<int64_t> FantomReader::Read(int64_t nbytes, void* out) {
   ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, nbytes));
   memcpy(out, buffer->data(), buffer->size());
-  current_position_ += buffer->size();
+  pos_+= buffer->size();
   return buffer->size();
 }
 
 arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::Read(int64_t nbytes) {
   ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, nbytes));
-  current_position_ += buffer->size();
+  pos_+= buffer->size();
   return buffer;
 }
 
