@@ -394,29 +394,43 @@ void WaitForIOCompletionsAndSetupReaders(
   struct io_uring& ring,
   std::vector<CoalescedIORequest>& io_requests,
   const std::shared_ptr<FantomReader>& fantom_reader,
-  parquet::RowGroupReader* row_group_reader
+  parquet::RowGroupReader* row_group_reader,
+  std::vector<size_t>* completed_requests,
+  const size_t* requests_to_complete,
+  bool use_threads
 ) {
-  size_t completed_operations = 0;
-  
+  size_t min_completed_requests = use_threads ? 128 : 1;
+  completed_requests->clear();
+
   // Wait for all I/O operations to complete
-  while (completed_operations < io_requests.size()) {
+  while (*requests_to_complete > 0) {
     struct io_uring_cqe* completion_entry;
-    int wait_result = io_uring_wait_cqe_timeout(&ring, &completion_entry, NULL);
-    
-    if (wait_result == -ETIME || wait_result == -EINTR) {
-      continue; // Timeout or interrupted, retry
+
+    if (completed_requests->size() < min_completed_requests)
+    {
+      int wait_result = io_uring_wait_cqe_timeout(&ring, &completion_entry, NULL);
+      
+      if (wait_result == -ETIME || wait_result == -EINTR) {
+        continue; // Timeout or interrupted, retry
+      }
+      
+      if (wait_result < 0) {
+        throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
+      }
     }
-    
-    if (wait_result < 0) {
-      throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
+    else
+    {
+      if (io_uring_peek_cqe(&ring, &completion_entry) != 0)
+        return;
     }
 
-    completed_operations++;
+    *requests_to_complete--;
 
     // Validate the completion
     size_t request_index = reinterpret_cast<size_t>(io_uring_cqe_get_data(completion_entry));
     CoalescedIORequest& completed_request = io_requests[request_index];
- 
+    completed_requests->push_back(request_index);
+     
     if (completion_entry->res < 0) {
       throw std::logic_error("I/O operation failed: " + std::string(strerror(-completion_entry->res)));
     }
@@ -437,7 +451,6 @@ void WaitForIOCompletionsAndSetupReaders(
 
     io_uring_cqe_seen(&ring, completion_entry);
   }
-
 }
 
 // Process all completed I/O requests, optionally in parallel
@@ -458,15 +471,20 @@ void ProcessAllCompletedRequests(
   bool use_threads,
   size_t target_row_ranges_index
 ) {
+  std::vector<size_t> completed_requests;
+  size_t requests_to_complete = io_requests.size();
+  completed_requests.reserve(io_requests.size());
+
   // Wait for all I/O operations and setup readers
-  WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader);
+  WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader, &completed_requests, &requests_to_complete, use_threads);
 
   // Process all requests, potentially in parallel
   auto processing_status = ::arrow::internal::OptionalParallelFor(
     use_threads,
-    static_cast<int>(io_requests.size()),
-    [&](int request_index) -> Status {
+    static_cast<int>(completed_requests.size()),
+    [&](int i) -> Status {
       try {
+        size_t request_index = completed_requests[i];
         ProcessSingleIOCompletion(
           current_target_row, io_requests[request_index], fantom_reader, row_group_metadata,
           column_indices, target_row_ranges, target_column_indices,
