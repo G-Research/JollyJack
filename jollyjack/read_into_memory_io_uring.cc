@@ -57,7 +57,7 @@ class FantomReader : public arrow::io::RandomAccessFile {
 };
 
 FantomReader::FantomReader(int fd)
-    : fd_(fd), current_position_(0), file_size_(0) {
+    : fd_(fd), pos_(0), file_size_(0) {
   struct stat file_stats;
   if (fstat(fd_, &file_stats) < 0) {
     throw std::runtime_error("Failed to get file statistics with fstat");
@@ -138,18 +138,18 @@ arrow::Status FantomReader::Seek(int64_t position) {
 }
 
 arrow::Result<int64_t> FantomReader::Tell() const {
-  return current_position_;
+  return pos_;
 }
 
 arrow::Result<int64_t> FantomReader::Read(int64_t nbytes, void* out) {
-  ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, nbytes));
+  ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(pos_, nbytes));
   memcpy(out, buffer->data(), buffer->size());
   pos_+= buffer->size();
   return buffer->size();
 }
 
 arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::Read(int64_t nbytes) {
-  ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(current_position_, nbytes));
+  ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(pos_, nbytes));
   pos_+= buffer->size();
   return buffer;
 }
