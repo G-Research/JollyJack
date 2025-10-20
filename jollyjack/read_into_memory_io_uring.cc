@@ -433,7 +433,6 @@ void WaitForIOCompletionsAndSetupReaders(
   size_t* const requests_to_complete,
   bool use_threads
 ) {
-  struct __kernel_timespec ts = {};
   size_t min_completed_requests = use_threads ? 128 : 1;
   completed_requests->clear();
 
@@ -451,11 +450,9 @@ void WaitForIOCompletionsAndSetupReaders(
     }
     else
     {
-      int wait_result = io_uring_wait_cqe(&ring, &completion_entry);
-
-      if (wait_result < 0) {
-        throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
-      }
+      int wait_result = io_uring_peek_cqe(&ring, &completion_entry);
+      if (wait_result != 0)
+        return;
     }
 
     (*requests_to_complete)--;
@@ -510,30 +507,33 @@ void ProcessAllCompletedRequests(
   size_t requests_to_complete = io_requests.size();
   completed_requests.reserve(io_requests.size());
 
-  // Wait for all I/O operations and setup readers
-  WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader, &completed_requests, &requests_to_complete, use_threads);
+  while (requests_to_complete > 0)
+  {
+    // Wait for all I/O operations and setup readers
+    WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader, &completed_requests, &requests_to_complete, use_threads);
 
-  // Process all requests, potentially in parallel
-  auto processing_status = ::arrow::internal::OptionalParallelFor(
-    use_threads,
-    static_cast<int>(completed_requests.size()),
-    [&](int i) -> Status {
-      try {
-        size_t request_index = completed_requests[i];
-        ProcessSingleIOCompletion(
-          current_target_row, io_requests[request_index], fantom_reader, row_group_metadata,
-          column_indices, target_row_ranges, target_column_indices,
-          out, buffer_size, stride0_size, stride1_size, target_row_ranges_index
-        );
-        return Status::OK();
-      } catch (const std::exception& error) {
-        return Status::UnknownError("Request processing failed: " + std::string(error.what()));
+    // Process all requests, potentially in parallel
+    auto processing_status = ::arrow::internal::OptionalParallelFor(
+      use_threads,
+      static_cast<int>(completed_requests.size()),
+      [&](int i) -> Status {
+        try {
+          size_t request_index = completed_requests[i];
+          ProcessSingleIOCompletion(
+            current_target_row, io_requests[request_index], fantom_reader, row_group_metadata,
+            column_indices, target_row_ranges, target_column_indices,
+            out, buffer_size, stride0_size, stride1_size, target_row_ranges_index
+          );
+          return Status::OK();
+        } catch (const std::exception& error) {
+          return Status::UnknownError("Request processing failed: " + std::string(error.what()));
+        }
       }
-    }
-  );
+    );
 
-  if (!processing_status.ok()) {
-    throw std::logic_error("Parallel processing failed: " + processing_status.message());
+    if (!processing_status.ok()) {
+      throw std::logic_error("Parallel processing failed: " + processing_status.message());
+    }
   }
 }
 
