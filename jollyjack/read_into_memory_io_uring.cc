@@ -226,7 +226,7 @@ void ResolveColumnNameToIndices(
   
   for (const auto& column_name : column_names) {
     int column_index = schema->ColumnIndex(column_name);
-    
+
     if (column_index < 0) {
       throw std::logic_error("Column '" + column_name + "' was not found!");
     }
@@ -243,7 +243,7 @@ std::vector<ColumnFileRange> GetSortedColumnRanges(
 ) {
   std::vector<int> single_row_group = {row_group_index};
   std::vector<int> single_column(1);
-  
+
   std::vector<ColumnFileRange> column_ranges;
   column_ranges.reserve(column_indices.size());
 
@@ -292,11 +292,11 @@ void MatchColumnsToCoalescedRanges(
       if (column_range.file_offset >= range_end) {
         break;
       }
-      
+
       // Check for overlap between column range and coalesced range
       bool ranges_overlap = (column_range.file_offset < range_end && 
                            column_range.end_offset() > coalesced_range.offset);
-      
+
       if (ranges_overlap) {
         ColumnReadOperation column_op;
         column_op.column_array_index = column_range.column_array_index;
@@ -305,7 +305,7 @@ void MatchColumnsToCoalescedRanges(
         request.column_operations.push_back(column_op);
       }
     }
-    
+
     coalesced_requests.push_back(request);
   }
 }
@@ -599,7 +599,7 @@ void ReadIntoMemoryIOUring(
       );
 
       current_target_row += rows_in_group;
-      
+
       // Update row ranges index if using targeted row ranges
       if (!target_row_ranges.empty()) {
         auto remaining_rows = rows_in_group;
