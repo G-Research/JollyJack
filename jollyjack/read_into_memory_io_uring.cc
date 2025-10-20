@@ -198,8 +198,8 @@ void ValidateRowRangePairs(const std::vector<int64_t>& row_ranges) {
 
 // Open Parquet file and create necessary readers
 std::tuple<int, std::shared_ptr<FantomReader>, std::unique_ptr<parquet::ParquetFileReader>>
-OpenParquetFileForReading(const std::string& file_path, std::shared_ptr<parquet::FileMetaData> metadata) {
-  int fd = open(file_path.c_str(), O_RDONLY | O_DIRECT);
+OpenParquetFileForReading(const std::string& file_path, std::shared_ptr<parquet::FileMetaData> metadata, int flags) {
+  int fd = open(file_path.c_str(), flags);
   if (fd < 0) {
     throw std::logic_error("Failed to open file: " + file_path + " - " + strerror(errno));
   }
@@ -557,8 +557,12 @@ void ReadIntoMemoryIOUring(
 {
   ValidateRowRangePairs(target_row_ranges);
 
-  auto [fd, fantom_reader, parquet_reader] = 
-    OpenParquetFileForReading(parquet_file_path, file_metadata);
+  int flags = O_RDONLY;
+  char *env_value = getenv("JJ_experimental_O_DIRECT");
+  if (env_value)
+    flags |= O_DIRECT;
+
+  auto [fd, fantom_reader, parquet_reader] = OpenParquetFileForReading(parquet_file_path, file_metadata, flags);
   file_metadata = parquet_reader->metadata();
 
   ResolveColumnNameToIndices(column_indices, column_names, file_metadata);
