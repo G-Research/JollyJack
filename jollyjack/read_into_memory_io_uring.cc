@@ -451,9 +451,7 @@ void WaitForIOCompletionsAndSetupReaders(
     }
     else
     {
-      int wait_result = io_uring_wait_cqe_timeout(&ring, &completion_entry, &ts);
-      if (wait_result == -ETIME || wait_result == -EINTR)
-        return;
+      int wait_result = io_uring_wait_cqe(&ring, &completion_entry);
 
       if (wait_result < 0) {
         throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
