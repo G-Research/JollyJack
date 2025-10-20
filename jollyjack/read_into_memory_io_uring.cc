@@ -433,6 +433,7 @@ void WaitForIOCompletionsAndSetupReaders(
   size_t* const requests_to_complete,
   bool use_threads
 ) {
+  struct __kernel_timespec ts = {};
   size_t min_completed_requests = use_threads ? 128 : 1;
   completed_requests->clear();
 
@@ -450,8 +451,13 @@ void WaitForIOCompletionsAndSetupReaders(
     }
     else
     {
-      if (io_uring_peek_cqe(&ring, &completion_entry) != 0)
+      int wait_result = io_uring_wait_cqe_timeout(&ring, &completion_entry, &ts);
+      if (wait_result == -ETIME || wait_result == -EINTR)
         return;
+
+      if (wait_result < 0) {
+        throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
+      }
     }
 
     (*requests_to_complete)--;
