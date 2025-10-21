@@ -16,10 +16,12 @@ if benchmark_mode == "FILE_SYSTEM":
     # FILE_SYSTEM, unable to fit everything into page cache, no repeats
     n_files = 12
     n_repeats = 1
+    purge_cache = True
 elif benchmark_mode == "CPU":
     # "CPU" -> one file, goes into page cache, many repeats
     n_files = 1
     n_repeats = 12
+    purge_cache = False
 else:
     raise RuntimeError(f"Ivalid JJ_benchmark_mode:{benchmark_mode}")
 
@@ -29,6 +31,12 @@ n_columns = 7_000
 n_columns_to_read = 3_000
 chunk_size = 32_000
 parquet_path = "my.parquet" if sys.platform.startswith('win') else "/tmp/my.parquet"
+
+def purge_file_from_cache(path:str):
+
+    with open(path, "r") as f:
+        fd = f.fileno()
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
 
 def generate_random_parquet(
     filename: str,
@@ -186,6 +194,10 @@ def measure_reading(max_workers, worker):
         for dummy_item in dummy_items: 
             dummy_item.result()
 
+        if (purge_cache):
+            for i in range(n_files):
+                purge_file_from_cache(path = f"{parquet_path}{i}")
+
         # Submit the work
         t = time.time()
         work_results = []
@@ -208,6 +220,7 @@ print (f"n_threads = {n_threads}")
 print (f"row_groups = {row_groups}")
 print (f"n_columns = {n_columns}")
 print (f"chunk_size = {chunk_size}")
+print (f"purge_cache = {purge_cache}")
 
 print (f"pyarrow.version = {pa.__version__}")
 print (f"jollyjack.version = {jj.__version__}")
