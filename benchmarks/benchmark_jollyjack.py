@@ -224,6 +224,7 @@ print (f"purge_cache = {purge_cache}")
 
 print (f"pyarrow.version = {pa.__version__}")
 print (f"jollyjack.version = {jj.__version__}")
+os.environ["JJ_experimental_O_DIRECT"] = 'ON'
 
 for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None, pa.float16())]:
     
