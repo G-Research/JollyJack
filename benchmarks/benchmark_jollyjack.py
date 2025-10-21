@@ -16,7 +16,7 @@ if benchmark_mode == "FILE_SYSTEM":
     # FILE_SYSTEM, unable to fit everything into page cache, no repeats
     n_files = 12
     n_repeats = 1
-    purge_cache = True
+    purge_cache = False if sys.platform.startswith('win') else True
 elif benchmark_mode == "CPU":
     # "CPU" -> one file, goes into page cache, many repeats
     n_files = 1
