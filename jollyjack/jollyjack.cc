@@ -333,7 +333,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), cache_options);
   }
 
-  std::vector<ColumnIndex> column_mapping(column_mapping.size());
+  std::vector<ColumnIndex> column_mapping(column_indices.size());
   for (auto i=0; i < column_indices.size(); i++)
   {
     column_mapping[i].column = column_indices[i];
