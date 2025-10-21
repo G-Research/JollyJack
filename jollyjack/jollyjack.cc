@@ -14,6 +14,12 @@
 
 using arrow::Status;
 
+struct ColumnIndex
+{
+  int column;
+  int index;
+};
+
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
     , std::shared_ptr<parquet::ColumnReader> column_reader
@@ -327,6 +333,19 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), cache_options);
   }
 
+  std::vector<ColumnIndex> column_mapping(column_mapping.size());
+  for (auto i=0; i < column_indices.size(); i++)
+  {
+    column_mapping[i].column = column_indices[i];
+    column_mapping[i].index = i;
+  }
+
+  // Sort columns for better IO predicability ?!
+  std::sort(column_mapping.begin(), column_mapping.end(),
+    [](const ColumnIndex& a, const ColumnIndex& b) {
+      return a.column < b.column;
+  });
+
   int64_t target_row = 0;
   size_t target_row_ranges_idx = 0;
   for (int row_group : row_groups)
@@ -352,27 +371,27 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         << std::endl;
 #endif
   std::vector<std::shared_ptr<parquet::ColumnReader>> column_readers;
-  column_readers.resize(column_indices.size());
+  column_readers.resize(column_mapping.size());
   char *env_value = getenv("JJ_experimental_column_reader");
 
   // Experimental code path, to check if in some circumstances it is more efficient to create all column readers at once (this involves reading the file content).
   if (env_value != NULL)
   {
-    for (size_t target_column = 0; target_column < column_indices.size(); target_column++)
+    for (size_t i = 0; i < column_mapping.size(); i++)
     {
-      column_readers[target_column] = row_group_reader->Column(column_indices[target_column]);
+      column_readers[i] = row_group_reader->Column(column_mapping[i].column);
     }
   }
 
-  auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
-            [&](int target_column) { 
+  auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_mapping.size(),
+            [&](int i) { 
               try
               {        
-                auto column_reader = column_readers[target_column];
+                auto column_reader = column_readers[i];
                 if (column_reader == nullptr)
-                  column_reader = row_group_reader->Column(column_indices[target_column]);
+                  column_reader = row_group_reader->Column(column_mapping[i].column);
 
-                return ReadColumn(target_column
+                return ReadColumn(column_mapping[i].index
                   , target_row
                   , column_reader
                   , row_group_metadata.get()
