@@ -345,8 +345,8 @@ void SubmitIORequests(
   for (size_t request_index = 0; request_index < io_requests.size(); request_index++) {
     auto& request = io_requests[request_index];
     
-    struct io_uring_sqe* submission_entry = io_uring_get_sqe(&ring);
-    if (!submission_entry) {
+    struct io_uring_sqe* sqe = io_uring_get_sqe(&ring);
+    if (!sqe) {
       throw std::logic_error("Failed to get submission queue entry from io_uring");
     }
 
@@ -373,10 +373,11 @@ void SubmitIORequests(
 
     // Prepare read operation for io_uring
     io_uring_prep_read(
-      submission_entry, fd, request.read_buffer->mutable_data(),
+      sqe, fd, request.read_buffer->mutable_data(),
       aligned_read_length, aligned_start_offset
     );
-    io_uring_sqe_set_data(submission_entry, reinterpret_cast<void*>(request_index));
+    io_uring_sqe_set_flags(sqe, IOSQE_ASYNC);
+    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(request_index));
   }
 
   int submitted_count = io_uring_submit(&ring);
