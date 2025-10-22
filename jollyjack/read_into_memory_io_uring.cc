@@ -579,7 +579,7 @@ void ReadIntoMemoryIOUring(
   try {
     int64_t current_target_row = 0;
     size_t target_row_ranges_index = 0;
-    
+
     // Process each row group
     for (int row_group_index : target_row_groups) {
       const auto row_group_reader = parquet_reader->RowGroup(row_group_index);
