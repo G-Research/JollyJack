@@ -16,7 +16,7 @@ if benchmark_mode == "FILE_SYSTEM":
     # FILE_SYSTEM, unable to fit everything into page cache, no repeats
     n_files = 12
     n_repeats = 1
-    purge_cache = False if sys.platform.startswith('win') else True
+    purge_cache = False if sys.platform.startswith('win') else False
 elif benchmark_mode == "CPU":
     # "CPU" -> one file, goes into page cache, many repeats
     n_files = 1
@@ -224,7 +224,6 @@ print (f"purge_cache = {purge_cache}")
 
 print (f"pyarrow.version = {pa.__version__}")
 print (f"jollyjack.version = {jj.__version__}")
-os.environ["JJ_experimental_O_DIRECT"] = 'ON'
 
 for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None, pa.float16())]:
     
