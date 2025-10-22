@@ -370,14 +370,6 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         << " stride1_size:" << stride1_size
         << std::endl;
 #endif
-  std::vector<std::shared_ptr<parquet::ColumnReader>> column_readers;
-  column_readers.resize(column_mapping.size());
-
-  // It seems, that it is more efficient to create all column readers single-threaded (this involves reading the file content).
-  for (size_t i = 0; i < column_mapping.size(); i++)
-  {
-    column_readers[i] = row_group_reader->Column(column_mapping[i].column);
-  }
 
   auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_mapping.size(),
             [&](int i) {
@@ -385,7 +377,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
               {
                 return ReadColumn(column_mapping[i].index
                   , target_row
-                  , column_readers[i]
+                  , row_group_reader->Column(column_mapping[i].column)
                   , row_group_metadata.get()
                   , buffer
                   , buffer_size
