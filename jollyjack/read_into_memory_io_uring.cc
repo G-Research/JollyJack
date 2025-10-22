@@ -569,9 +569,12 @@ void ReadIntoMemoryIOUring(
   ResolveColumnNameToIndices(column_indices, column_names, file_metadata);
 
   #define IORING_SETUP_COOP_TASKRUN 256
+  #define IORING_SETUP_SINGLE_ISSUER 4096
+  #define IORING_SETUP_DEFER_TASKRUN 8192
+
   // Initialize io_uring with enough capacity for all columns
   struct io_uring ring = {};
-  int ret = io_uring_queue_init(column_indices.size(), &ring, IORING_SETUP_COOP_TASKRUN);
+  int ret = io_uring_queue_init(column_indices.size(), &ring, IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_DEFER_TASKRUN);
   if (ret < 0) {
     throw std::logic_error(
       "Failed to initialize io_uring: " + std::string(strerror(-ret))
