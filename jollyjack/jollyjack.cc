@@ -371,8 +371,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         << std::endl;
 #endif
 
-  // It seems it is more efficient to create all column readers at once (this involves reading the file content).
-  // Concurrent reading just increases threads conention, but it is not faster as the readed is protected with a lock.
+  // It seems it is more efficient to create all column readers at once (this involves reading the file content). 
+  // Concurrent reading just increases thread contention and isn't faster because the read operation is protected by a lock.
   std::vector<std::shared_ptr<parquet::ColumnReader>> column_readers(column_mapping.size());
   for (size_t i = 0; i < column_mapping.size(); i++)
   {
