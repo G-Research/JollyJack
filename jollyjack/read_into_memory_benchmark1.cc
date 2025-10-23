@@ -47,6 +47,7 @@ void ReadIntoMemory_benchmark1(
 
   auto reader_properties = parquet::default_reader_properties();
   auto parquet_reader = parquet::ParquetFileReader::OpenFile(path, false, reader_properties, file_metadata);
+  file_metadata = parquet_reader->metadata();
 
   if (pre_buffer)
   {
