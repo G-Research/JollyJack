@@ -309,7 +309,7 @@ std::vector<CoalescedIORequest> MatchColumnsToCoalescedRanges(
     coalesced_requests.push_back(request);
   }
 
-  return std::move(coalesced_requests);
+  return coalesced_requests;
 }
 
 // Submit all coalesced I/O requests to io_uring for parallel execution
@@ -585,8 +585,8 @@ void ReadIntoMemoryIOUring(
         {
           ::arrow::io::ReadRange read_range = 
           {
+            .offset = column_range.file_offset,
             .length = column_range.data_length,
-            .offset = column_range.file_offset
           };
 
           maybe_coalesced_ranges.push_back(read_range);
