@@ -26,7 +26,7 @@ using arrow::Status;
  */
 class FantomReader : public arrow::io::RandomAccessFile {
  public:
-  explicit FantomReader(int fd);
+  explicit FantomReader(int fd, bool respect_block_size);
   ~FantomReader() override;
 
   arrow::Result<int64_t> ReadAt(
@@ -56,7 +56,7 @@ class FantomReader : public arrow::io::RandomAccessFile {
   int64_t cached_buffer_offset_ = 0;
 };
 
-FantomReader::FantomReader(int fd)
+FantomReader::FantomReader(int fd, bool respect_block_size)
     : fd_(fd), pos_(0), file_size_(0) {
   struct stat file_stats;
   if (fstat(fd_, &file_stats) < 0) {
@@ -64,7 +64,7 @@ FantomReader::FantomReader(int fd)
   }
 
   file_size_ = file_stats.st_size;
-  block_size_ = file_stats.st_blksize;
+  block_size_ = respect_block_size ? file_stats.st_blksize : 1;
 }
 
 FantomReader::~FantomReader() {
@@ -205,7 +205,7 @@ OpenParquetFileForReading(const std::string& file_path, std::shared_ptr<parquet:
   }
 
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
-  auto fantom_reader = std::make_shared<FantomReader>(fd);
+  auto fantom_reader = std::make_shared<FantomReader>(fd, flags & O_DIRECT);
   auto parquet_reader = parquet::ParquetFileReader::Open(fantom_reader, reader_properties, metadata);
 
   return {fd, fantom_reader, std::move(parquet_reader)};
@@ -546,7 +546,7 @@ void ReadIntoMemoryIOUring(
   size_t stride0_size,
   size_t stride1_size,
   std::vector<int> column_indices,
-  const std::vector<int>& target_row_groups,
+  const std::vector<int>& row_groups,
   const std::vector<int64_t>& target_row_ranges,
   const std::vector<std::string>& column_names,
   const std::vector<int>& target_column_indices,
@@ -566,6 +566,10 @@ void ReadIntoMemoryIOUring(
   file_metadata = parquet_reader->metadata();
 
   ResolveColumnNameToIndices(column_indices, column_names, file_metadata);
+  if (pre_buffer)
+  {
+    parquet_reader->PreBuffer(row_groups, column_indices, parquet::default_arrow_reader_properties().io_context(), cache_options);
+  }
 
   // Initialize io_uring with enough capacity for all columns
   struct io_uring ring = {};
@@ -581,7 +585,7 @@ void ReadIntoMemoryIOUring(
     size_t target_row_ranges_index = 0;
 
     // Process each row group
-    for (int row_group_index : target_row_groups) {
+    for (int row_group_index : row_groups) {
       const auto row_group_reader = parquet_reader->RowGroup(row_group_index);
       const auto row_group_metadata = file_metadata->RowGroup(row_group_index);
       const auto rows_in_group = row_group_metadata->num_rows();
