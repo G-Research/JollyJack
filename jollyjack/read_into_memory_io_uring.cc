@@ -322,8 +322,8 @@ void SubmitIORequests(
   for (size_t request_index = 0; request_index < io_requests.size(); request_index++) {
     auto& request = io_requests[request_index];
     
-    struct io_uring_sqe* submission_entry = io_uring_get_sqe(&ring);
-    if (!submission_entry) {
+    struct io_uring_sqe* sqe = io_uring_get_sqe(&ring);
+    if (!sqe) {
       throw std::logic_error("Failed to get submission queue entry from io_uring");
     }
 
@@ -350,10 +350,11 @@ void SubmitIORequests(
 
     // Prepare read operation for io_uring
     io_uring_prep_read(
-      submission_entry, fd, request.read_buffer->mutable_data(),
+      sqe, fd, request.read_buffer->mutable_data(),
       aligned_read_length, aligned_start_offset
     );
-    io_uring_sqe_set_data(submission_entry, reinterpret_cast<void*>(request_index));
+    io_uring_sqe_set_flags(sqe, IOSQE_ASYNC);
+    io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(request_index));
   }
 
   int submitted_count = io_uring_submit(&ring);
@@ -544,9 +545,13 @@ void ReadIntoMemoryIOUring(
 
   ResolveColumnNameToIndices(column_indices, column_names, file_metadata);
 
+  #define IORING_SETUP_COOP_TASKRUN 256
+  #define IORING_SETUP_SINGLE_ISSUER 4096
+  #define IORING_SETUP_DEFER_TASKRUN 8192
+
   // Initialize io_uring with enough capacity for all columns
   struct io_uring ring = {};
-  int ret = io_uring_queue_init(column_indices.size(), &ring, 0);
+  int ret = io_uring_queue_init(column_indices.size(), &ring, IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_DEFER_TASKRUN);
   if (ret < 0) {
     throw std::logic_error(
       "Failed to initialize io_uring: " + std::string(strerror(-ret))

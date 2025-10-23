@@ -92,13 +92,10 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
         
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
 
-    pr = pq.ParquetReader()
-    pr.open(path)
-
     row_groups_to_read = random.sample(range(row_groups), 1)
     column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_numpy(source = path
-                        , metadata = pr.metadata
+                        , metadata = None
                         , np_array = np_array
                         , row_group_indices = row_groups_to_read
                         , column_indices = column_indices_to_read
