@@ -99,6 +99,23 @@ with fs.LocalFileSystem().open_input_file(path) as f:
 						)
 print(np_array)
 #```
+
+### Using cache options
+#```
+np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
+cache_opts = pa.CacheOptions(hole_size_limit = 1024, range_size_limit = 2048, lazy = True)
+with fs.LocalFileSystem().open_input_file(path) as f:
+    jj.read_into_numpy (source = f
+                        , metadata = None
+                        , np_array = np_array
+                        , row_group_indices = [0]
+                        , row_ranges = [slice(0, 1), slice(4, 6)]
+                        , column_indices = range(pr.metadata.num_columns)
+                        , cache_opts = cache_opts
+						)
+print(np_array)
+#```
+
 ### Generating a torch tensor to read into:
 # ```
 import torch

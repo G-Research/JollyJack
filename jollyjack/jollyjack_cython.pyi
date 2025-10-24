@@ -79,7 +79,7 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, row_ranges =
     pre_buffer : bool, default False
     use_threads : bool, default True
     use_memory_map : bool, default False
-    cache_options : arrow::io::CacheOptions, default None -> CCacheOptions.LazyDefaults()
+    cache_options : pa.CacheOptions(), default None -> CCacheOptions.LazyDefaults()
 
     Notes:
     -----
