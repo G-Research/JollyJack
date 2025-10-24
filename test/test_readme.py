@@ -112,6 +112,7 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , row_ranges = [slice(0, 1), slice(4, 6)]
                         , column_indices = range(pr.metadata.num_columns)
                         , cache_opts = cache_opts
+                        , pre_buffer = True
 						)
 print(np_array)
 #```
