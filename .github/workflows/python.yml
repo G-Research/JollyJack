@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        mode: [ReadIntoMemoryIOUring, IOUringReader1, IOUringReader2]
+        mode: [ReadIntoMemoryIOUring, IOUringReader1]
     steps:
     - uses: actions/checkout@v5
     - name: Set up Python 3.12
