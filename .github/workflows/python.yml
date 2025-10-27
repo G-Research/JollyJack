@@ -122,7 +122,7 @@ jobs:
       env:
         CIBW_BUILD_VERBOSITY: 1
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v5
       with:
         name: dist-${{ matrix.runner }}
         path: ./dist/*
