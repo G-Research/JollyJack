@@ -402,7 +402,7 @@ void ProcessSingleIOCompletion(
 }
 
 // Wait for io_uring completions and setup column readers
-void WaitForIOCompletionsAndSetupReaders(
+arrow::Status WaitForIOCompletionsAndSetupReaders(
   struct io_uring& ring,
   std::vector<CoalescedIORequest>& io_requests,
   const std::shared_ptr<FantomReader>& fantom_reader,
@@ -421,7 +421,6 @@ void WaitForIOCompletionsAndSetupReaders(
     if (completed_requests->size() < min_completed_requests)
     {
       int wait_result = io_uring_wait_cqe(&ring, &completion_entry);
-
       if (wait_result < 0) {
         throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
       }
@@ -430,7 +429,7 @@ void WaitForIOCompletionsAndSetupReaders(
     {
       int wait_result = io_uring_peek_cqe(&ring, &completion_entry);
       if (wait_result != 0)
-        return;
+        return arrow::Status::OK();
     }
 
     (*requests_to_complete)--;
@@ -441,14 +440,14 @@ void WaitForIOCompletionsAndSetupReaders(
     completed_requests->push_back(request_index);
 
     if (completion_entry->res < 0) {
-      throw std::logic_error("I/O operation failed: " + std::string(strerror(-completion_entry->res)));
+      auto msg = std::string("I/O operation failed: ") + std::string(strerror(-completion_entry->res));
+      return arrow::Status::UnknownError(msg);
     }
 
     if (completion_entry->res < completed_request.read_length) {
-      throw std::logic_error(
-        "Incomplete read: expected " + std::to_string(completed_request.read_length) + 
-        " bytes, got " + std::to_string(completion_entry->res)
-      );
+      auto msg = std::string("Incomplete read: expected ") + std::to_string(completed_request.read_length) + 
+        " bytes, got " + std::to_string(completion_entry->res);
+      return arrow::Status::UnknownError(msg);
     }
 
     completed_request.read_buffer->Resize(completed_request.read_length);
@@ -461,6 +460,8 @@ void WaitForIOCompletionsAndSetupReaders(
 
     io_uring_cqe_seen(&ring, completion_entry);
   }
+
+  return arrow::Status::OK();
 }
 
 // Process all completed I/O requests, optionally in parallel
@@ -485,10 +486,13 @@ void ProcessAllCompletedRequests(
   size_t requests_to_complete = io_requests.size();
   completed_requests.reserve(io_requests.size());
 
+  arrow::Status final_status = arrow::Status::OK();
   while (requests_to_complete > 0)
   {
     // Wait for all I/O operations and setup readers
-    WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader, &completed_requests, &requests_to_complete, use_threads);
+    auto waiting_status = WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader, &completed_requests, &requests_to_complete, use_threads);
+    if (!waiting_status.ok())
+      final_status = waiting_status;
 
     // Process all requests, potentially in parallel
     auto processing_status = ::arrow::internal::OptionalParallelFor(
@@ -509,9 +513,12 @@ void ProcessAllCompletedRequests(
       }
     );
 
-    if (!processing_status.ok()) {
-      throw std::logic_error("Parallel processing failed: " + processing_status.message());
-    }
+    if (!processing_status.ok())
+      final_status = processing_status;
+  }
+
+  if (!final_status.ok()) {
+    throw std::logic_error("Parallel processing failed: " + final_status.message());
   }
 }
 
