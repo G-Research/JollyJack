@@ -19,40 +19,10 @@ jobs:
   test:
     if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.pull_request.head.repo.id != github.event.pull_request.base.repo.id
     runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v5
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v6
-      with:
-        python-version: "3.12"
-        
-    - name: Install dependencies
-      shell: bash
-      run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-        python3 -m pip install -r requirements.txt
-        python3 -m pip install flake8 pytest
-
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    - name: Test with pytest
-      run: |
-        sudo apt-get install liburing-dev
-        pip install --editable .
-        pytest
-
-  test_io_uring:
-    if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.pull_request.head.repo.id != github.event.pull_request.base.repo.id
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        mode: [ReadIntoMemoryIOUring, IOUringReader1]
+        mode: [None, IOUringReader1, ReadIntoMemoryIOUring, ReadIntoMemoryIOUring_ODirect] 
+      fail-fast: false
     steps:
     - uses: actions/checkout@v5
     - name: Set up Python 3.12
@@ -60,6 +30,17 @@ jobs:
       with:
         python-version: "3.12"
         
+    - name: Set environment variables
+      run: |
+        if [[ ${{ matrix.mode }} == IOUringReader1 ]]; then
+          echo "JJ_experimental_io_uring_mode=IOUringReader1" &gt;&gt; $GITHUB_ENV
+        else if [[ ${{ matrix.mode }} == ReadIntoMemoryIOUring ]]; then
+          echo "JJ_experimental_io_uring_mode=ReadIntoMemoryIOUring" &gt;&gt; $GITHUB_ENV
+        else if [[ ${{ matrix.mode }} == ReadIntoMemoryIOUring_ODirect ]]; then
+          echo "JJ_experimental_io_uring_mode=ReadIntoMemoryIOUring" &gt;&gt; $GITHUB_ENV
+          echo "JJ_experimental_O_DIRECT=ON" &gt;&gt; $GITHUB_ENV
+        fi
+    
     - name: Install dependencies
       shell: bash
       run: |
@@ -80,8 +61,6 @@ jobs:
         sudo apt-get install liburing-dev
         pip install --editable .
         pytest
-      env:
-        JJ_experimental_io_uring_mode : ${{ matrix.mode }}
 
   build-wheels:
     if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.pull_request.head.repo.id != github.event.pull_request.base.repo.id
