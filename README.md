@@ -12,7 +12,7 @@
 
 ## Required
 
-- pyarrow  ~= 21.0.0
+- pyarrow  ~= 22.0.0
  
 JollyJack operates on top of pyarrow, making it an essential requirement for both building and using JollyJack. While our source package is compatible with recent versions of pyarrow, the binary distribution package specifically requires the latest major version of pyarrow.
 

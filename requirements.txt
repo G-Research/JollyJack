@@ -1,7 +1,7 @@
-pyarrow~=21.0.0
-pandas
-palletjack>=2.7.0
-humanize
+pyarrow~=22.0.0
+palletjack>=2.9.0
 numpy>=1.16.6
 parameterized
+humanize
+pandas
 
