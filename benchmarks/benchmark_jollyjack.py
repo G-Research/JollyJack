@@ -230,12 +230,6 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
         genrate_data(path = path, n_row_groups = row_groups, n_columns = n_columns, compression = compression, dtype = dtype)
 
     print(f".")
-    for n_threads in [1, n_threads]:
-        for pre_buffer in [False, True]:
-            for use_threads in [False, True]:
-                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
-
-    print(f".")
     for jj_uring in [None] if sys.platform.startswith('win') else [None, 'ReadIntoMemoryIOUring', 'IOUringReader1']:
         if jj_uring is None:
             os.environ.pop("JJ_experimental_io_uring_mode", None)
@@ -250,14 +244,5 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     print(f".")
     for n_threads in [1, n_threads]:
         for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}")
-
-    print(f".")
-    for jj_variant in [1, 2]:
-        os.environ["JJ_copy_to_row_major"] = str(jj_variant)
-        for n_threads in [1, n_threads]:
-            print(f"`JollyJack.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}")
-
-    print(f".")
-    for n_threads in [1, n_threads]:
-        print(f"`numpy.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}")
+            for use_threads in [False, True]:
+                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
