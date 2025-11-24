@@ -24,7 +24,7 @@ jobs:
         mode: [None, IOUringReader1, ReadIntoMemoryIOUring, ReadIntoMemoryIOUring_ODirect] 
       fail-fast: false
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Set up Python 3.12
       uses: actions/setup-python@v6
       with:
@@ -71,7 +71,7 @@ jobs:
       fail-fast: false
 
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up QEMU
       if: runner.os == 'Linux'
@@ -114,7 +114,7 @@ jobs:
         runner: [ubuntu-latest, windows-latest, macos-latest]
       fail-fast: false
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Set up Python 3.12
       uses: actions/setup-python@v6
       with:
@@ -151,7 +151,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
   
       - name: Download artifacts
         uses: actions/download-artifact@v6
@@ -194,7 +194,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Set up Python 3.10
       uses: actions/setup-python@v6
       with:
