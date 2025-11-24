@@ -14,7 +14,7 @@ benchmark_mode = os.getenv("JJ_benchmark_mode", "CPU")
 
 if benchmark_mode == "FILE_SYSTEM":    
     # FILE_SYSTEM, unable to fit everything into page cache, no repeats
-    n_files = 12
+    n_files = 6
     n_repeats = 1
     purge_cache = False if sys.platform.startswith('win') else False
 elif benchmark_mode == "CPU":
