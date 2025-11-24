@@ -31,6 +31,7 @@ n_columns = 7_000
 n_columns_to_read = 3_000
 chunk_size = 32_000
 parquet_path = "my.parquet" if sys.platform.startswith('win') else "/tmp/my.parquet"
+column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
 
 def purge_file_from_cache(path:str):
 
@@ -85,7 +86,6 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
     pr.open(path, pre_buffer = pre_buffer)
 
     row_groups_to_read = random.sample(range(row_groups), 1)
-    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     table = pr.read_row_groups(row_groups = row_groups_to_read, column_indices = column_indices_to_read, use_threads=use_threads)
 
 def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
@@ -93,7 +93,6 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
 
     row_groups_to_read = random.sample(range(row_groups), 1)
-    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_numpy(source = path
                         , metadata = None
                         , np_array = np_array
@@ -113,7 +112,6 @@ def worker_jollyjack_copy_to_row_major(dtype, path):
     pr.open(path)
     
     row_groups_to_read = random.sample(range(row_groups), 1)
-    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_numpy(source = path
                         , metadata = pr.metadata
                         , np_array = np_array
@@ -133,7 +131,6 @@ def worker_numpy_copy_to_row_major(dtype, path):
     pr.open(path)
 
     row_groups_to_read = random.sample(range(row_groups), 1)
-    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_numpy(source = path
                         , metadata = pr.metadata
                         , np_array = np_array
@@ -168,7 +165,6 @@ def worker_jollyjack_torch(pre_buffer, dtype, path):
     pr.open(path)    
 
     row_groups_to_read = random.sample(range(row_groups), 1)
-    column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
     jj.read_into_torch(source = path
                         , metadata = pr.metadata
                         , tensor = tensor
