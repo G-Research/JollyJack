@@ -333,19 +333,6 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), cache_options);
   }
 
-  std::vector<ColumnIndex> column_mapping(column_indices.size());
-  for (auto i=0; i < column_indices.size(); i++)
-  {
-    column_mapping[i].column = column_indices[i];
-    column_mapping[i].index = i;
-  }
-
-  // Sort columns for better IO predicability ?!
-  std::sort(column_mapping.begin(), column_mapping.end(),
-    [](const ColumnIndex& a, const ColumnIndex& b) {
-      return a.column < b.column;
-  });
-
   int64_t target_row = 0;
   size_t target_row_ranges_idx = 0;
   for (int row_group : row_groups)
@@ -371,13 +358,13 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         << std::endl;
 #endif
 
-  auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_mapping.size(),
+  auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
             [&](int i) {
               try
               {
-                return ReadColumn(column_mapping[i].index
+                return ReadColumn(i
                   , target_row
-                  , row_group_reader->Column(column_mapping[i].column)
+                  , row_group_reader->Column(column_indices[i])
                   , row_group_metadata.get()
                   , buffer
                   , buffer_size
