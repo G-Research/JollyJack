@@ -87,9 +87,10 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
 
     row_groups_to_read = random.sample(range(row_groups), 1)
     table = pr.read_row_groups(row_groups = row_groups_to_read, column_indices = column_indices_to_read, use_threads=use_threads)
+    np_array = table.to_pandas()
 
 def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
-        
+
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
 
     row_groups_to_read = random.sample(range(row_groups), 1)
