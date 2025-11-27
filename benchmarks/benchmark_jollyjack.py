@@ -4,6 +4,7 @@ import pyarrow as pa
 import pandas as pd
 import numpy as np
 import concurrent.futures
+import threading
 import humanize
 import random
 import time
@@ -32,6 +33,7 @@ n_columns_to_read = 3_000
 chunk_size = 32_000
 parquet_path = "my.parquet" if sys.platform.startswith('win') else "/tmp/my.parquet"
 column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
+thread_local_data = threading.local()
 
 def purge_file_from_cache(path:str):
 
@@ -91,7 +93,8 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
 
 def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
 
-    np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F')
+    np_array = getattr(thread_local_data, 'np_array', np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F'))
+    thread_local_data.np_array = np_array
 
     row_groups_to_read = random.sample(range(row_groups), 1)
     jj.read_into_numpy(source = path
