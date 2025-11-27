@@ -51,7 +51,7 @@ manylinux-aarch64-image = "manylinux_2_28"
 ########################### cibuildwheel Linux #####################
 [tool.cibuildwheel.linux]
 # ODO: Use native arch64 runner once repo is moved to corporate GitHub org
-archs = ["auto"]
+archs = ["auto", "aarch64",]
 
 repair-wheel-command = [
  "auditwheel repair --exclude libarrow.so.2200 --exclude libparquet.so.2200 -w {dest_dir} {wheel}",
