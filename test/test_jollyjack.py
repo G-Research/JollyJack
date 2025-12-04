@@ -446,7 +446,7 @@ class TestJollyJack(unittest.TestCase):
     @parameterized.expand(itertools.product([False, True], [False, True], [False, True], [pa.float16(), pa.float32(), pa.float64()]))
     def test_read_filesystem(self, pre_buffer, use_threads, use_memory_map, dtype):
 
-        if os.environ.get('JJ_experimental_io_uring_mode') != None:
+        if os.environ.get('JJ_EXPERIMENTAL_IO_URING_MODE') != None:
             self.skipTest("io_uring is enabled but this test is not compatible with io_uring")
 
         with tempfile.TemporaryDirectory() as tmpdirname:
