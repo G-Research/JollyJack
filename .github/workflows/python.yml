@@ -38,7 +38,7 @@ jobs:
           echo "JJ_EXPERIMENTAL_IO_URING_MODE=ReadIntoMemoryIOUring" >> $GITHUB_ENV
         elif [[ "${{ matrix.mode }}" == "ReadIntoMemoryIOUring_ODirect" ]]; then
           echo "JJ_EXPERIMENTAL_IO_URING_MODE=ReadIntoMemoryIOUring" >> $GITHUB_ENV
-          echo "JJ_EXPERIMENTAL_O_DIRECT=ON" >> $GITHUB_ENV
+          echo "JJ_EXPERIMENTAL_O_DIRECT=4096" >> $GITHUB_ENV
         fi
     
     - name: Install dependencies
