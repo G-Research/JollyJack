@@ -205,7 +205,7 @@ OpenParquetFileForReading(const std::string& file_path, std::shared_ptr<parquet:
   }
 
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
-  auto fantom_reader = std::make_shared<FantomReader>(fd, flags & O_DIRECT);
+  auto fantom_reader = std::make_shared<FantomReader>(fd, block_size);
   auto parquet_reader = parquet::ParquetFileReader::Open(fantom_reader, reader_properties, metadata);
 
   return {fd, fantom_reader, std::move(parquet_reader)};
