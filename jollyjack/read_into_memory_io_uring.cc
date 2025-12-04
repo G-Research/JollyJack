@@ -26,7 +26,7 @@ using arrow::Status;
  */
 class FantomReader : public arrow::io::RandomAccessFile {
  public:
-  explicit FantomReader(int fd, bool respect_block_size);
+  explicit FantomReader(int fd, int block_size);
   ~FantomReader() override;
 
   arrow::Result<int64_t> ReadAt(
@@ -56,7 +56,7 @@ class FantomReader : public arrow::io::RandomAccessFile {
   int64_t cached_buffer_offset_ = 0;
 };
 
-FantomReader::FantomReader(int fd, bool respect_block_size)
+FantomReader::FantomReader(int fd, int block_size)
     : fd_(fd), pos_(0), file_size_(0) {
   struct stat file_stats;
   if (fstat(fd_, &file_stats) < 0) {
@@ -64,7 +64,7 @@ FantomReader::FantomReader(int fd, bool respect_block_size)
   }
 
   file_size_ = file_stats.st_size;
-  block_size_ = respect_block_size ? file_stats.st_blksize : 1;
+  block_size_ = std::max(block_size, 1);
 }
 
 FantomReader::~FantomReader() {
@@ -198,7 +198,7 @@ void ValidateRowRangePairs(const std::vector<int64_t>& row_ranges) {
 
 // Open Parquet file and create necessary readers
 std::tuple<int, std::shared_ptr<FantomReader>, std::unique_ptr<parquet::ParquetFileReader>>
-OpenParquetFileForReading(const std::string& file_path, std::shared_ptr<parquet::FileMetaData> metadata, int flags) {
+OpenParquetFileForReading(const std::string& file_path, std::shared_ptr<parquet::FileMetaData> metadata, int flags, int block_size) {
   int fd = open(file_path.c_str(), flags);
   if (fd < 0) {
     throw std::logic_error("Failed to open file: " + file_path + " - " + strerror(errno));
@@ -543,11 +543,15 @@ void ReadIntoMemoryIOUring(
   ValidateRowRangePairs(target_row_ranges);
 
   int flags = O_RDONLY;
-  char *env_value = getenv("JJ_experimental_O_DIRECT");
+  char *env_value = getenv("JJ_EXPERIMENTAL_O_DIRECT");
+  int block_size = 0;
   if (env_value)
+  {
     flags |= O_DIRECT;
+    block_size = atoi(env_value);
+  }
 
-  auto [fd, fantom_reader, parquet_reader] = OpenParquetFileForReading(parquet_file_path, file_metadata, flags);
+  auto [fd, fantom_reader, parquet_reader] = OpenParquetFileForReading(parquet_file_path, file_metadata, flags, block_size);
   file_metadata = parquet_reader->metadata();
 
   ResolveColumnNameToIndices(column_indices, column_names, file_metadata);

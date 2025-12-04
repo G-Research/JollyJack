@@ -238,9 +238,9 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
     print(f".")
     for jj_uring in [None] if sys.platform.startswith('win') else [None, 'ReadIntoMemoryIOUring', 'IOUringReader1']:
         if jj_uring is None:
-            os.environ.pop("JJ_experimental_io_uring_mode", None)
+            os.environ.pop("JJ_EXPERIMENTAL_IO_URING_MODE", None)
         else:
-            os.environ["JJ_experimental_io_uring_mode"] = jj_uring
+            os.environ["JJ_EXPERIMENTAL_IO_URING_MODE"] = jj_uring
         print(f".")
         for n_threads in [1, n_threads]:
             for pre_buffer in [False, True]:

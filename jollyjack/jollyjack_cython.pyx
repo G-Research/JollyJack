@@ -104,8 +104,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef shared_ptr[CRandomAccessFile] rd_handle
     cdef c_string pathstr
 
-    # Please note that the `JJ_experimental_io_uring_mode` variable is experimental and may be changed or removed in future versions
-    io_uring_mode = os.environ.get("JJ_experimental_io_uring_mode")
+    # Please note that the `JJ_EXPERIMENTAL_IO_URING_MODE` variable is experimental and may be changed or removed in future versions
+    io_uring_mode = os.environ.get("JJ_EXPERIMENTAL_IO_URING_MODE")
     if io_uring_mode is None:
         get_reader(source, use_memory_map, &rd_handle)
     elif io_uring_mode == 'ReadIntoMemoryIOUring':
@@ -130,7 +130,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     elif io_uring_mode == 'IOUringReader1':
         rd_handle = cjollyjack.GetIOUringReader1 (source.encode("utf-8"))
     else:
-        raise ValueError(f"Unsupprted JJ_experimental_io_uring_mode={io_uring_mode}")
+        raise ValueError(f"Unsupprted JJ_EXPERIMENTAL_IO_URING_MODE={io_uring_mode}")
 
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle
