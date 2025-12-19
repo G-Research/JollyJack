@@ -288,24 +288,26 @@ std::vector<CoalescedIORequest> MatchColumnsToCoalescedRanges(
     
     int64_t range_end = coalesced_range.offset + coalesced_range.length;
     
-    // Find all column ranges that overlap with this coalesced range
-    for (const auto& column_range : sorted_column_ranges) {
-      // Early termination: if column starts after coalesced range ends
-      if (column_range.file_offset >= range_end) {
+    // Binary search for first column that could overlap
+    auto start_it = std::lower_bound(
+      sorted_column_ranges.begin(),
+      sorted_column_ranges.end(),
+      coalesced_range.offset,
+      [](const ColumnFileRange& col, int64_t offset) {
+        return col.end_offset() <= offset;
+      }
+    );
+    
+    // Iterate only through potentially overlapping columns
+    for (auto it = start_it; it != sorted_column_ranges.end(); ++it) {
+      if (it->file_offset >= range_end) {
         break;
       }
-
-      // Check for overlap between column range and coalesced range
-      bool ranges_overlap = (column_range.file_offset < range_end && 
-                           column_range.end_offset() > coalesced_range.offset);
-
-      if (ranges_overlap) {
-        ColumnReadOperation column_op;
-        column_op.column_array_index = column_range.column_array_index;
-        column_op.parquet_column_index = column_indices[column_range.column_array_index];
-        
-        request.column_operations.push_back(column_op);
-      }
+      
+      request.column_operations.emplace_back();
+      ColumnReadOperation &column_op = request.column_operations.back();
+      column_op.column_array_index = it->column_array_index;
+      column_op.parquet_column_index = column_indices[it->column_array_index];
     }
   }
 
