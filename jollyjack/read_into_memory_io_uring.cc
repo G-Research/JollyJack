@@ -280,7 +280,9 @@ std::vector<CoalescedIORequest> MatchColumnsToCoalescedRanges(
   coalesced_requests.reserve(coalesced_ranges.size());
 
   for (const auto& coalesced_range : coalesced_ranges) {
-    CoalescedIORequest request;
+    // Construct directly in the vector
+    coalesced_requests.emplace_back();
+    CoalescedIORequest& request = coalesced_requests.back();
     request.file_offset = coalesced_range.offset;
     request.read_length = coalesced_range.length;
     
@@ -305,8 +307,6 @@ std::vector<CoalescedIORequest> MatchColumnsToCoalescedRanges(
         request.column_operations.push_back(column_op);
       }
     }
-
-    coalesced_requests.push_back(request);
   }
 
   return coalesced_requests;
