@@ -450,7 +450,8 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
       return arrow::Status::UnknownError(msg);
     }
 
-    completed_request.read_buffer->Resize(completed_request.read_length);
+    bool shrink_to_fit = false;
+    completed_request.read_buffer->Resize(completed_request.read_length, shrink_to_fit);
     fantom_reader->SetBuffer(completed_request.file_offset, completed_request.read_buffer);
 
     // Create column readers for each column in this request
