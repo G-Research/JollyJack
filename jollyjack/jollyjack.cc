@@ -22,7 +22,7 @@ struct ColumnIndex
 
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
-    , std::shared_ptr<parquet::ColumnReader> column_reader
+    , parquet::ColumnReader *column_reader
     , parquet::RowGroupMetaData *row_group_metadata
     , void* buffer
     , size_t buffer_size
@@ -141,7 +141,7 @@ arrow::Status ReadColumn (int column_index
             return arrow::Status::UnknownError(msg);
           }
 
-          auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader.get());
+          auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -161,7 +161,7 @@ arrow::Status ReadColumn (int column_index
             return arrow::Status::UnknownError(msg);
           }
 
-          auto typed_reader = static_cast<parquet::FloatReader *>(column_reader.get());
+          auto typed_reader = static_cast<parquet::FloatReader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -184,7 +184,7 @@ arrow::Status ReadColumn (int column_index
 
           const int64_t warp_size = 1024;
           parquet::FixedLenByteArray flba [warp_size];
-          auto typed_reader = static_cast<parquet::FixedLenByteArrayReader *>(column_reader.get());
+          auto typed_reader = static_cast<parquet::FixedLenByteArrayReader *>(column_reader);
 
           while (rows_to_read > 0)
           {
@@ -218,7 +218,7 @@ arrow::Status ReadColumn (int column_index
             return arrow::Status::UnknownError(msg);
           }
 
-          auto typed_reader = static_cast<parquet::Int32Reader *>(column_reader.get());
+          auto typed_reader = static_cast<parquet::Int32Reader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -238,7 +238,7 @@ arrow::Status ReadColumn (int column_index
             return arrow::Status::UnknownError(msg);
           }
 
-          auto typed_reader = static_cast<parquet::Int64Reader *>(column_reader.get());
+          auto typed_reader = static_cast<parquet::Int64Reader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -364,7 +364,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
               {
                 return ReadColumn(i
                   , target_row
-                  , row_group_reader->Column(column_indices[i])
+                  , row_group_reader->Column(column_indices[i]).get()
                   , row_group_metadata.get()
                   , buffer
                   , buffer_size

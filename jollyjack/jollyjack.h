@@ -31,7 +31,7 @@ std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader2(const std::string
 
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
-    , std::shared_ptr<parquet::ColumnReader> column_reader
+    , parquet::ColumnReader* column_reader
     , parquet::RowGroupMetaData *row_group_metadata
     , void* buffer
     , size_t buffer_size
