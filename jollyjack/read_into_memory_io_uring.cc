@@ -252,7 +252,6 @@ std::vector<ColumnFileRange> GetSortedColumnRanges(
     single_column[0] = column_indices[column_array_index];
 
     auto ranges = parquet_reader->GetReadRanges(single_row_group, single_column, 0, 1).ValueOrDie();
-
     column_ranges.emplace_back();
     ColumnFileRange& range_info = column_ranges.back();
     range_info.file_offset = ranges[0].offset;
@@ -270,13 +269,12 @@ std::vector<ColumnFileRange> GetSortedColumnRanges(
 }
 
 // Match individual column ranges to coalesced read ranges
-void MatchColumnsToCoalescedRanges(
+std::vector<CoalescedIORequest> MatchColumnsToCoalescedRanges(
   const std::vector<ColumnFileRange>& sorted_column_ranges,
   const std::vector<arrow::io::ReadRange>& coalesced_ranges,
-  const std::vector<int>& column_indices,
-  std::vector<CoalescedIORequest>& coalesced_requests
+  const std::vector<int>& column_indices
 ) {
-  coalesced_requests.clear();
+  std::vector<CoalescedIORequest> coalesced_requests;
   coalesced_requests.reserve(coalesced_ranges.size());
 
   for (const auto& coalesced_range : coalesced_ranges) {
@@ -313,6 +311,8 @@ void MatchColumnsToCoalescedRanges(
       column_op.parquet_column_index = column_indices[it->column_array_index];
     }
   }
+
+  return std::move(coalesced_requests);
 }
 
 // Submit all coalesced I/O requests to io_uring for parallel execution
@@ -576,7 +576,6 @@ void ReadIntoMemoryIOUring(
   try {
     int64_t current_target_row = 0;
     size_t target_row_ranges_index = 0;
-    std::vector<CoalescedIORequest> coalesced_requests;
 
     // Process each row group
     for (int row_group_index : row_groups) {
@@ -602,7 +601,7 @@ void ReadIntoMemoryIOUring(
       }
       else
       {
-        for (auto column_range: sorted_column_ranges)
+        for (const auto& column_range: sorted_column_ranges)
         {
           ::arrow::io::ReadRange read_range = 
           {
@@ -615,7 +614,7 @@ void ReadIntoMemoryIOUring(
       }
 
       // Create coalesced I/O requests to minimize file operations
-      MatchColumnsToCoalescedRanges(sorted_column_ranges, maybe_coalesced_ranges, column_indices, coalesced_requests);
+      auto coalesced_requests = MatchColumnsToCoalescedRanges(sorted_column_ranges, maybe_coalesced_ranges, column_indices);
 
       // Submit all I/O requests asynchronously
       SubmitIORequests(ring, coalesced_requests, fd, fantom_reader->GetBlockSize());
