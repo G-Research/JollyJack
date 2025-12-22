@@ -128,7 +128,9 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
                 , c_cache_options)
             return
     elif io_uring_mode == 'IOUringReader1':
-        rd_handle = cjollyjack.GetIOUringReader1 (source.encode("utf-8"))
+        rd_handle = cjollyjack.GetIOUringReader1 (source.encode("utf-8"))        
+    elif io_uring_mode == 'DirectReader':
+        rd_handle = cjollyjack.GetDirectReader (source.encode("utf-8"))
     else:
         raise ValueError(f"Unsupprted JJ_EXPERIMENTAL_IO_URING_MODE={io_uring_mode}")
 

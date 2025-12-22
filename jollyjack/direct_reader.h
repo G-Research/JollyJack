@@ -26,5 +26,5 @@ class DirectReader : public arrow::io::RandomAccessFile {
   int64_t pos_ = 0;
   int64_t size_ = 0;
   bool is_closed_ = false;
-  size_t block_size_ = 4096;
+  size_t block_size_;
 };

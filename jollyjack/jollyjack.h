@@ -27,7 +27,7 @@ void CopyToRowMajor (void* src_buffer,
     std::vector<int> row_indices);
 
 std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename);
-std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader2(const std::string& filename);
+std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename);
 
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
