@@ -17,6 +17,7 @@
 #include <arrow/result.h>
 #include <arrow/status.h>
 #include <arrow/buffer.h>
+#include <arrow/io/memory.h>
 #include <arrow/util/future.h>
 
 DirectReader::DirectReader(const std::string& filename, size_t block_size)
@@ -76,41 +77,26 @@ DirectReader::Read(int64_t nbytes) {
 
 arrow::Result<std::shared_ptr<arrow::Buffer>>
 DirectReader::ReadAt(int64_t position, int64_t nbytes) {
-  // Align position and size to block_size_
-  int64_t aligned_pos = (position / block_size_) * block_size_;
-  int64_t offset = position - aligned_pos;
-  int64_t aligned_size =
-      ((nbytes + offset + block_size_ - 1) / block_size_) * block_size_;
 
-  // Allocate aligned buffer
-  void* aligned_buffer = nullptr;
-  if (posix_memalign(&aligned_buffer, block_size_, aligned_size) != 0) {
-    return arrow::Status::OutOfMemory("Failed to allocate aligned buffer");
-  }
+    // Allocate buffer for this coalesced request
+  // Calculate aligned offset and length using bit hacks
+  int64_t align_down_mask = ~(block_size_ - 1);
+  // Mask for checking alignment, or effectively for aligning up with offset
+  // This is not directly used as a mask for 'align up' in the same way as 'align down'
+  int64_t aligned_start_offset = position & align_down_mask;
+  int64_t original_end_offset = position + nbytes;
+  // Align up for the end offset: (val + align - 1) & ~(align - 1)
+  int64_t aligned_end_offset = (original_end_offset + block_size_ - 1) & align_down_mask;
+  int64_t aligned_read_length = aligned_end_offset - aligned_start_offset;
+  
+  ARROW_ASSIGN_OR_RAISE(auto buffer, arrow::AllocateBuffer(aligned_read_length, block_size_));
+  ssize_t bytes_read = pread(fd_, buffer->mutable_data(), aligned_read_length, aligned_start_offset);
 
-  // Perform direct read
-  ssize_t bytes_read = pread(fd_, aligned_buffer, aligned_size, aligned_pos);
   if (bytes_read < 0) {
-    free(aligned_buffer);
     return arrow::Status::IOError("pread failed");
   }
 
-  // Copy requested data to Arrow buffer
-  ARROW_ASSIGN_OR_RAISE(auto buffer, arrow::AllocateResizableBuffer(nbytes));
-  
-  int64_t copy_size = std::min(nbytes, bytes_read - offset);
-  if (copy_size > 0) {
-    memcpy(buffer->mutable_data(),
-           static_cast<char*>(aligned_buffer) + offset, copy_size);
-  }
-  
-  free(aligned_buffer);
-
-  if (copy_size < nbytes) {
-    ARROW_RETURN_NOT_OK(buffer->Resize(copy_size));
-  }
-
-  return std::shared_ptr<arrow::Buffer>(std::move(buffer));
+  return arrow::SliceBuffer(std::move(buffer), position - aligned_start_offset, nbytes);
 }
 
 arrow::Future<std::shared_ptr<arrow::Buffer>>
