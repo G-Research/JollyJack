@@ -18,6 +18,7 @@ class DirectReader : public arrow::io::RandomAccessFile {
   arrow::Result<std::shared_ptr<arrow::Buffer>> ReadAt(int64_t position, int64_t nbytes) override;
   arrow::Future<std::shared_ptr<arrow::Buffer>> ReadAsync(const arrow::io::IOContext& ctx, int64_t position,int64_t nbytes) override;
   arrow::Result<int64_t> GetSize() override;
+  arrow::Status WillNeed(const std::vector<arrow::io::ReadRange>& ranges);
 
  private:
   int fd_;

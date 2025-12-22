@@ -108,3 +108,8 @@ DirectReader::ReadAsync(const arrow::io::IOContext& ctx, int64_t position,
 arrow::Result<int64_t> DirectReader::GetSize() {
   return size_;
 }
+
+arrow::Status WillNeed(const std::vector<arrow::io::ReadRange>& ranges)
+{
+  return arrow::Status::OK();
+}
