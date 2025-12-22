@@ -236,7 +236,7 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
                 print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
 
     print(f".")
-    for (jj_uring, jj_direct) in [None] if sys.platform.startswith('win') else [(None, None), ('ReadIntoMemoryIOUring', None), ('ReadIntoMemoryIOUring', '4096'), ('IOUringReader1', None)]:
+    for (jj_uring, jj_direct) in [(None, None)] if sys.platform.startswith('win') else [(None, None), ('ReadIntoMemoryIOUring', None), ('ReadIntoMemoryIOUring', '4096'), ('IOUringReader1', None)]:
 
         if jj_uring is None:
             os.environ.pop("JJ_EXPERIMENTAL_IO_URING_MODE", None)
