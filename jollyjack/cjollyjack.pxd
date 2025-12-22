@@ -33,6 +33,7 @@ cdef extern from "jollyjack.h":
         vector[int] row_indices) except + nogil
 
     cdef shared_ptr[CRandomAccessFile] GetIOUringReader1 (const string& path) except + nogil
+    cdef shared_ptr[CRandomAccessFile] GetDirectReader (const string& path) except + nogil
 
 cdef extern from "jollyjack_io_uring.h":
     cdef void ReadIntoMemoryIOUring (const string& path
