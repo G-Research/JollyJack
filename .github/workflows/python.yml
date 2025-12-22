@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        mode: [None, IOUringReader1, ReadIntoMemoryIOUring, ReadIntoMemoryIOUring_ODirect] 
+        mode: [None, IOUringReader1, DirectReader, ReadIntoMemoryIOUring, ReadIntoMemoryIOUring_ODirect] 
       fail-fast: false
     steps:
     - uses: actions/checkout@v6
@@ -34,6 +34,8 @@ jobs:
       run: |
         if [[ "${{ matrix.mode }}" == "IOUringReader1" ]]; then
           echo "JJ_EXPERIMENTAL_IO_URING_MODE=IOUringReader1" >> $GITHUB_ENV
+        elif [[ "${{ matrix.mode }}" == "DirectReader" ]]; then
+          echo "JJ_EXPERIMENTAL_IO_URING_MODE=DirectReader" >> $GITHUB_ENV
         elif [[ "${{ matrix.mode }}" == "ReadIntoMemoryIOUring" ]]; then
           echo "JJ_EXPERIMENTAL_IO_URING_MODE=ReadIntoMemoryIOUring" >> $GITHUB_ENV
         elif [[ "${{ matrix.mode }}" == "ReadIntoMemoryIOUring_ODirect" ]]; then
