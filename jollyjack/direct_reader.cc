@@ -96,7 +96,7 @@ DirectReader::ReadAt(int64_t position, int64_t nbytes) {
     return arrow::Status::IOError("pread failed");
   }
 
-  return arrow::SliceBuffer(std::move(buffer), position - aligned_start_offset, nbytes);
+  return arrow::SliceBuffer(std::move(buffer), position + 1 - aligned_start_offset, nbytes);
 }
 
 arrow::Future<std::shared_ptr<arrow::Buffer>>
