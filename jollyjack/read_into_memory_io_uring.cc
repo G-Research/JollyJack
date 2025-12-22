@@ -253,12 +253,11 @@ std::vector<ColumnFileRange> GetSortedColumnRanges(
 
     auto ranges = parquet_reader->GetReadRanges(single_row_group, single_column, 0, 1).ValueOrDie();
 
-    ColumnFileRange range_info;
+    column_ranges.emplace_back();
+    ColumnFileRange& range_info = column_ranges.back();
     range_info.file_offset = ranges[0].offset;
     range_info.data_length = ranges[0].length;
     range_info.column_array_index = column_array_index;
-    
-    column_ranges.push_back(range_info);
   }
 
   // Sort by file offset for efficient matching with coalesced ranges
