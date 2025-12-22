@@ -277,30 +277,17 @@ std::vector<CoalescedIORequest> MatchColumnsToCoalescedRanges(
   std::vector<CoalescedIORequest> coalesced_requests;
   coalesced_requests.reserve(coalesced_ranges.size());
 
+  auto it = sorted_column_ranges.begin();
   for (const auto& coalesced_range : coalesced_ranges) {
     // Construct directly in the vector
     coalesced_requests.emplace_back();
     CoalescedIORequest& request = coalesced_requests.back();
     request.file_offset = coalesced_range.offset;
     request.read_length = coalesced_range.length;
-    
     int64_t range_end = coalesced_range.offset + coalesced_range.length;
-    
-    // Binary search for first column that could overlap
-    auto start_it = std::lower_bound(
-      sorted_column_ranges.begin(),
-      sorted_column_ranges.end(),
-      coalesced_range.offset,
-      [](const ColumnFileRange& col, int64_t offset) {
-        return col.end_offset() <= offset;
-      }
-    );
-
-    // Purely speculative allocation
-    request.column_operations.reserve(64);
 
     // Iterate only through potentially overlapping columns
-    for (auto it = start_it; it != sorted_column_ranges.end(); ++it) {
+    for (; it != sorted_column_ranges.end(); ++it) {
       if (it->file_offset >= range_end) {
         break;
       }
@@ -547,11 +534,13 @@ void ReadIntoMemoryIOUring(
   ValidateRowRangePairs(target_row_ranges);
 
   int flags = O_RDONLY;
+  bool use_direct_mode = false;
   char *env_value = getenv("JJ_EXPERIMENTAL_O_DIRECT");
   int block_size = 0;
   if (env_value)
   {
     flags |= O_DIRECT;
+    use_direct_mode = true;
     block_size = atoi(env_value);
   }
 
@@ -597,7 +586,10 @@ void ReadIntoMemoryIOUring(
             cache_options.hole_size_limit, cache_options.range_size_limit
           ).ValueOrDie();
 
-        fantom_reader->WillNeed(maybe_coalesced_ranges);
+        if (!use_direct_mode)
+        {
+          fantom_reader->WillNeed(maybe_coalesced_ranges);
+        }
       }
       else
       {
