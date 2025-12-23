@@ -17,17 +17,17 @@
 #include <arrow/util/future.h>
 
 DirectReader::DirectReader(const std::string& filename, size_t block_size)
-    : filename_(filename), pos_(0), size_(0), is_closed_(false),
+    : pos_(0), size_(0), is_closed_(false),
       block_size_(block_size) {
-  fd_ = open(filename_.c_str(), O_RDONLY | O_DIRECT);
+  fd_ = open(filename.c_str(), O_RDONLY | O_DIRECT);
   if (fd_ < 0) {
-    throw std::runtime_error("Failed to open file with O_DIRECT: " + filename_);
+    throw std::runtime_error("Failed to open file with O_DIRECT: " + filename);
   }
 
   struct stat st;
   if (fstat(fd_, &st) < 0) {
     close(fd_);
-    throw std::runtime_error("fstat failed: " + filename_);
+    throw std::runtime_error("fstat failed: " + filename);
   }
   size_ = st.st_size;
 }

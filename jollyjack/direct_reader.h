@@ -22,10 +22,8 @@ class DirectReader : public arrow::io::RandomAccessFile {
 
  private:
   int fd_;
-  //static thread_local io_uring ring_;
-  std::string filename_;
   int64_t pos_ = 0;
   int64_t size_ = 0;
-  bool is_closed_ = false;
   size_t block_size_;
+  bool is_closed_ = false;
 };
