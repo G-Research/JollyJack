@@ -528,7 +528,7 @@ void ReadIntoMemoryIOUring(
   const std::vector<int>& target_column_indices,
   bool pre_buffer,
   bool use_threads,
-  bool use_direct_mode,
+  bool use_o_direct,
   int64_t expected_total_rows, 
   arrow::io::CacheOptions cache_options)
 {
@@ -536,7 +536,7 @@ void ReadIntoMemoryIOUring(
 
   int flags = O_RDONLY;
   int block_size = 0;
-  if (use_direct_mode)
+  if (use_o_direct)
   {
     flags |= O_DIRECT;
     block_size = 4096;
@@ -584,7 +584,7 @@ void ReadIntoMemoryIOUring(
             cache_options.hole_size_limit, cache_options.range_size_limit
           ).ValueOrDie();
 
-        if (!use_direct_mode)
+        if (!use_o_direct)
         {
           fantom_reader->WillNeed(maybe_coalesced_ranges);
         }

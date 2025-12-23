@@ -49,7 +49,7 @@ cdef extern from "read_into_memory_io_uring.h":
         , const vector[int] &target_column_indices
         , bool pre_buffer
         , bool use_threads
-        , bool use_direct_mode
+        , bool use_o_direct
         , int64_t expected_rows        
         , CCacheOptions cache_options
         ) except + nogil

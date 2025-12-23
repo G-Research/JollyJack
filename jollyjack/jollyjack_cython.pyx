@@ -103,13 +103,14 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
 
     cdef shared_ptr[CRandomAccessFile] rd_handle
     cdef c_string pathstr
-
+    cdef bool cuse_o_direct
     # Please note that the `JJ_EXPERIMENTAL_READER` variable is experimental and may be changed or removed in future versions
     jj_experimental_reader = os.environ.get("JJ_EXPERIMENTAL_READER")
     if jj_experimental_reader is None:
         get_reader(source, use_memory_map, &rd_handle)
-    elif jj_experimental_reader == 'ReadIntoMemoryIOUring':
+    elif jj_experimental_reader == 'ReadIntoMemoryIOUring' || jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect':
         pathstr = source.encode("utf-8")
+        cuse_o_direct = jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect'
         with nogil:
             cjollyjack.ReadIntoMemoryIOUring (pathstr
                 , c_metadata
@@ -124,27 +125,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
                 , ctarget_column_indices
                 , cpre_buffer
                 , cuse_threads
-                , false
-                , cexpected_rows
-                , c_cache_options)
-            return
-    elif jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect':
-        pathstr = source.encode("utf-8")
-        with nogil:
-            cjollyjack.ReadIntoMemoryIOUring (pathstr
-                , c_metadata
-                , np_array.data
-                , cbuffer_size
-                , cstride0_size
-                , cstride1_size
-                , ccolumn_indices
-                , crow_group_indices
-                , ctarget_row_ranges
-                , ccolumn_names
-                , ctarget_column_indices
-                , cpre_buffer
-                , cuse_threads
-                , true
+                , cuse_o_direct
                 , cexpected_rows
                 , c_cache_options)
             return
