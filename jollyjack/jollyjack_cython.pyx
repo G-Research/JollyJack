@@ -104,11 +104,11 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef shared_ptr[CRandomAccessFile] rd_handle
     cdef c_string pathstr
 
-    # Please note that the `JJ_EXPERIMENTAL_IO_URING_MODE` variable is experimental and may be changed or removed in future versions
-    io_uring_mode = os.environ.get("JJ_EXPERIMENTAL_IO_URING_MODE")
-    if io_uring_mode is None:
+    # Please note that the `JJ_EXPERIMENTAL_READER` variable is experimental and may be changed or removed in future versions
+    jj_experimental_reader = os.environ.get("JJ_EXPERIMENTAL_READER")
+    if jj_experimental_reader is None:
         get_reader(source, use_memory_map, &rd_handle)
-    elif io_uring_mode == 'ReadIntoMemoryIOUring':
+    elif jj_experimental_reader == 'ReadIntoMemoryIOUring':
         pathstr = source.encode("utf-8")
         with nogil:
             cjollyjack.ReadIntoMemoryIOUring (pathstr
@@ -124,15 +124,36 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
                 , ctarget_column_indices
                 , cpre_buffer
                 , cuse_threads
+                , false
                 , cexpected_rows
                 , c_cache_options)
             return
-    elif io_uring_mode == 'IOUringReader1':
+    elif jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect':
+        pathstr = source.encode("utf-8")
+        with nogil:
+            cjollyjack.ReadIntoMemoryIOUring (pathstr
+                , c_metadata
+                , np_array.data
+                , cbuffer_size
+                , cstride0_size
+                , cstride1_size
+                , ccolumn_indices
+                , crow_group_indices
+                , ctarget_row_ranges
+                , ccolumn_names
+                , ctarget_column_indices
+                , cpre_buffer
+                , cuse_threads
+                , true
+                , cexpected_rows
+                , c_cache_options)
+            return
+    elif jj_experimental_reader == 'IOUringReader1':
         rd_handle = cjollyjack.GetIOUringReader1 (source.encode("utf-8"))        
-    elif io_uring_mode == 'DirectReader':
+    elif jj_experimental_reader == 'DirectReader':
         rd_handle = cjollyjack.GetDirectReader (source.encode("utf-8"))
     else:
-        raise ValueError(f"Unsupprted JJ_EXPERIMENTAL_IO_URING_MODE={io_uring_mode}")
+        raise ValueError(f"Unsupprted JJ_EXPERIMENTAL_READER={jj_experimental_reader}")
 
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle

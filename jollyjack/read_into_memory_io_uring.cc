@@ -526,22 +526,20 @@ void ReadIntoMemoryIOUring(
   const std::vector<int64_t>& target_row_ranges,
   const std::vector<std::string>& column_names,
   const std::vector<int>& target_column_indices,
-  bool pre_buffer,  // Currently unused but kept for API compatibility
+  bool pre_buffer,
   bool use_threads,
+  bool use_direct_mode,
   int64_t expected_total_rows, 
   arrow::io::CacheOptions cache_options)
 {
   ValidateRowRangePairs(target_row_ranges);
 
   int flags = O_RDONLY;
-  bool use_direct_mode = false;
-  char *env_value = getenv("JJ_EXPERIMENTAL_O_DIRECT");
   int block_size = 0;
-  if (env_value)
+  if (use_direct_mode)
   {
     flags |= O_DIRECT;
-    use_direct_mode = true;
-    block_size = atoi(env_value);
+    block_size = 4096;
   }
 
   auto [fd, fantom_reader, parquet_reader] = OpenParquetFileForReading(parquet_file_path, file_metadata, flags, block_size);

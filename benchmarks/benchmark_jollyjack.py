@@ -236,23 +236,18 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
                 print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
 
     print(f".")
-    for (jj_uring, jj_direct) in [(None, None)] if sys.platform.startswith('win') else [(None, None), ('DirectReader', None), ('ReadIntoMemoryIOUring', None), ('ReadIntoMemoryIOUring', '4096'), ('IOUringReader1', None)]:
+    for jj_reader in [None] if sys.platform.startswith('win') else [None, 'DirectReader', 'ReadIntoMemoryIOUring', 'ReadIntoMemoryIOUring_ODirect', 'IOUringReader1']:
 
-        if jj_uring is None:
-            os.environ.pop("JJ_EXPERIMENTAL_IO_URING_MODE", None)
+        if jj_reader is None:
+            os.environ.pop("JJ_EXPERIMENTAL_READER", None)
         else:
-            os.environ["JJ_EXPERIMENTAL_IO_URING_MODE"] = jj_uring
-
-        if jj_direct is None:
-            os.environ.pop("JJ_EXPERIMENTAL_O_DIRECT", None)
-        else:
-            os.environ["JJ_EXPERIMENTAL_O_DIRECT"] = jj_direct
+            os.environ["JJ_EXPERIMENTAL_READER"] = jj_reader
 
         print(f".")
         for n_threads in [1, n_threads]:
             for pre_buffer in [False, True]:
                 for use_threads in [False, True]:
-                    print(f"`JollyJack.read_into_numpy` jj_uring:{jj_uring},  jj_direct:{jj_direct}, n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))} seconds")
+                    print(f"`JollyJack.read_into_numpy` jj_reader:{jj_reader}, n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))} seconds")
 
     print(f".")
     for n_threads in [1, n_threads]:

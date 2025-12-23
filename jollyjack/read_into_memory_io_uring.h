@@ -12,7 +12,8 @@ void ReadIntoMemoryIOUring (const std::string& path
     , const std::vector<std::string> &column_names
     , const std::vector<int> &target_column_indices
     , bool pre_buffer
-    , bool use_threads
+    , bool use_threads    
+    , bool use_direct_mode
     , int64_t expected_rows
     , arrow::io::CacheOptions cache_options);
 
