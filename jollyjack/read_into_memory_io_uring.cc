@@ -299,7 +299,7 @@ std::vector<CoalescedIORequest> MatchColumnsToCoalescedRanges(
     }
   }
 
-  return std::move(coalesced_requests);
+  return coalesced_requests;
 }
 
 // Submit all coalesced I/O requests to io_uring for parallel execution
