@@ -661,7 +661,7 @@ std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& 
 #else
 std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename)
 {  
-    throw std::runtime_error("O_DIRECT is not available on this platform!"); 
+    throw std::runtime_error("DirectReader is not available on this platform!"); 
 }
 #endif
 
