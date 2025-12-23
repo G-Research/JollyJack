@@ -89,7 +89,6 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> DirectReader::ReadAt(int64_t posit
 
 arrow::Future<std::shared_ptr<arrow::Buffer>> 
 DirectReader::ReadAsync(const arrow::io::IOContext& ctx, int64_t position, int64_t nbytes) {
-  if (nbytes > 0) throw new std::runtime_error("whoops");
   return RandomAccessFile::ReadAsync(ctx, position, nbytes);
 }
 
