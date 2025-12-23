@@ -1,17 +1,12 @@
 /**
  * @brief Implements an Arrow RandomAccessFile that performs direct I/O reads
  *        with O_DIRECT mode and configurable block size.
- *
- * @author Alan Fitton
  */
 
 #include "direct_reader.h"
 
 #include <fcntl.h>
-#include <unistd.h>
 #include <sys/stat.h>
-#include <cstring>
-#include <stdexcept>
 #include <iostream>
 
 #include <arrow/result.h>
@@ -68,24 +63,17 @@ arrow::Result<int64_t> DirectReader::Read(int64_t nbytes, void* out) {
   return buffer->size();
 }
 
-arrow::Result<std::shared_ptr<arrow::Buffer>>
-DirectReader::Read(int64_t nbytes) {
+arrow::Result<std::shared_ptr<arrow::Buffer>> DirectReader::Read(int64_t nbytes) {
   ARROW_ASSIGN_OR_RAISE(auto buffer, ReadAt(pos_, nbytes));
   pos_ += buffer->size();
   return buffer;
 }
 
-arrow::Result<std::shared_ptr<arrow::Buffer>>
-DirectReader::ReadAt(int64_t position, int64_t nbytes) {
-
-    // Allocate buffer for this coalesced request
+arrow::Result<std::shared_ptr<arrow::Buffer>> DirectReader::ReadAt(int64_t position, int64_t nbytes) {
   // Calculate aligned offset and length using bit hacks
   int64_t align_down_mask = ~(block_size_ - 1);
-  // Mask for checking alignment, or effectively for aligning up with offset
-  // This is not directly used as a mask for 'align up' in the same way as 'align down'
   int64_t aligned_start_offset = position & align_down_mask;
   int64_t original_end_offset = position + nbytes;
-  // Align up for the end offset: (val + align - 1) & ~(align - 1)
   int64_t aligned_end_offset = (original_end_offset + block_size_ - 1) & align_down_mask;
   int64_t aligned_read_length = aligned_end_offset - aligned_start_offset;
   
@@ -99,9 +87,9 @@ DirectReader::ReadAt(int64_t position, int64_t nbytes) {
   return arrow::SliceBuffer(std::move(buffer), position - aligned_start_offset, nbytes);
 }
 
-arrow::Future<std::shared_ptr<arrow::Buffer>>
-DirectReader::ReadAsync(const arrow::io::IOContext& ctx, int64_t position,
-                        int64_t nbytes) {
+arrow::Future<std::shared_ptr<arrow::Buffer>> 
+DirectReader::ReadAsync(const arrow::io::IOContext& ctx, int64_t position, int64_t nbytes) {
+  if (nbytes > 0) throw new std::runtime_error("whoops");
   return RandomAccessFile::ReadAsync(ctx, position, nbytes);
 }
 

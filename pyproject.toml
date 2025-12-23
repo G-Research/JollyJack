@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jollyjack"
-version = "0.20.2"
+version = "0.20.3"
 description = "Read parquet data directly into numpy array"
 readme = "README.md"
 requires-python = ">=3.9"
