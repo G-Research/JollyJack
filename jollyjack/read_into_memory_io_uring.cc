@@ -105,17 +105,12 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> FantomReader::ReadAt(int64_t posit
     return arrow::Status::UnknownError(error_message);
   }
 
-  // Allocate buffer for this coalesced request
   // Calculate aligned offset and length using bit hacks
   int64_t align_down_mask = ~(block_size_ - 1);
-  // Mask for checking alignment, or effectively for aligning up with offset
-  // This is not directly used as a mask for 'align up' in the same way as 'align down'
   int64_t aligned_start_offset = position & align_down_mask;
   int64_t original_end_offset = position + nbytes;
-  // Align up for the end offset: (val + align - 1) & ~(align - 1)
   int64_t aligned_end_offset = (original_end_offset + block_size_ - 1) & align_down_mask;
   int64_t aligned_read_length = aligned_end_offset - aligned_start_offset;
-
   int64_t updated_nbytes = nbytes + (position - aligned_start_offset);
 
   // Allocate new buffer and read from file
@@ -317,18 +312,12 @@ void SubmitIORequests(
       throw std::logic_error("Failed to get submission queue entry from io_uring");
     }
 
-    // Allocate buffer for this coalesced request
     // Calculate aligned offset and length using bit hacks
     int64_t align_down_mask = ~(block_size - 1);
-    // Mask for checking alignment, or effectively for aligning up with offset
-    // This is not directly used as a mask for 'align up' in the same way as 'align down'
     int64_t aligned_start_offset = request.file_offset & align_down_mask;
     int64_t original_end_offset = request.file_offset + request.read_length;
-    // Align up for the end offset: (val + align - 1) & ~(align - 1)
     int64_t aligned_end_offset = (original_end_offset + block_size - 1) & align_down_mask;
     int64_t aligned_read_length = aligned_end_offset - aligned_start_offset;
-
-    // allign file offset + bump the read_lengtrh
     request.read_length = request.read_length + request.file_offset - aligned_start_offset;
     request.file_offset = aligned_start_offset;
 
