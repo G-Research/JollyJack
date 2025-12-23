@@ -108,7 +108,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     jj_experimental_reader = os.environ.get("JJ_EXPERIMENTAL_READER")
     if jj_experimental_reader is None:
         get_reader(source, use_memory_map, &rd_handle)
-    elif jj_experimental_reader == 'ReadIntoMemoryIOUring' || jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect':
+    elif (jj_experimental_reader == 'ReadIntoMemoryIOUring' or jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect'):
         pathstr = source.encode("utf-8")
         cuse_o_direct = jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect'
         with nogil:
