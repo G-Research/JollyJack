@@ -109,7 +109,7 @@ arrow::Result<int64_t> DirectReader::GetSize() {
   return size_;
 }
 
-arrow::Status WillNeed(const std::vector<arrow::io::ReadRange>& ranges)
+arrow::Status DirectReader::WillNeed(const std::vector<arrow::io::ReadRange>& ranges)
 {
   return arrow::Status::OK();
 }
