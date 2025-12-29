@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        mode: [None, A, IOUringReader1, DirectReader, ReadIntoMemoryIOUring, ReadIntoMemoryIOUring_ODirect] 
+        mode: [None, IOUringReader1, DirectReader, ReadIntoMemoryIOUring, ReadIntoMemoryIOUring_ODirect] 
       fail-fast: false
     steps:
     - uses: actions/checkout@v6
