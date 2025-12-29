@@ -528,7 +528,7 @@ void ReadIntoMemoryIOUring(
   if (use_o_direct)
   {
     flags |= O_DIRECT;
-    block_size = 8;
+    block_size = 4096;
   }
 
   auto [fd, fantom_reader, parquet_reader] = OpenParquetFileForReading(parquet_file_path, file_metadata, flags, block_size);
