@@ -656,7 +656,10 @@ std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string
 #include "direct_reader.h"
 std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename)
 {  
-   return std::make_shared<DirectReader>(filename, 8);
+  if (!filename.empty())
+    throw std::runtime_error("Whoops!"); 
+  return std::make_shared<DirectReader>(filename, 8);
+   
 }
 #else
 std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename)
