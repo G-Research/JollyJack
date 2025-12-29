@@ -33,14 +33,12 @@ jobs:
     - name: Set environment variables
       run: |
         if [[ "${{ matrix.mode }}" == "IOUringReader1" ]]; then
-          echo "JJ_EXPERIMENTAL_IO_URING_MODE=IOUringReader1" >> $GITHUB_ENV
-        elif [[ "${{ matrix.mode }}" == "DirectReader" ]]; then
-          echo "JJ_EXPERIMENTAL_IO_URING_MODE=DirectReader" >> $GITHUB_ENV
+          echo "JJ_EXPERIMENTAL_READER=IOUringReader1" >> $GITHUB_ENV
         elif [[ "${{ matrix.mode }}" == "ReadIntoMemoryIOUring" ]]; then
-          echo "JJ_EXPERIMENTAL_IO_URING_MODE=ReadIntoMemoryIOUring" >> $GITHUB_ENV
+          echo "JJ_EXPERIMENTAL_READER=ReadIntoMemoryIOUring" >> $GITHUB_ENV
         elif [[ "${{ matrix.mode }}" == "ReadIntoMemoryIOUring_ODirect" ]]; then
-          echo "JJ_EXPERIMENTAL_IO_URING_MODE=ReadIntoMemoryIOUring" >> $GITHUB_ENV
-          echo "JJ_EXPERIMENTAL_O_DIRECT=4096" >> $GITHUB_ENV
+          echo "JJ_EXPERIMENTAL_READER=ReadIntoMemoryIOUring_ODirect" >> $GITHUB_ENV
+
         fi
     
     - name: Install dependencies
