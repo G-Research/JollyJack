@@ -177,11 +177,15 @@ def worker_jollyjack_torch(pre_buffer, dtype, path):
                         , pre_buffer = pre_buffer
                         , use_threads = False)
 
+def calculate_data_size(dtype):
+    return chunk_size * n_columns_to_read * dtype.byte_width
+
 def measure_reading(max_workers, worker):
 
     def dummy_worker():
         time.sleep(0.01)
 
+    data_set_bytes = 0
     tt = []
     # measure multiple times and take the fastest run
     for _ in range(5):
@@ -206,10 +210,12 @@ def measure_reading(max_workers, worker):
 
         pool.shutdown(wait=True)
         tt.append(time.time() - t)
-
+        data_set_bytes = len(work_results) * calculate_data_size(dtype=dtype)
+        
     tts = [f"{t:.2f}" for t in tt]
     tts = f"[{', '.join(tts)}]"
-    return f"{min(tt):.2f} seconds -> {tts}"
+    throughput_gbps = data_set_bytes / min (tt) / (1024 * 1024 * 1024) * 8
+    return f"{min(tt):.2f}s, {throughput_gbps:.2f} Gb/s -> {tts}"
 
 print(f".")
 print (f"benchmark_mode = {benchmark_mode}, n_files = {n_files}, n_repeats = {n_repeats}")
@@ -224,16 +230,17 @@ print (f"jollyjack.version = {jj.__version__}")
 
 for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None, pa.float16())]:
     
-    print(f".")
     for f in range(n_files):
         path = f"{parquet_path}{f}"
         genrate_data(path = path, n_row_groups = row_groups, n_columns = n_columns, compression = compression, dtype = dtype)
 
+    print(f"....................................")
+    print(f"dtype:{dtype}, compression={compression}:")
     print(f".")
     for n_threads in [1, n_threads]:
         for pre_buffer in [False, True]:
             for use_threads in [False, True]:
-                print(f"`ParquetReader.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
+                print(f"`pq.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
 
     print(f".")
     for jj_reader in [None] if sys.platform.startswith('win') else [None, 'DirectReader', 'ReadIntoMemoryIOUring', 'ReadIntoMemoryIOUring_ODirect', 'IOUringReader1']:
@@ -247,19 +254,19 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
         for n_threads in [1, n_threads]:
             for pre_buffer in [False, True]:
                 for use_threads in [False, True]:
-                    print(f"`JollyJack.read_into_numpy` jj_reader:{jj_reader}, n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))} seconds")
+                    print(f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}")
 
     print(f".")
     for n_threads in [1, n_threads]:
         for pre_buffer in [False, True]:
-            print(f"`JollyJack.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}")
+            print(f"`jj.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}")
 
     print(f".")
     for jj_variant in [1, 2]:
         os.environ["JJ_copy_to_row_major"] = str(jj_variant)
         for n_threads in [1, n_threads]:
-            print(f"`JollyJack.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}")
+            print(f"`jj.copy_to_row_major` n_threads:{n_threads}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}")
 
     print(f".")
     for n_threads in [1, n_threads]:
-        print(f"`numpy.copy_to_row_major` n_threads:{n_threads}, dtype:{dtype}, compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}")
+        print(f"`np.copy_to_row_major` compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}")
