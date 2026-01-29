@@ -17,8 +17,7 @@
 #include <arrow/util/future.h>
 
 DirectReader::DirectReader(const std::string& filename, size_t block_size)
-    : pos_(0), size_(0), is_closed_(false),
-      block_size_(block_size) {
+    : block_size_(block_size) {
   fd_ = open(filename.c_str(), O_RDONLY | O_DIRECT);
   if (fd_ < 0) {
     throw std::runtime_error("Failed to open file with O_DIRECT: " + filename);

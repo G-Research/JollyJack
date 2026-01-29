@@ -145,7 +145,7 @@ arrow::Status ReadColumn (int column_index
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
-            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (double *)&base_ptr[target_offset], &tmp_values_read);
+            std::ignore = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (double *)&base_ptr[target_offset], &tmp_values_read);
             target_offset += tmp_values_read * stride0_size;
             values_read += tmp_values_read;
             rows_to_read -= tmp_values_read;
@@ -165,7 +165,7 @@ arrow::Status ReadColumn (int column_index
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
-            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (float *)&base_ptr[target_offset], &tmp_values_read);
+            std::ignore = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (float *)&base_ptr[target_offset], &tmp_values_read);
             target_offset += tmp_values_read * stride0_size;
             values_read += tmp_values_read;
             rows_to_read -= tmp_values_read;
@@ -175,7 +175,7 @@ arrow::Status ReadColumn (int column_index
 
         case parquet::Type::FIXED_LEN_BYTE_ARRAY:
         {
-          if (stride0_size != column_reader->descr()->type_length())
+          if ((int32_t)stride0_size != column_reader->descr()->type_length())
           {
             auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(column_reader->descr()->type_length()) + 
               ", but the target value size is " + std::to_string(stride0_size) + "!");
@@ -189,10 +189,10 @@ arrow::Status ReadColumn (int column_index
           while (rows_to_read > 0)
           {
               int64_t tmp_values_read = 0;
-              auto read_levels = typed_reader->ReadBatch(std::min(warp_size, rows_to_read), nullptr, nullptr, flba, &tmp_values_read);
+              std::ignore = typed_reader->ReadBatch(std::min(warp_size, rows_to_read), nullptr, nullptr, flba, &tmp_values_read);
               if (tmp_values_read > 0)
               {
-                if (flba[tmp_values_read - 1].ptr - flba[0].ptr != (tmp_values_read - 1) * stride0_size)
+                if (flba[0].ptr + (tmp_values_read - 1) * stride0_size != flba[tmp_values_read - 1].ptr)
                 {
                   // TODO(marcink)  We could copy each FLB pointed value one by one instead of throwing an exception.
                   //                However, at the time of this implementation, non-contiguous memory is impossible, so that exception is not expected to occur anyway.
@@ -222,7 +222,7 @@ arrow::Status ReadColumn (int column_index
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
-            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (int32_t *)&base_ptr[target_offset], &tmp_values_read);
+            std::ignore = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (int32_t *)&base_ptr[target_offset], &tmp_values_read);
             target_offset += tmp_values_read * stride0_size;
             values_read += tmp_values_read;
             rows_to_read -= tmp_values_read;
@@ -242,7 +242,7 @@ arrow::Status ReadColumn (int column_index
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
-            auto read_levels = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (int64_t *)&base_ptr[target_offset], &tmp_values_read);
+            std::ignore = typed_reader->ReadBatch(rows_to_read, nullptr, nullptr, (int64_t *)&base_ptr[target_offset], &tmp_values_read);
             target_offset += tmp_values_read * stride0_size;
             values_read += tmp_values_read;
             rows_to_read -= tmp_values_read;
