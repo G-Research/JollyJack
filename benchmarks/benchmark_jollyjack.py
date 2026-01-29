@@ -93,8 +93,12 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
 
 def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
 
-    np_array = getattr(thread_local_data, 'np_array', np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order='F'))
-    thread_local_data.np_array = np_array
+    np_array = getattr(thread_local_data, 'np_array', None)
+    if np_array is None:
+        np_array = np.empty((chunk_size, n_columns_to_read), dtype=dtype, order='F')
+        # By writing all zeros we make sure that the memory is properly allocated and mapped to physical RAM (avoid Memory Allocation Contention)
+        np_array[:] = 0
+        thread_local_data.np_array = np_array
 
     jj.read_into_numpy(source = path
                         , metadata = None
@@ -178,18 +182,12 @@ def calculate_data_size(dtype):
 
 def measure_reading(max_workers, worker):
 
-    def dummy_worker():
-        time.sleep(0.01)
-
-    data_set_bytes = 0
     tt = []
+    data_set_bytes = 0
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+
     # measure multiple times and take the fastest run
     for _ in range(5):
-        # Create the pool and warm it up
-        pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-        dummy_items = [pool.submit(dummy_worker) for i in range(0, n_threads)]
-        for dummy_item in dummy_items: 
-            dummy_item.result()
 
         if (purge_cache):
             for i in range(n_files):
@@ -204,10 +202,11 @@ def measure_reading(max_workers, worker):
         for work_result in work_results:
             work_result.result()
 
-        pool.shutdown(wait=True)
         tt.append(time.time() - t)
         data_set_bytes = len(work_results) * calculate_data_size(dtype=dtype)
-        
+
+    pool.shutdown(wait=True)
+
     tts = [f"{t:.2f}" for t in tt]
     tts = f"[{', '.join(tts)}]"
     throughput_gbps = data_set_bytes / min (tt) / (1024 * 1024 * 1024) * 8
