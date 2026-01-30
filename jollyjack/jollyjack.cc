@@ -358,6 +358,16 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
         << std::endl;
 #endif
 
+  // Warm up the lazy cache in a single-threaded pass to avoid thread contention
+  // during parallel reads.
+  if (pre_buffer && use_threads && cache_options.lazy)
+  {
+    for (auto c_idx: column_indices)
+    {
+      std::ignore = row_group_reader->Column(c_idx);
+    }
+  }
+
   auto result = ::arrow::internal::OptionalParallelFor(use_threads, column_indices.size(),
             [&](int i) {
               try
