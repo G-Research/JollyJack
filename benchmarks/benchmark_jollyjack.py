@@ -181,10 +181,11 @@ def calculate_data_size(dtype):
     return chunk_size * n_columns_to_read * dtype.byte_width
 
 def measure_reading(max_workers, worker):
-
+    global thread_local_data
     tt = []
     data_set_bytes = 0
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+    thread_local_data = threading.local()
 
     # measure multiple times and take the fastest run
     for _ in range(5):
