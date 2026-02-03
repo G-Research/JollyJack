@@ -1,5 +1,8 @@
 # JollyJack
 
+JollyJack is a high‑performance Parquet reader designed to load data directly
+into NumPy arrays and PyTorch tensors with minimal overhead.
+
 ## Features
 
 - Reading parquet files directly into numpy arrays and torch tensors (fp16, fp32, fp64)
@@ -10,18 +13,29 @@
 ## Known limitations
 
 - Data cannot contain null values
+- Destination NumPy arrays and PyTorch tensors must be column‑major (Fortran‑style) 
 
-## Selecting a reader backend
-The default backend uses reagular file api via `parquet::ParquetFileReader`. Most of the time this is the right choice.
-There is an alternative reding backend which levereges io_uring. It can help achieving better performance, especially in combination with O_DIRECT mode for for very large datasets. To enable alternative backend set the `JJ_READER_BACKEND` enviornemnt variable:
-- JJ_READER_BACKEND=io_uring
-- JJ_READER_BACKEND=io_uring_odirect
-
-## Required
+## Requirements
 
 - pyarrow  ~= 22.0.0
  
-JollyJack operates on top of pyarrow, making it an essential requirement for both building and using JollyJack. While our source package is compatible with recent versions of pyarrow, the binary distribution package specifically requires the latest major version of pyarrow.
+JollyJack builds on top of PyArrow. While the source package may work with
+newer versions, the prebuilt binary wheels are built and tested against pyarrow 22.x.
+
+## Selecting a reader backend
+
+By default, the reader uses the regular file API via
+`parquet::ParquetFileReader`. In most cases, this is the recommended choice.
+
+An alternative reader backend based on **io_uring** is also available. It can
+provide better performance, especially for very large datasets and when used
+together with **O_DIRECT**.
+
+To enable the alternative backend, set the `JJ_READER_BACKEND` environment
+variable to one of the following values:
+
+- `io_uring`
+- `io_uring_odirect`
 
 ##  Installation
 
@@ -134,7 +148,7 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , row_group_indices = [0]
                         , row_ranges = [slice(0, 1), slice(4, 6)]
                         , column_indices = range(pr.metadata.num_columns)
-                        , cache_options = cache_options,
+                        , cache_options = cache_options
                         , pre_buffer = True
 						)
 print(np_array)
@@ -143,7 +157,7 @@ print(np_array)
 ### Generating a torch tensor to read into:
 ```
 import torch
-# Create a tesnsor and transpose it to get Fortran-style order
+# Create a tensor and transpose it to get Fortran-style order
 tensor = torch.zeros(n_columns, n_rows, dtype = torch.float32).transpose(0, 1)
 ```
 
