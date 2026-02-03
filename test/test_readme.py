@@ -14,7 +14,7 @@ import os
 import unittest
 from pyarrow import fs
 
-if os.environ.get('JJ_EXPERIMENTAL_READER') != None:
+if os.environ.get('JJ_READER_BACKEND') != None:
   pytest.skip("io_uring is enabled but this test is not compatible with io_uring", allow_module_level=True)
 
 

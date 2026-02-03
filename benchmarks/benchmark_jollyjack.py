@@ -34,7 +34,6 @@ chunk_size = 32_000
 parquet_path = "my.parquet" if sys.platform.startswith('win') else "/tmp/my.parquet"
 column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
 row_groups_to_read = random.sample(range(row_groups), 1)
-thread_local_data = threading.local()
 
 def purge_file_from_cache(path:str):
 
@@ -239,12 +238,12 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
                 print(f"`pq.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
 
     print(f".")
-    for jj_reader in [None] if sys.platform.startswith('win') else [None, 'DirectReader', 'ReadIntoMemoryIOUring', 'ReadIntoMemoryIOUring_ODirect', 'IOUringReader1']:
+    for jj_reader in [None] if sys.platform.startswith('win') else [None, 'IOUring', 'IOUring_ODirect']:
 
         if jj_reader is None:
-            os.environ.pop("JJ_EXPERIMENTAL_READER", None)
+            os.environ.pop("JJ_READER_BACKEND", None)
         else:
-            os.environ["JJ_EXPERIMENTAL_READER"] = jj_reader
+            os.environ["JJ_READER_BACKEND"] = jj_reader
 
         print(f".")
         for n_threads in [1, n_threads]:
