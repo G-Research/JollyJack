@@ -5,10 +5,17 @@
 - Reading parquet files directly into numpy arrays and torch tensors (fp16, fp32, fp64)
 - Faster and requiring less memory than vanilla PyArrow
 - Compatibility with [PalletJack](https://github.com/marcin-krystianc/PalletJack)
+- Support for io_uring and O_DIRECT mode
 
 ## Known limitations
 
 - Data cannot contain null values
+
+## Selecting a reader backend
+The default backend uses reagular file api via `parquet::ParquetFileReader`. Most of the time this is the right choice.
+There is an alternative reding backend which levereges io_uring. It can help achieving better performance, especially in combination with O_DIRECT mode for for very large datasets. To enable alternative backend set the `JJ_READER_BACKEND` enviornemnt variable:
+- JJ_READER_BACKEND=io_uring
+- JJ_READER_BACKEND=io_uring_odirect
 
 ## Required
 
