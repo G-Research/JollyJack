@@ -15,13 +15,6 @@ into NumPy arrays and PyTorch tensors with minimal overhead.
 - Data cannot contain null values
 - Destination NumPy arrays and PyTorch tensors must be column‑major (Fortran‑style) 
 
-## Performance tuning tips
-
-- Run mutithreaded, i.e. run `read_into_numpy` concurrently. Mind that spawning too many threads may create thread contention and it can get slower instead of faster.
-- Reuse numpy arrays (memory allocation is fast but can create thread contention in kernel allocating and zeroing Transparent Huge Pages)
-- For large datasets (larger than filesystem cache) you probably should use: `use_threads=True`, `pre_buffer=True`, `JJ_READER_BACKEND=IOUring_ODirect`
-- For small datasets that fit into filesystem cache you probably should use: `use_threads=False`, `pre_buffer=False`
-
 ## Requirements
 
 - pyarrow  ~= 22.0.0
@@ -43,6 +36,39 @@ variable to one of the following values:
 
 - `io_uring`
 - `io_uring_odirect`
+
+## Performance tuning tips
+
+JollyJack performance is primarily determined by I/O mode, threading,
+and memory allocation behavior. The optimal configuration depends on whether
+your workload is I/O‑bound or memory‑/CPU‑bound.
+
+### Threading strategy
+
+- JollyJack can be safely called concurrently from multiple threads.
+- Parallel reads usually improve throughput, but oversubscribing threads can cause contention and degraded performance
+
+### Reuse destination arrays
+
+- Reusing NumPy arrays or PyTorch tensors avoids repeated memory allocation.
+- While allocation itself is fast, it can trigger kernel contention and degrade perofrmance
+
+### Large datasets (exceed filesystem cache)
+
+For datasets larger than available page cache, performance is typically I/O‑bound.
+
+Recommended configuration:
+
+- `use_threads = True`, `pre_buffer = True`, `JJ_READER_BACKEND = io_uring_odirect`
+
+This combination bypasses the page cache, reduces double buffering and allows deeper I/O queues via io_uring
+
+### Small datasets (fit in filesystem cache)
+
+For datasets that comfortably fit in RAM, performance is typically CPU‑ or memory‑bound.
+
+Recommended configuration is to
+- `use_threads = False`, `pre_buffer = False` and use default reader backend (no io_uring)
 
 ##  Installation
 
