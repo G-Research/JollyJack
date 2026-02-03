@@ -238,7 +238,7 @@ for compression, dtype in [(None, pa.float32()), ('snappy', pa.float32()), (None
                 print(f"`pq.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}")
 
     print(f".")
-    for jj_reader in [None] if sys.platform.startswith('win') else [None, 'IOUring', 'IOUring_ODirect']:
+    for jj_reader in [None] if sys.platform.startswith('win') else [None, 'io_uring', 'io_uring_odirect']:
 
         if jj_reader is None:
             os.environ.pop("JJ_READER_BACKEND", None)

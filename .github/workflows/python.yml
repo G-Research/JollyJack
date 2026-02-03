@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        mode: [None, IOUring, IOUring_ODirect]
+        mode: [None, io_uring, io_uring_odirect]
       fail-fast: false
     steps:
     - uses: actions/checkout@v6

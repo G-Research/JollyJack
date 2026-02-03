@@ -108,9 +108,9 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
     if jj_reader_backend is None:
         get_reader(source, use_memory_map, &rd_handle)
-    elif (jj_reader_backend == 'IOUring' or jj_reader_backend == 'IOUring_ODirect'):
+    elif (jj_reader_backend == 'io_uring' or jj_reader_backend == 'io_uring_odirect'):
         pathstr = source.encode("utf-8")
-        cuse_o_direct = jj_reader_backend == 'IOUring_ODirect'
+        cuse_o_direct = jj_reader_backend == 'io_uring_odirect'
         with nogil:
             cjollyjack.ReadIntoMemoryIOUring (pathstr
                 , c_metadata
