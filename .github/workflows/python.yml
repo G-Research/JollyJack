@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        mode: [None, IOUringReader1, DirectReader, ReadIntoMemoryIOUring, ReadIntoMemoryIOUring_ODirect] 
+        mode: [None, io_uring, io_uring_odirect]
       fail-fast: false
     steps:
     - uses: actions/checkout@v6
@@ -33,7 +33,7 @@ jobs:
     - name: Set environment variables
       run: |
         if [[ "${{ matrix.mode }}" != "None" ]]; then
-          echo "JJ_EXPERIMENTAL_READER=${{ matrix.mode }}" >> $GITHUB_ENV
+          echo "JJ_READER_BACKEND=${{ matrix.mode }}" >> $GITHUB_ENV
         fi
 
     - name: Install dependencies

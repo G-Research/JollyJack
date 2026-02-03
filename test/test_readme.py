@@ -14,7 +14,7 @@ import os
 import unittest
 from pyarrow import fs
 
-if os.environ.get('JJ_EXPERIMENTAL_READER') != None:
+if os.environ.get('JJ_READER_BACKEND') != None:
   pytest.skip("io_uring is enabled but this test is not compatible with io_uring", allow_module_level=True)
 
 
@@ -96,6 +96,23 @@ with fs.LocalFileSystem().open_input_file(path) as f:
                         , row_group_indices = [0]
                         , row_ranges = [slice(0, 1), slice(4, 6)]
                         , column_indices = range(pr.metadata.num_columns)
+						)
+print(np_array)
+#```
+
+### Using cache options
+#```
+np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
+cache_options = pa.CacheOptions(hole_size_limit = 1024, range_size_limit = 2048, lazy = True)
+with fs.LocalFileSystem().open_input_file(path) as f:
+    jj.read_into_numpy (source = f
+                        , metadata = None
+                        , np_array = np_array
+                        , row_group_indices = [0]
+                        , row_ranges = [slice(0, 1), slice(4, 6)]
+                        , column_indices = range(pr.metadata.num_columns)
+                        , cache_options = cache_options
+                        , pre_buffer = True
 						)
 print(np_array)
 #```

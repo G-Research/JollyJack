@@ -104,13 +104,13 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef shared_ptr[CRandomAccessFile] rd_handle
     cdef c_string pathstr
     cdef bool cuse_o_direct
-    # Please note that the `JJ_EXPERIMENTAL_READER` variable is experimental and may be changed or removed in future versions
-    jj_experimental_reader = os.environ.get("JJ_EXPERIMENTAL_READER")
-    if jj_experimental_reader is None:
+    # Please note that the `JJ_READER_BACKEND` variable is experimental and may be changed or removed in future versions
+    jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
+    if jj_reader_backend is None:
         get_reader(source, use_memory_map, &rd_handle)
-    elif (jj_experimental_reader == 'ReadIntoMemoryIOUring' or jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect'):
+    elif (jj_reader_backend == 'io_uring' or jj_reader_backend == 'io_uring_odirect'):
         pathstr = source.encode("utf-8")
-        cuse_o_direct = jj_experimental_reader == 'ReadIntoMemoryIOUring_ODirect'
+        cuse_o_direct = jj_reader_backend == 'io_uring_odirect'
         with nogil:
             cjollyjack.ReadIntoMemoryIOUring (pathstr
                 , c_metadata
@@ -129,12 +129,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
                 , cexpected_rows
                 , c_cache_options)
             return
-    elif jj_experimental_reader == 'IOUringReader1':
-        rd_handle = cjollyjack.GetIOUringReader1 (source.encode("utf-8"))        
-    elif jj_experimental_reader == 'DirectReader':
-        rd_handle = cjollyjack.GetDirectReader (source.encode("utf-8"))
     else:
-        raise ValueError(f"Unsupprted JJ_EXPERIMENTAL_READER={jj_experimental_reader}")
+        raise ValueError(f"Unsupprted JJ_READER_BACKEND={jj_reader_backend}")
 
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle
