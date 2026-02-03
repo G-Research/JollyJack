@@ -2,13 +2,20 @@
 
 ## Features
 
-- Reading parquet files directly into numpy arrays and torch tensors (fp16, fp32, fp64)
+- Reading parquet files directly into numpy arrays and torch tensors (fp16, fp32, fp64, int32, int64)
 - Faster and requiring less memory than vanilla PyArrow
 - Compatibility with [PalletJack](https://github.com/marcin-krystianc/PalletJack)
 
 ## Known limitations
 
 - Data cannot contain null values
+
+## Performance tuning tips
+
+- Run mutithreaded, i.e. run `read_into_numpy` concurrently. Mind that spawning too many threads may create thread contention and it can get slower instead of faster.
+- Reuse numpy arrays (memory allocation is fast but can create thread contention in kernel allocating and zeroing Transparent Huge Pages)
+- For large datasets (larger than filesystem cache) you probably should use: `use_threads=True`, `pre_buffer=True`, `JJ_READER_BACKEND=IOUring_ODirect`
+- For small datasets that fit into filesystem cache you probably should use: `use_threads=False`, `pre_buffer=False`
 
 ## Required
 
