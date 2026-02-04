@@ -1096,7 +1096,7 @@ class TestJollyJack(unittest.TestCase):
             pr.open(path)            
             np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
             
-            os.environ.pop("JJ_READER_BACKEND", None)
+            jj_backend = os.environ.pop("JJ_READER_BACKEND", None)
 
             jj.read_into_numpy (source = path
                                 , metadata = None
@@ -1122,7 +1122,8 @@ class TestJollyJack(unittest.TestCase):
                         , use_memory_map = use_memory_map)
             self.assertTrue(f"Unsupprted JJ_READER_BACKEND=foo_bar" in str(context.exception), context.exception)
             pr.close()
-                   
+            os.environ["JJ_READER_BACKEND"] = jj_backend
+
 if __name__ == '__main__':
     unittest.main()
     #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
