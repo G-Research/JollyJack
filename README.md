@@ -15,13 +15,6 @@ into NumPy arrays and PyTorch tensors with minimal overhead.
 - Data cannot contain null values
 - Destination NumPy arrays and PyTorch tensors must be column-major (Fortran-style) 
 
-## Requirements
-
-- pyarrow  ~= 22.0.0
- 
-JollyJack builds on top of PyArrow. While the source package may work with
-newer versions, the prebuilt binary wheels are built and tested against pyarrow 22.x.
-
 ## Selecting a reader backend
 
 By default, the reader uses the regular file API via
@@ -34,8 +27,8 @@ together with **O_DIRECT**.
 To enable the alternative backend, set the `JJ_READER_BACKEND` environment
 variable to one of the following values:
 
-- `io_uring`
-- `io_uring_odirect`
+- `io_uring` - Uses io_uring for async I/O with page cache
+- `io_uring_odirect` - Uses io_uring with O_DIRECT (bypasses page cache)
 
 ## Performance tuning tips
 
@@ -51,7 +44,7 @@ your workload is I/O-bound or memory-/CPU-bound.
 ### Reuse destination arrays
 
 - Reusing NumPy arrays or PyTorch tensors avoids repeated memory allocation.
-- While allocation itself is fast, it can trigger kernel contention and degrade perofrmance
+- While allocation itself is fast, it can trigger kernel contention and degrade performance
 
 ### Large datasets (exceed filesystem cache)
 
@@ -69,6 +62,13 @@ For datasets that comfortably fit in RAM, performance is typically CPU- or memor
 
 Recommended configuration is to
 - `use_threads = False`, `pre_buffer = False` and use default reader backend (no io_uring)
+
+## Requirements
+
+- pyarrow  ~= 22.0.0
+ 
+JollyJack builds on top of PyArrow. While the source package may work with
+newer versions, the prebuilt binary wheels are built and tested against pyarrow 22.x.
 
 ##  Installation
 
