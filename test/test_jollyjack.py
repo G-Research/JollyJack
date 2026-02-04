@@ -1097,7 +1097,6 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
             
             jj_backend = os.environ.pop("JJ_READER_BACKEND", None)
-
             jj.read_into_numpy (source = path
                                 , metadata = None
                                 , np_array = np_array
@@ -1122,7 +1121,8 @@ class TestJollyJack(unittest.TestCase):
                         , use_memory_map = use_memory_map)
             self.assertTrue(f"Unsupprted JJ_READER_BACKEND=foo_bar" in str(context.exception), context.exception)
             pr.close()
-
+            
+            os.environ.pop("JJ_READER_BACKEND", None)
             if jj_backend is not None:
                 os.environ["JJ_READER_BACKEND"] = jj_backend
 
