@@ -39,7 +39,7 @@ variable to one of the following values:
 
 ## Performance tuning tips
 
-JollyJack performance is primarily determined by I/O mode, threading,
+JollyJack performance is primarily determined by I/O, threading,
 and memory allocation behavior. The optimal configuration depends on whether
 your workload is I/O-bound or memory-/CPU-bound.
 
