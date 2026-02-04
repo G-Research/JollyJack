@@ -1,6 +1,17 @@
 import jollyjack as jj
 
-def read_into_torch (source, metadata, tensor, row_group_indices, column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, cache_options = None):
+def read_into_torch(
+    source,
+    metadata,
+    tensor,
+    row_group_indices,
+    column_indices=[],
+    column_names=[],
+    pre_buffer=False,
+    use_threads=True,
+    use_memory_map=False,
+    cache_options=None,
+):
     """
     Read parquet data directly into a tensor.
 
@@ -33,24 +44,37 @@ def read_into_torch (source, metadata, tensor, row_group_indices, column_indices
     Notes:
     -----
     Either column_indices or column_names must be provided, but not both.
-    When using an iterable of tuples for column_indices or column_names, 
-    each tuple should contain exactly two elements: the source column (index or name) 
+    When using an iterable of tuples for column_indices or column_names,
+    each tuple should contain exactly two elements: the source column (index or name)
     and the target column index in the numpy array.
     """
 
-    jj._read_into_torch (source
-                     , metadata
-                     , tensor
-                     , row_group_indices
-                     , column_indices
-                     , column_names
-                     , pre_buffer
-                     , use_threads
-                     , use_memory_map
-                     )
+    jj._read_into_torch(
+        source,
+        metadata,
+        tensor,
+        row_group_indices,
+        column_indices,
+        column_names,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+    )
     return
 
-def read_into_numpy (source, metadata, np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, cache_options = None):
+def read_into_numpy(
+    source,
+    metadata,
+    np_array,
+    row_group_indices,
+    row_ranges=[],
+    column_indices=[],
+    column_names=[],
+    pre_buffer=False,
+    use_threads=True,
+    use_memory_map=False,
+    cache_options=None,
+):
     """
     Read parquet data directly into a numpy array.
     NumPy array needs to be in a Fortran-style (column-major) order.
@@ -84,28 +108,29 @@ def read_into_numpy (source, metadata, np_array, row_group_indices, row_ranges =
     Notes:
     -----
     Either column_indices or column_names must be provided, but not both.
-    When using an iterable of tuples for column_indices or column_names, 
-    each tuple should contain exactly two elements: the source column (index or name) 
+    When using an iterable of tuples for column_indices or column_names,
+    each tuple should contain exactly two elements: the source column (index or name)
     and the target column index in the numpy array.
     """
 
-    jj._read_into_numpy (source
-                     , metadata
-                     , np_array
-                     , row_group_indices
-                     , column_indices
-                     , column_names
-                     , pre_buffer
-                     , use_threads
-                     , use_memory_map
-                     , cache_options
-                     )
+    jj._read_into_numpy(
+        source,
+        metadata,
+        np_array,
+        row_group_indices,
+        column_indices,
+        column_names,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        cache_options,
+    )
     return
 
-def copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
+def copy_to_torch_row_major(src_tensor, dst_tensor, row_indices):
     """
     Copy source column-major array to a row-major array and shuffles its rows according to provided indices.
-    
+
     Args:
         src_array (numpy.ndarray): Source column-major array to be copied and shuffled.
         dst_array (numpy.ndarray): Destination row-major array to store the result.
@@ -114,7 +139,7 @@ def copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
     Raises:
         AssertError: If array shapes do not match or row_indices is invalid.
         RuntimeError: If row_indices has invalid index.
-        
+
     Example:
         >>> src = np.array([[1, 2], [3, 4]], dtype=int, order='F')
         >>> dst = np.zeros((2, 2), dtype=int, order='C')
@@ -122,13 +147,13 @@ def copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
         >>> copy_to_row_major(src, dst, indices)
         array([[3, 4],
                 [1, 2]])
-   """
+    """
     return
 
-def copy_to_numpy_row_major (src_array, dst_array, row_indices):
+def copy_to_numpy_row_major(src_array, dst_array, row_indices):
     """
     Copy source column-major array to a row-major array and shuffles its rows according to provided indices.
-    
+
     Args:
         src_array (numpy.ndarray): Source column-major array to be copied and shuffled.
         dst_array (numpy.ndarray): Destination row-major array to store the result.
@@ -137,7 +162,7 @@ def copy_to_numpy_row_major (src_array, dst_array, row_indices):
     Raises:
         AssertError: If array shapes do not match or row_indices is invalid.
         RuntimeError: If row_indices has invalid index.
-        
+
     Example:
         >>> src = np.array([[1, 2], [3, 4]], dtype=int, order='F')
         >>> dst = np.zeros((2, 2), dtype=int, order='C')
@@ -145,5 +170,5 @@ def copy_to_numpy_row_major (src_array, dst_array, row_indices):
         >>> copy_to_row_major(src, dst, indices)
         array([[3, 4],
                 [1, 2]])
-   """
+    """
     return
