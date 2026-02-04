@@ -1122,7 +1122,9 @@ class TestJollyJack(unittest.TestCase):
                         , use_memory_map = use_memory_map)
             self.assertTrue(f"Unsupprted JJ_READER_BACKEND=foo_bar" in str(context.exception), context.exception)
             pr.close()
-            os.environ["JJ_READER_BACKEND"] = jj_backend
+
+            if jj_backend is not None:
+                os.environ["JJ_READER_BACKEND"] = jj_backend
 
 if __name__ == '__main__':
     unittest.main()
