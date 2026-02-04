@@ -1,6 +1,6 @@
 # JollyJack
 
-JollyJack is a high‑performance Parquet reader designed to load data directly
+JollyJack is a high-performance Parquet reader designed to load data directly
 into NumPy arrays and PyTorch tensors with minimal overhead.
 
 ## Features
@@ -13,7 +13,7 @@ into NumPy arrays and PyTorch tensors with minimal overhead.
 ## Known limitations
 
 - Data cannot contain null values
-- Destination NumPy arrays and PyTorch tensors must be column‑major (Fortran‑style) 
+- Destination NumPy arrays and PyTorch tensors must be column-major (Fortran-style) 
 
 ## Requirements
 
@@ -41,7 +41,7 @@ variable to one of the following values:
 
 JollyJack performance is primarily determined by I/O mode, threading,
 and memory allocation behavior. The optimal configuration depends on whether
-your workload is I/O‑bound or memory‑/CPU‑bound.
+your workload is I/O-bound or memory-/CPU-bound.
 
 ### Threading strategy
 
@@ -55,7 +55,7 @@ your workload is I/O‑bound or memory‑/CPU‑bound.
 
 ### Large datasets (exceed filesystem cache)
 
-For datasets larger than available page cache, performance is typically I/O‑bound.
+For datasets larger than available page cache, performance is typically I/O-bound.
 
 Recommended configuration:
 
@@ -65,7 +65,7 @@ This combination bypasses the page cache, reduces double buffering and allows de
 
 ### Small datasets (fit in filesystem cache)
 
-For datasets that comfortably fit in RAM, performance is typically CPU‑ or memory‑bound.
+For datasets that comfortably fit in RAM, performance is typically CPU- or memory-bound.
 
 Recommended configuration is to
 - `use_threads = False`, `pre_buffer = False` and use default reader backend (no io_uring)

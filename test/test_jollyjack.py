@@ -1084,6 +1084,45 @@ class TestJollyJack(unittest.TestCase):
             jj.copy_to_numpy_row_major(src_array = src_array, dst_array = dst_array, row_indices = [i + 1 for i in range(n_rows)])
         self.assertTrue(f"Row index = {n_rows} is not in the expected range [0, {n_rows})" in str(context.exception), context.exception)
 
+    @parameterized.expand(itertools.product([False, True], [False, True], [False, True]))
+    def test_read_backends(self, pre_buffer, use_threads, use_memory_map):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows, n_columns)
+            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=False, write_statistics=False, store_schema=False)
+
+            pr = pq.ParquetReader()
+            pr.open(path)            
+            np_array = np.zeros((n_rows, n_columns), dtype='f', order='F')
+            
+            os.environ.pop("JJ_READER_BACKEND", None)
+
+            jj.read_into_numpy (source = path
+                                , metadata = None
+                                , np_array = np_array
+                                , row_group_indices = range(pr.metadata.num_row_groups)
+                                , column_indices = range(pr.metadata.num_columns)
+                                , pre_buffer = pre_buffer
+                                , use_threads = use_threads
+                                , use_memory_map = use_memory_map)
+            
+            expected_data = pr.read_all()
+            self.assertTrue(np.array_equal(np_array, expected_data))
+
+            os.environ["JJ_READER_BACKEND"] = "foo_bar"
+            with self.assertRaises(ValueError) as context:
+                jj.read_into_numpy (source = path
+                        , metadata = None
+                        , np_array = np_array
+                        , row_group_indices = range(pr.metadata.num_row_groups)
+                        , column_indices = range(pr.metadata.num_columns)
+                        , pre_buffer = pre_buffer
+                        , use_threads = use_threads
+                        , use_memory_map = use_memory_map)
+            self.assertTrue(f"Unsupprted JJ_READER_BACKEND=foo_bar" in str(context.exception), context.exception)
+            pr.close()
+                   
 if __name__ == '__main__':
     unittest.main()
     #unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
