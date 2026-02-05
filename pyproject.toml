@@ -2,7 +2,7 @@
 requires = [
   "setuptools>=55",
   "Cython>=3",
-  "pyarrow~=22.0.0",
+  "pyarrow~=23.0.0",
   "numpy>=1.16.6",
 ]
 
@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jollyjack"
-version = "0.21.0"
+version = "0.22.0"
 description = "Read parquet data directly into numpy array"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -20,7 +20,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "pyarrow~=22.0.0",
+  "pyarrow~=23.0.0",
   "numpy>=1.16.6",
 ]
 
@@ -54,7 +54,7 @@ manylinux-aarch64-image = "manylinux_2_28"
 archs = ["auto", "aarch64",]
 
 repair-wheel-command = [
- "auditwheel repair --exclude libarrow.so.2200 --exclude libparquet.so.2200 -w {dest_dir} {wheel}",
+ "auditwheel repair --exclude libarrow.so.2300 --exclude libparquet.so.2300 -w {dest_dir} {wheel}",
 ]
 
 before-all = [
