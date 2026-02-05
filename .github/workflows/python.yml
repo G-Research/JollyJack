@@ -20,12 +20,17 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'push' || github.event.pull_request.head.repo.id != github.event.pull_request.base.repo.id
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4    
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
     - name: Run Black (check only)
         run: |
           python3 -m pip install black
           black --check --diff --color .
-          
+
     - name: Lint with flake8
       run: |
         python3 -m pip install flake8
