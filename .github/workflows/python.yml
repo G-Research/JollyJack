@@ -27,9 +27,9 @@ jobs:
         python-version: "3.12"
 
     - name: Run Black (check only)
-        run: |
-          python3 -m pip install black
-          black --check --diff --color .
+      run: |
+        python3 -m pip install black
+        black --check --diff --color .
 
     - name: Lint with flake8
       run: |
