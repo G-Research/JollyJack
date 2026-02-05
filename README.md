@@ -6,13 +6,13 @@ into NumPy arrays and PyTorch tensors with minimal overhead.
 ## Features
 
 - Load Parquet straight into NumPy arrays or PyTorch tensors (fp16, fp32, fp64, int32, int64)
-- Up to 6× faster and lower memory use than vanilla PyArrow
+- Up to 6× faster and with lower memory use than vanilla PyArrow
 - Compatibility with [PalletJack](https://github.com/marcin-krystianc/PalletJack)
 - Optional io_uring + O_DIRECT backend for I/O-bound workloads
 
 ## Known limitations
 
-- Data cannot contain null values
+- Data must not contain null values
 - Destination NumPy arrays and PyTorch tensors must be column-major (Fortran-style) 
 
 ## Selecting a reader backend
@@ -27,8 +27,8 @@ together with **O_DIRECT**.
 To enable the alternative backend, set the `JJ_READER_BACKEND` environment
 variable to one of the following values:
 
-- `io_uring` - Uses io_uring for async I/O with page cache
-- `io_uring_odirect` - Uses io_uring with O_DIRECT (bypasses page cache)
+- `io_uring` - Uses io_uring for async I/O with the page cache
+- `io_uring_odirect` - Uses io_uring with O_DIRECT (bypasses the page cache)
 
 ## Performance tuning tips
 
@@ -39,16 +39,16 @@ your workload is I/O-bound or memory-/CPU-bound.
 ### Threading strategy
 
 - JollyJack can be safely called concurrently from multiple threads.
-- Parallel reads usually improve throughput, but oversubscribing threads can cause contention and degraded performance
+- Parallel reads usually improve throughput, but oversubscribing threads can cause contention and degrade performance.
 
 ### Reuse destination arrays
 
 - Reusing NumPy arrays or PyTorch tensors avoids repeated memory allocation.
-- While allocation itself is fast, it can trigger kernel contention and degrade performance
+- While allocation itself is fast, it can trigger kernel contention and degrade performance.
 
 ### Large datasets (exceed filesystem cache)
 
-For datasets larger than available page cache, performance is typically I/O-bound.
+For datasets larger than the available page cache, performance is typically I/O-bound.
 
 Recommended configuration:
 
@@ -60,8 +60,8 @@ This combination bypasses the page cache, reduces double buffering and allows de
 
 For datasets that comfortably fit in RAM, performance is typically CPU- or memory-bound.
 
-Recommended configuration is to
-- `use_threads = False`, `pre_buffer = False` and use default reader backend (no io_uring)
+Recommended configuration:
+- `use_threads = False`, `pre_buffer = False` and use the default reader backend (no io_uring)
 
 ## Requirements
 
@@ -108,13 +108,13 @@ pq.write_table(
 )
 ```
 
-### Generating a numpy array to read into:
+### Generating a NumPy array to read into:
 ```
 # Create an array of zeros
 np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
 ```
 
-### Reading entire file into numpy array:
+### Reading entire file into NumPy array:
 ```
 pr = pq.ParquetReader()
 pr.open(path)
@@ -126,8 +126,8 @@ for rg in range(pr.metadata.num_row_groups):
     row_begin = row_end
     row_end = row_begin + pr.metadata.row_group(rg).num_rows
 
-    # To define which subset of the numpy array we want read into,
-    # we need to create a view which shares underlying memory with the target numpy array
+    # To define which subset of the NumPy array we want read into,
+    # we need to create a view which shares underlying memory with the target NumPy array
     subset_view = np_array[row_begin:row_end, :]
     jj.read_into_numpy(
         source=path,
@@ -147,7 +147,7 @@ with fs.LocalFileSystem().open_input_file(path) as f:
         column_indices=range(pr.metadata.num_columns),
     )
 ```
-### Reading columns in reversed order:
+### Reading columns in reverse order:
 ```
 with fs.LocalFileSystem().open_input_file(path) as f:
     jj.read_into_numpy(
@@ -206,29 +206,11 @@ with fs.LocalFileSystem().open_input_file(path) as f:
 print(np_array)
 ```
 
-### Using cache options
-```
-np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
-cache_options = pa.CacheOptions(hole_size_limit=1024, range_size_limit=2048, lazy=True)
-with fs.LocalFileSystem().open_input_file(path) as f:
-    jj.read_into_numpy(
-        source=f,
-        metadata=None,
-        np_array=np_array,
-        row_group_indices=[0],
-        row_ranges=[slice(0, 1), slice(4, 6)],
-        column_indices=range(pr.metadata.num_columns),
-        cache_options=cache_options,
-        pre_buffer=True,
-    )
-print(np_array)
-```
-
-### Generating a torch tensor to read into:
+### Generating a PyTorch tensor to read into:
 ```
 import torch
 
-# Create a tesnsor and transpose it to get Fortran-style order
+# Create a tensor and transpose it to get Fortran-style order
 tensor = torch.zeros(n_columns, n_rows, dtype=torch.float32).transpose(0, 1)
 ```
 
