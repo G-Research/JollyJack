@@ -376,7 +376,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
               {
                 return ReadColumn(i
                   , target_row
-                  , column_readers.size() > 0 ? column_readers[column_indices[i]].get() : row_group_reader->Column(column_indices[i]).get()
+                  , column_readers.size() > 0 ? column_readers[i].get() : row_group_reader->Column(column_indices[i]).get()
                   , row_group_metadata.get()
                   , buffer
                   , buffer_size
