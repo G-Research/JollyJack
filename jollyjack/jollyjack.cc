@@ -360,11 +360,13 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
   // Warm up the lazy cache in a single-threaded pass to avoid thread contention
   // during parallel reads.
+  std::vector<std::shared_ptr<parquet::ColumnReader>> column_readers;
   if (pre_buffer && use_threads && cache_options.lazy)
   {
+    column_readers.reserve(column_indices.size());
     for (auto c_idx: column_indices)
     {
-      std::ignore = row_group_reader->Column(c_idx);
+      column_readers.emplace_back(std::move(row_group_reader->Column(c_idx)));
     }
   }
 
@@ -374,7 +376,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
               {
                 return ReadColumn(i
                   , target_row
-                  , row_group_reader->Column(column_indices[i]).get()
+                  , column_readers.size() > 0 ? column_readers[column_indices[i]].get() : row_group_reader->Column(column_indices[i]).get()
                   , row_group_metadata.get()
                   , buffer
                   , buffer_size
