@@ -130,7 +130,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
                 , c_cache_options)
             return
     else:
-        raise ValueError(f"Unsupprted JJ_READER_BACKEND={jj_reader_backend}")
+        raise ValueError(f"Unsupported JJ_READER_BACKEND={jj_reader_backend}")
 
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle
@@ -169,7 +169,7 @@ cpdef void copy_to_numpy_row_major (cnp.ndarray src_array, cnp.ndarray dst_array
     assert src_array.shape[1] == dst_array.shape[1], f"src_array.shape[1] != dst_array.shape[1], {src_array.shape[1]} != {dst_array.shape[1]}"
     assert (src_array.strides[0] <= src_array.strides[1]), f"Expected source array in a Fortran (column-major) order"
     assert (dst_array.strides[1] <= dst_array.strides[0]), f"Expected destination array in a C (row-major) order"
-    assert src_array.dtype == dst_array.dtype, f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != {dst_array.dtype}"
+    assert src_array.dtype == dst_array.dtype, f"Source and destination arrays have different datatypes, {src_array.dtype} != {dst_array.dtype}"
     assert len(row_indices) == src_array.shape[0], f"Unexpected len of row indices, {len(row_indices)} != {src_array.shape[0]}"
     assert min(row_indices) >= 0, f"Row index = {min(row_indices)} is not in the expected range [0, {dst_array.shape[0]})" 
     assert max(row_indices) < dst_array.shape[0], f"Row index = {max(row_indices)} is not in the expected range [0, {dst_array.shape[0]})" 
