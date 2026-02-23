@@ -11,7 +11,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jollyjack"
 version = "0.22.1"
-description = "Read parquet data directly into numpy array"
+description = "High-performance Parquet reader for loading data directly into NumPy arrays and PyTorch tensors"
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [

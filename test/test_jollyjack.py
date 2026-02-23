@@ -1794,7 +1794,7 @@ class TestJollyJack(unittest.TestCase):
                 src_array=src_array, dst_array=dst_array, row_indices=range(n_rows)
             )
         self.assertTrue(
-            f"Source and destination arrays have diffrent datatypes, {src_array.dtype} != uint8"
+            f"Source and destination arrays have different datatypes, {src_array.dtype} != uint8"
             in str(context.exception),
             context.exception,
         )
@@ -1891,7 +1891,7 @@ class TestJollyJack(unittest.TestCase):
                     use_memory_map=use_memory_map,
                 )
             self.assertTrue(
-                f"Unsupprted JJ_READER_BACKEND=foo_bar" in str(context.exception),
+                f"Unsupported JJ_READER_BACKEND=foo_bar" in str(context.exception),
                 context.exception,
             )
             pr.close()

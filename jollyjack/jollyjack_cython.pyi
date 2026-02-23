@@ -46,7 +46,7 @@ def read_into_torch(
     Either column_indices or column_names must be provided, but not both.
     When using an iterable of tuples for column_indices or column_names,
     each tuple should contain exactly two elements: the source column (index or name)
-    and the target column index in the numpy array.
+    and the target column index in the tensor.
     """
 
     jj._read_into_torch(
@@ -129,30 +129,28 @@ def read_into_numpy(
 
 def copy_to_torch_row_major(src_tensor, dst_tensor, row_indices):
     """
-    Copy source column-major array to a row-major array and shuffles its rows according to provided indices.
+    Copy source column-major tensor to a row-major tensor and shuffle its rows according to provided indices.
 
     Args:
-        src_array (numpy.ndarray): Source column-major array to be copied and shuffled.
-        dst_array (numpy.ndarray): Destination row-major array to store the result.
+        src_tensor (torch.Tensor): Source column-major tensor to be copied and shuffled.
+        dst_tensor (torch.Tensor): Destination row-major tensor to store the result.
         row_indices (numpy.ndarray): Array of indices specifying the row permutation.
 
     Raises:
-        AssertError: If array shapes do not match or row_indices is invalid.
-        RuntimeError: If row_indices has invalid index.
+        AssertionError: If tensor shapes do not match or row_indices is invalid.
+        RuntimeError: If row_indices has an invalid index.
 
     Example:
-        >>> src = np.array([[1, 2], [3, 4]], dtype=int, order='F')
-        >>> dst = np.zeros((2, 2), dtype=int, order='C')
+        >>> src = torch.tensor([[1, 2], [3, 4]], dtype=torch.int32)
+        >>> dst = torch.zeros(2, 2, dtype=torch.int32)
         >>> indices = np.array([1, 0])
-        >>> copy_to_row_major(src, dst, indices)
-        array([[3, 4],
-                [1, 2]])
+        >>> jj.copy_to_torch_row_major(src, dst, indices)
     """
     return
 
 def copy_to_numpy_row_major(src_array, dst_array, row_indices):
     """
-    Copy source column-major array to a row-major array and shuffles its rows according to provided indices.
+    Copy source column-major array to a row-major array and shuffle its rows according to provided indices.
 
     Args:
         src_array (numpy.ndarray): Source column-major array to be copied and shuffled.
@@ -160,15 +158,13 @@ def copy_to_numpy_row_major(src_array, dst_array, row_indices):
         row_indices (numpy.ndarray): Array of indices specifying the row permutation.
 
     Raises:
-        AssertError: If array shapes do not match or row_indices is invalid.
-        RuntimeError: If row_indices has invalid index.
+        AssertionError: If array shapes do not match or row_indices is invalid.
+        RuntimeError: If row_indices has an invalid index.
 
     Example:
         >>> src = np.array([[1, 2], [3, 4]], dtype=int, order='F')
         >>> dst = np.zeros((2, 2), dtype=int, order='C')
         >>> indices = np.array([1, 0])
-        >>> copy_to_row_major(src, dst, indices)
-        array([[3, 4],
-                [1, 2]])
+        >>> jj.copy_to_numpy_row_major(src, dst, indices)
     """
     return

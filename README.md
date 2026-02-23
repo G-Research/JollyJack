@@ -54,32 +54,33 @@ Recommended configuration:
 
 - `use_threads = True`, `pre_buffer = True`, `JJ_READER_BACKEND = io_uring_odirect`
 
-This combination bypasses the page cache, reduces double buffering and allows deeper I/O queues via io_uring
+This combination bypasses the page cache, reduces double-buffering, and allows deeper I/O queues via io_uring.
 
 ### Small datasets (fit in filesystem cache)
 
 For datasets that comfortably fit in RAM, performance is typically CPU- or memory-bound.
 
 Recommended configuration:
-- `use_threads = False`, `pre_buffer = False` and use the default reader backend (no io_uring)
+
+- `use_threads = False`, `pre_buffer = False`, and the default reader backend (no io_uring).
 
 ## Requirements
 
-- pyarrow  ~= 22.0.0
- 
+- pyarrow ~= 23.0.0
+
 JollyJack builds on top of PyArrow. While the source package may work with
-newer versions, the prebuilt binary wheels are built and tested against pyarrow 22.x.
+newer versions, the prebuilt binary wheels are built and tested against pyarrow 23.x.
 
-##  Installation
+## Installation
 
-```
+```bash
 pip install jollyjack
 ```
 
-## How to use:
+## How to use
 
-### Generating a sample parquet file:
-```
+### Generating a sample Parquet file
+```python
 import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
@@ -108,14 +109,14 @@ pq.write_table(
 )
 ```
 
-### Generating a NumPy array to read into:
-```
+### Generating a NumPy array to read into
+```python
 # Create an array of zeros
 np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
 ```
 
-### Reading entire file into NumPy array:
-```
+### Reading an entire file into a NumPy array
+```python
 pr = pq.ParquetReader()
 pr.open(path)
 
@@ -147,8 +148,8 @@ with fs.LocalFileSystem().open_input_file(path) as f:
         column_indices=range(pr.metadata.num_columns),
     )
 ```
-### Reading columns in reverse order:
-```
+### Reading columns in reverse order
+```python
 with fs.LocalFileSystem().open_input_file(path) as f:
     jj.read_into_numpy(
         source=f,
@@ -162,7 +163,7 @@ with fs.LocalFileSystem().open_input_file(path) as f:
 ```
 
 ### Reading column 3 into multiple destination columns
-```
+```python
 with fs.LocalFileSystem().open_input_file(path) as f:
     jj.read_into_numpy(
         source=f,
@@ -174,7 +175,7 @@ with fs.LocalFileSystem().open_input_file(path) as f:
 ```
 
 ### Sparse reading
-```
+```python
 np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
 with fs.LocalFileSystem().open_input_file(path) as f:
     jj.read_into_numpy(
@@ -189,7 +190,7 @@ print(np_array)
 ```
 
 ### Using cache options
-```
+```python
 np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
 cache_options = pa.CacheOptions(hole_size_limit=1024, range_size_limit=2048, lazy=True)
 with fs.LocalFileSystem().open_input_file(path) as f:
@@ -206,16 +207,16 @@ with fs.LocalFileSystem().open_input_file(path) as f:
 print(np_array)
 ```
 
-### Generating a PyTorch tensor to read into:
-```
+### Generating a PyTorch tensor to read into
+```python
 import torch
 
 # Create a tensor and transpose it to get Fortran-style order
 tensor = torch.zeros(n_columns, n_rows, dtype=torch.float32).transpose(0, 1)
 ```
 
-### Reading entire file into the tensor:
-```
+### Reading an entire file into a PyTorch tensor
+```python
 pr = pq.ParquetReader()
 pr.open(path)
 
