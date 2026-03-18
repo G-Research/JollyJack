@@ -24,7 +24,7 @@ elif benchmark_mode == "CPU":
     n_repeats = 6
     purge_cache = False
 else:
-    raise RuntimeError(f"Ivalid JJ_benchmark_mode:{benchmark_mode}")
+    raise RuntimeError(f"Invalid JJ_benchmark_mode:{benchmark_mode}")
 
 n_threads = 2
 row_groups = 1
@@ -88,7 +88,7 @@ def generate_random_parquet(
             writer.close()
 
 
-def genrate_data(n_columns, n_row_groups, path, compression, dtype):
+def generate_data(n_columns, n_row_groups, path, compression, dtype):
 
     t = time.time()
     generate_random_parquet(
@@ -144,8 +144,8 @@ def worker_jollyjack_copy_to_row_major(dtype, path):
 
     np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order="F")
     dst_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order="C")
-    row_indicies = list(range(chunk_size))
-    random.shuffle(row_indicies)
+    row_indices = list(range(chunk_size))
+    random.shuffle(row_indices)
 
     pr = pq.ParquetReader()
     pr.open(path)
@@ -160,7 +160,7 @@ def worker_jollyjack_copy_to_row_major(dtype, path):
         use_threads=False,
     )
 
-    jj.copy_to_numpy_row_major(np_array, dst_array, row_indicies)
+    jj.copy_to_numpy_row_major(np_array, dst_array, row_indices)
 
 
 def worker_numpy_copy_to_row_major(dtype, path):
@@ -284,7 +284,7 @@ for compression, dtype in [
 
     for f in range(n_files):
         path = f"{parquet_path}{f}"
-        genrate_data(
+        generate_data(
             path=path,
             n_row_groups=row_groups,
             n_columns=n_columns,
