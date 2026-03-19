@@ -26,7 +26,7 @@ elif benchmark_mode == "CPU":
 else:
     raise RuntimeError(f"Invalid JJ_benchmark_mode:{benchmark_mode}")
 
-n_threads = 2
+worker_counts = [1, 2]
 row_groups = 1
 n_columns = 7_000
 n_columns_to_read = 3_000
@@ -267,7 +267,7 @@ print(f".")
 print(
     f"benchmark_mode = {benchmark_mode}, n_files = {n_files}, n_repeats = {n_repeats}"
 )
-print(f"n_threads = {n_threads}")
+print(f"worker_counts = {worker_counts}")
 print(f"row_groups = {row_groups}")
 print(f"n_columns = {n_columns}")
 print(f"chunk_size = {chunk_size}")
@@ -295,11 +295,11 @@ for compression, dtype in [
     print(f"....................................")
     print(f"dtype:{dtype}, compression={compression}:")
     print(f".")
-    for n_threads in [1, n_threads]:
+    for n_workers in worker_counts:
         for pre_buffer in [False, True]:
             for use_threads in [False, True]:
                 print(
-                    f"`pq.read_row_groups` n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
+                    f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
                 )
 
     print(f".")
@@ -315,30 +315,30 @@ for compression, dtype in [
             os.environ["JJ_READER_BACKEND"] = jj_reader
 
         print(f".")
-        for n_threads in [1, n_threads]:
+        for n_workers in worker_counts:
             for pre_buffer in [False, True]:
                 for use_threads in [False, True]:
                     print(
-                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_threads:{n_threads}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
                     )
 
     print(f".")
-    for n_threads in [1, n_threads]:
+    for n_workers in worker_counts:
         for pre_buffer in [False, True]:
             print(
-                f"`jj.read_into_torch` n_threads:{n_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_threads, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
             )
 
     print(f".")
     for jj_variant in [1, 2]:
         os.environ["JJ_copy_to_row_major"] = str(jj_variant)
-        for n_threads in [1, n_threads]:
+        for n_workers in worker_counts:
             print(
-                f"`jj.copy_to_row_major` n_threads:{n_threads}, jj_variant={jj_variant} duration:{measure_reading(n_threads, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}"
+                f"`jj.copy_to_row_major` n_workers:{n_workers}, jj_variant={jj_variant} duration:{measure_reading(n_workers, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}"
             )
 
     print(f".")
-    for n_threads in [1, n_threads]:
+    for n_workers in worker_counts:
         print(
-            f"`np.copy_to_row_major` compression={compression}, duration:{measure_reading(n_threads, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}"
+            f"`np.copy_to_row_major` compression={compression}, duration:{measure_reading(n_workers, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}"
         )
