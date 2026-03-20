@@ -193,15 +193,11 @@ def worker_raw_bytes_read(dtype, path):
 
     np_array = get_thread_local_np_array(dtype)
     buf = np_array.reshape(-1, order="A").data
-    fd = os.open(path, os.O_RDONLY)
-    try:
+    with open(path, "rb") as f:
+        fd = f.fileno()
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
         os.preadv(fd, [buf], 0)
-        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_NOREUSE)
-    finally:
-        os.close(fd)
-
 
 def worker_raw_bytes_read_with_metadata(dtype, path):
 
@@ -217,8 +213,6 @@ def worker_raw_bytes_read_with_metadata(dtype, path):
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
         os.preadv(fd, [buf], 0)
-        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_NOREUSE)
-
 
 def worker_jollyjack_torch(pre_buffer, dtype, path):
 
