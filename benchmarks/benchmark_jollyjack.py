@@ -120,14 +120,19 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
     np_array = table.to_pandas()
 
 
-def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
-
+def get_thread_local_np_array(dtype):
     np_array = getattr(thread_local_data, "np_array", None)
     if np_array is None:
         np_array = np.empty((chunk_size, n_columns_to_read), dtype=dtype, order="F")
         # By writing all zeros we make sure that the memory is properly allocated and mapped to physical RAM (avoid Memory Allocation Contention)
         np_array[:] = 0
         thread_local_data.np_array = np_array
+    return np_array
+
+
+def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
+
+    np_array = get_thread_local_np_array(dtype)
 
     jj.read_into_numpy(
         source=path,
@@ -183,6 +188,31 @@ def worker_numpy_copy_to_row_major(dtype, path):
 
     np.copyto(dst_array, np_array)
 
+
+def worker_raw_bytes_read(dtype, path):
+
+    np_array = get_thread_local_np_array(dtype)
+    buf = np_array.reshape(-1, order="A").data
+    with open(path, "rb") as f:
+        fd = f.fileno()
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
+        os.preadv(fd, [buf], 0)
+
+def worker_raw_bytes_read_with_metadata(dtype, path):
+
+    np_array = get_thread_local_np_array(dtype)
+    buf = np_array.reshape(-1, order="A").data
+
+    with open(path, "rb") as f:
+        pr = pq.ParquetReader()
+        pr.open(f)
+        _metadata = pr.metadata
+
+        fd = f.fileno()
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
+        os.preadv(fd, [buf], 0)
 
 def worker_jollyjack_torch(pre_buffer, dtype, path):
 
@@ -294,6 +324,21 @@ for compression, dtype in [
 
     print(f"....................................")
     print(f"dtype:{dtype}, compression={compression}:")
+    print(f".")
+
+    if not sys.platform.startswith("win"):
+        print(f".")
+        for n_workers in worker_counts:
+            print(
+                f"`raw_bytes_read` n_workers:{n_workers}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path))}"
+            )
+
+        print(f".")
+        for n_workers in worker_counts:
+            print(
+                f"`raw_bytes_read_with_metadata` n_workers:{n_workers}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read_with_metadata(dtype.to_pandas_dtype(), path))}"
+            )
+
     print(f".")
     for n_workers in worker_counts:
         for pre_buffer in [False, True]:
