@@ -202,6 +202,24 @@ def worker_raw_bytes_read(dtype, path):
     finally:
         os.close(fd)
 
+
+def worker_raw_bytes_read_with_metadata(dtype, path):
+
+    np_array = get_thread_local_np_array(dtype)
+    buf = np_array.reshape(-1, order="A").data
+
+    with open(path, "rb") as f:
+        pr = pq.ParquetReader()
+        pr.open(f)
+        _metadata = pr.metadata
+
+        fd = f.fileno()
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
+        os.preadv(fd, [buf], 0)
+        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_NOREUSE)
+
+
 def worker_jollyjack_torch(pre_buffer, dtype, path):
 
     import torch
@@ -319,6 +337,11 @@ for compression, dtype in [
         for n_workers in worker_counts:
             print(
                 f"`raw_bytes_read` n_workers:{n_workers}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path))}"
+            )
+
+        for n_workers in worker_counts:
+            print(
+                f"`raw_bytes_read_with_metadata` n_workers:{n_workers}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read_with_metadata(dtype.to_pandas_dtype(), path))}"
             )
 
     for n_workers in worker_counts:
