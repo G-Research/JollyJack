@@ -339,11 +339,13 @@ for compression, dtype in [
                 f"`raw_bytes_read` n_workers:{n_workers}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path))}"
             )
 
+        print(f".")
         for n_workers in worker_counts:
             print(
                 f"`raw_bytes_read_with_metadata` n_workers:{n_workers}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read_with_metadata(dtype.to_pandas_dtype(), path))}"
             )
 
+    print(f".")
     for n_workers in worker_counts:
         for pre_buffer in [False, True]:
             for use_threads in [False, True]:
