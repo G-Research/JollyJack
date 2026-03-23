@@ -199,6 +199,7 @@ def worker_raw_bytes_read(dtype, path):
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
         os.preadv(fd, [buf], 0)
 
+
 def worker_raw_bytes_read_with_metadata(dtype, path):
 
     np_array = get_thread_local_np_array(dtype)
@@ -213,6 +214,7 @@ def worker_raw_bytes_read_with_metadata(dtype, path):
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
         os.preadv(fd, [buf], 0)
+
 
 def worker_jollyjack_torch(pre_buffer, dtype, path):
 
