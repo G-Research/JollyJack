@@ -189,30 +189,22 @@ def worker_numpy_copy_to_row_major(dtype, path):
     np.copyto(dst_array, np_array)
 
 
-def worker_raw_bytes_read(dtype, path):
-
-    np_array = get_thread_local_np_array(dtype)
-    buf = np_array.reshape(-1, order="A").data
-    with open(path, "rb") as f:
-        fd = f.fileno()
-        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
-        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
-        os.preadv(fd, [buf], 0)
-
-
-def worker_raw_bytes_read_with_metadata(dtype, path):
+def worker_raw_bytes_read(dtype, path, pre_buffer, read_metadata):
 
     np_array = get_thread_local_np_array(dtype)
     buf = np_array.reshape(-1, order="A").data
 
     with open(path, "rb") as f:
-        pr = pq.ParquetReader()
-        pr.open(f)
-        _metadata = pr.metadata
+        if read_metadata:
+            pr = pq.ParquetReader()
+            pr.open(f)
+            _ = pr.metadata
 
         fd = f.fileno()
-        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
-        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
+        if pre_buffer:
+            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
+            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
+
         os.preadv(fd, [buf], 0)
 
 
@@ -331,15 +323,11 @@ for compression, dtype in [
     if not sys.platform.startswith("win"):
         print(f".")
         for n_workers in worker_counts:
-            print(
-                f"`raw_bytes_read` n_workers:{n_workers}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path))}"
-            )
-
-        print(f".")
-        for n_workers in worker_counts:
-            print(
-                f"`raw_bytes_read_with_metadata` n_workers:{n_workers}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read_with_metadata(dtype.to_pandas_dtype(), path))}"
-            )
+            for pre_buffer in [False, True]:
+                for read_metadata in [False, True]:
+                    print(
+                        f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path, pre_buffer = pre_buffer, read_metadata = read_metadata))}"
+                    )
 
     print(f".")
     for n_workers in worker_counts:
