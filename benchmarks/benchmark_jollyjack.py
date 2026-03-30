@@ -189,7 +189,7 @@ def worker_numpy_copy_to_row_major(dtype, path):
     np.copyto(dst_array, np_array)
 
 
-def worker_raw_bytes_read(dtype, path, pre_buffer, read_metadata):
+def worker_raw_bytes_read(dtype, path, read_metadata):
 
     np_array = get_thread_local_np_array(dtype)
     buf = np_array.reshape(-1, order="A").data
@@ -201,12 +201,7 @@ def worker_raw_bytes_read(dtype, path, pre_buffer, read_metadata):
             _ = pr.metadata
 
         fd = f.fileno()
-        if pre_buffer:
-            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_SEQUENTIAL)
-            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
-
         os.preadv(fd, [buf], 0)
-
 
 def worker_jollyjack_torch(pre_buffer, dtype, path):
 
@@ -323,11 +318,10 @@ for compression, dtype in [
     if not sys.platform.startswith("win"):
         print(f".")
         for n_workers in worker_counts:
-            for pre_buffer in [False, True]:
-                for read_metadata in [False, True]:
-                    print(
-                        f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path, pre_buffer = pre_buffer, read_metadata = read_metadata))}"
-                    )
+            for read_metadata in [False, True]:
+                print(
+                    f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path, read_metadata = read_metadata))}"
+                )
 
     print(f".")
     for n_workers in worker_counts:
