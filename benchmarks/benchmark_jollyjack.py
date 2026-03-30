@@ -10,6 +10,9 @@ import random
 import time
 import sys
 import os
+import csv
+import io
+import datetime
 
 benchmark_mode = os.getenv("JJ_benchmark_mode", "CPU")
 
@@ -240,6 +243,56 @@ def worker_jollyjack_torch(pre_buffer, dtype, path):
     )
 
 
+csv_rows = []
+CSV_FIELDS = [
+    "timestamp",
+    "benchmark_mode",
+    "method",
+    "dtype",
+    "compression",
+    "n_workers",
+    "use_threads",
+    "pre_buffer",
+    "jj_reader",
+    "read_metadata",
+    "jj_variant",
+    "min_time_s",
+    "throughput_gbps",
+]
+
+
+def record_result(
+    method,
+    min_time,
+    throughput,
+    dtype="",
+    compression="",
+    n_workers="",
+    use_threads="",
+    pre_buffer="",
+    jj_reader="",
+    read_metadata="",
+    jj_variant="",
+):
+    csv_rows.append(
+        {
+            "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+            "benchmark_mode": benchmark_mode,
+            "method": method,
+            "dtype": dtype,
+            "compression": compression,
+            "n_workers": n_workers,
+            "use_threads": use_threads,
+            "pre_buffer": pre_buffer,
+            "jj_reader": jj_reader,
+            "read_metadata": read_metadata,
+            "jj_variant": jj_variant,
+            "min_time_s": f"{min_time:.2f}",
+            "throughput_gbps": f"{throughput:.2f}",
+        }
+    )
+
+
 def calculate_data_size(dtype):
     return chunk_size * n_columns_to_read * dtype.byte_width
 
@@ -279,8 +332,13 @@ def measure_reading(max_workers, worker):
 
     tts = [f"{t:.2f}" for t in tt]
     tts = f"[{', '.join(tts)}]"
-    throughput_gbps = data_set_bytes / min(tt) / (1024 * 1024 * 1024) * 8
-    return f"{min(tt):.2f}s, {throughput_gbps:.2f} Gb/s -> {tts}"
+    min_time = min(tt)
+    throughput_gbps = data_set_bytes / min_time / (1024 * 1024 * 1024) * 8
+    return (
+        f"{min_time:.2f}s, {throughput_gbps:.2f} Gb/s -> {tts}",
+        min_time,
+        throughput_gbps,
+    )
 
 
 print(f".")
@@ -320,17 +378,34 @@ for compression, dtype in [
         print(f".")
         for n_workers in worker_counts:
             for read_metadata in [False, True]:
+                duration_str, min_time, throughput = measure_reading(
+                    n_workers,
+                    lambda path: worker_raw_bytes_read(
+                        dtype.to_pandas_dtype(), path, read_metadata=read_metadata
+                    ),
+                )
                 print(
-                    f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path, read_metadata = read_metadata))}"
+                    f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, duration:{duration_str}"
+                )
+                record_result(
+                    "raw_bytes_read",
+                    min_time,
+                    throughput,
+                    dtype=str(dtype),
+                    compression=compression,
+                    n_workers=n_workers,
+                    read_metadata=read_metadata,
                 )
 
-    print(f".")
-    for n_workers in worker_counts:
-        for pre_buffer in [False, True]:
-            for use_threads in [False, True]:
-                print(
-                    f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
-                )
+    # print(f".")
+    # for n_workers in worker_counts:
+    #     for pre_buffer in [False, True]:
+    #         for use_threads in [False, True]:
+    #             duration_str, min_time, throughput = measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))
+    #             print(
+    #                 f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{duration_str}"
+    #             )
+    #             record_result("pq.read_row_groups", min_time, throughput, dtype=str(dtype), compression=compression, n_workers=n_workers, use_threads=use_threads, pre_buffer=pre_buffer)
 
     print(f".")
     for jj_reader in (
@@ -348,27 +423,92 @@ for compression, dtype in [
         for n_workers in worker_counts:
             for pre_buffer in [False, True]:
                 for use_threads in [False, True]:
+                    duration_str, min_time, throughput = measure_reading(
+                        n_workers,
+                        lambda path: worker_jollyjack_numpy(
+                            use_threads, pre_buffer, dtype.to_pandas_dtype(), path=path
+                        ),
+                    )
                     print(
-                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{duration_str}"
+                    )
+                    record_result(
+                        "jj.read_into_numpy",
+                        min_time,
+                        throughput,
+                        dtype=str(dtype),
+                        compression=compression,
+                        n_workers=n_workers,
+                        use_threads=use_threads,
+                        pre_buffer=pre_buffer,
+                        jj_reader=jj_reader,
                     )
 
-    print(f".")
-    for n_workers in worker_counts:
-        for pre_buffer in [False, True]:
-            print(
-                f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
-            )
-
-    print(f".")
-    for jj_variant in [1, 2]:
-        os.environ["JJ_copy_to_row_major"] = str(jj_variant)
-        for n_workers in worker_counts:
-            print(
-                f"`jj.copy_to_row_major` n_workers:{n_workers}, jj_variant={jj_variant} duration:{measure_reading(n_workers, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}"
-            )
-
-    print(f".")
-    for n_workers in worker_counts:
-        print(
-            f"`np.copy_to_row_major` compression={compression}, duration:{measure_reading(n_workers, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}"
+print(f".")
+for n_workers in worker_counts:
+    for pre_buffer in [False, True]:
+        duration_str, min_time, throughput = measure_reading(
+            n_workers,
+            lambda path: worker_jollyjack_torch(
+                pre_buffer, dtype.to_pandas_dtype(), path=path
+            ),
         )
+        print(
+            f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{duration_str}"
+        )
+        record_result(
+            "jj.read_into_torch",
+            min_time,
+            throughput,
+            dtype=str(dtype),
+            compression=compression,
+            n_workers=n_workers,
+            pre_buffer=pre_buffer,
+        )
+
+print(f".")
+for jj_variant in [1, 2]:
+    os.environ["JJ_copy_to_row_major"] = str(jj_variant)
+    for n_workers in worker_counts:
+        duration_str, min_time, throughput = measure_reading(
+            n_workers,
+            lambda path: worker_jollyjack_copy_to_row_major(
+                dtype.to_pandas_dtype(), path=path
+            ),
+        )
+        print(
+            f"`jj.copy_to_row_major` n_workers:{n_workers}, jj_variant={jj_variant} duration:{duration_str}"
+        )
+        record_result(
+            "jj.copy_to_row_major",
+            min_time,
+            throughput,
+            dtype=str(dtype),
+            compression=compression,
+            n_workers=n_workers,
+            jj_variant=jj_variant,
+        )
+
+print(f".")
+for n_workers in worker_counts:
+    duration_str, min_time, throughput = measure_reading(
+        n_workers,
+        lambda path: worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path),
+    )
+    print(f"`np.copy_to_row_major` compression={compression}, duration:{duration_str}")
+    record_result(
+        "np.copy_to_row_major",
+        min_time,
+        throughput,
+        dtype=str(dtype),
+        compression=compression,
+        n_workers=n_workers,
+    )
+
+# Print CSV summary to stdout
+buf = io.StringIO()
+writer = csv.DictWriter(buf, fieldnames=CSV_FIELDS)
+writer.writeheader()
+writer.writerows(csv_rows)
+print("\n--- CSV ---")
+print(buf.getvalue(), end="")
