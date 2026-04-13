@@ -66,24 +66,24 @@ Recommended configuration:
 
 ### Pre-buffering and `cache_options`
 
-When `pre_buffer=True`, Arrow's `ReadRangeCache` coalesces column ranges and
-reads them into intermediate buffers. By default the maximum coalesced range
-size is 32 MB (`range_size_limit`). Arrow supports several memory allocators
-(mimalloc, jemalloc, system). When Arrow is built with mimalloc (the default
-on most platforms), allocations above
-[~16 MB](https://github.com/microsoft/mimalloc/blob/75d69f4ab736ad9f56cdd76c7eb883f60ac48869/include/mimalloc/types.h#L205)
-are treated as singleton pages backed by direct OS `mmap`/`munmap` calls.
-These allocations bypass mimalloc's arena and cannot be reused across calls,
-causing repeated commit/decommit cycles and page fault overhead. Other
-allocators may have similar thresholds.
+When `pre_buffer=True`, Arrow merges nearby column ranges and reads them into
+temporary buffers. The default maximum merged range is 32 MB
+(`range_size_limit`).
 
-To avoid this, set `range_size_limit` to a value at or below the 16 MB
-threshold so that coalesced ranges stay within mimalloc's reusable arena:
+Arrow supports several memory allocators (mimalloc, jemalloc, system). With
+mimalloc (the default on most platforms), allocations above
+[~16 MB](https://github.com/microsoft/mimalloc/blob/75d69f4ab736ad9f56cdd76c7eb883f60ac48869/include/mimalloc/types.h#L205)
+go straight to the OS (`mmap`/`munmap`) instead of the internal arena. This
+means the memory cannot be reused between calls, and each call pays the cost
+of mapping and zeroing fresh pages. Other allocators may behave similarly.
+
+To avoid this, lower `range_size_limit` so that merged ranges fit inside the
+allocator's arena:
 
 ```python
 cache_options = pa.CacheOptions(
-    hole_size_limit=8192,       # default
-    range_size_limit=16*1024*1024,  # 16 MB (fits in mimalloc arena)
+    hole_size_limit=8192,           # default
+    range_size_limit=16*1024*1024,  # 16 MB, fits in mimalloc arena
     lazy=False,
 )
 jj.read_into_numpy(
@@ -97,10 +97,8 @@ jj.read_into_numpy(
 )
 ```
 
-To diagnose memory allocator behavior, set `MIMALLOC_SHOW_STATS=1` and
-`MIMALLOC_VERBOSE=1` environment variables. This prints allocation statistics
-(peak/total committed bytes, page counts, purge counts, abandoned pages) at
-process exit, which can help identify excessive commit/decommit churn.
+To debug allocator issues with mimalloc, run with `MIMALLOC_SHOW_STATS=1` and
+`MIMALLOC_VERBOSE=1`. This prints allocation statistics at process exit.
 
 ## Requirements
 
@@ -230,7 +228,11 @@ print(np_array)
 ### Using cache options
 ```python
 np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
-cache_options = pa.CacheOptions(hole_size_limit=1024, range_size_limit=2048, lazy=True)
+cache_options = pa.CacheOptions(
+    hole_size_limit=8192,           # default
+    range_size_limit=16*1024*1024,  # 16 MB, fits in mimalloc arena
+    lazy=False,
+)
 with fs.LocalFileSystem().open_input_file(path) as f:
     jj.read_into_numpy(
         source=f,
