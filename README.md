@@ -64,6 +64,37 @@ Recommended configuration:
 
 - `use_threads = False`, `pre_buffer = False`, and the default reader backend (no io_uring).
 
+### Pre-buffering and `cache_options`
+
+When `pre_buffer=True`, Arrow's `ReadRangeCache` coalesces column ranges and
+reads them into intermediate buffers. By default the maximum coalesced range
+size is 32 MB (`range_size_limit`). Arrow uses mimalloc as its memory
+allocator, and mimalloc treats allocations above
+[~16 MB](https://github.com/microsoft/mimalloc/blob/75d69f4ab736ad9f56cdd76c7eb883f60ac48869/include/mimalloc/types.h#L205)
+as singleton pages backed by direct OS `mmap`/`munmap` calls. These allocations bypass mimalloc's
+arena and cannot be reused across calls, causing repeated commit/decommit
+cycles and page fault overhead.
+
+To avoid this, set `range_size_limit` to a value at or below the 16 MB
+threshold so that coalesced ranges stay within mimalloc's reusable arena:
+
+```python
+cache_options = pa.CacheOptions(
+    hole_size_limit=8192,       # default
+    range_size_limit=16*1024*1024,  # 16 MB (fits in mimalloc arena)
+    lazy=False,
+)
+jj.read_into_numpy(
+    source=path,
+    metadata=None,
+    np_array=np_array,
+    row_group_indices=[0],
+    column_indices=range(n_columns),
+    pre_buffer=True,
+    cache_options=cache_options,
+)
+```
+
 ## Requirements
 
 - pyarrow ~= 23.0.0
