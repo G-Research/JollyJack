@@ -26,12 +26,22 @@ elif benchmark_mode == "CPU":
 else:
     raise RuntimeError(f"Invalid JJ_benchmark_mode:{benchmark_mode}")
 
-worker_counts = [1, 2]
-row_groups = 1
-n_columns = 7_000
-n_columns_to_read = 3_000
-chunk_size = 32_000
-parquet_path = "my.parquet" if sys.platform.startswith("win") else "/tmp/my.parquet"
+# Individual overrides (take precedence over mode)
+n_files = int(os.getenv("JJ_N_FILES", n_files))
+n_repeats = int(os.getenv("JJ_N_REPEATS", n_repeats))
+purge_cache = os.getenv("JJ_PURGE_CACHE", str(int(purge_cache))) == "1"
+
+worker_counts = [int(x) for x in os.getenv("JJ_WORKER_COUNTS", "1,2").split(",")]
+row_groups = int(os.getenv("JJ_ROW_GROUPS", "1"))
+n_columns = int(os.getenv("JJ_N_COLUMNS", "7000"))
+n_columns_to_read = int(os.getenv("JJ_N_COLUMNS_TO_READ", "3000"))
+chunk_size = int(os.getenv("JJ_CHUNK_SIZE", "32000"))
+measure_iterations = int(os.getenv("JJ_MEASURE_ITERATIONS", "5"))
+parquet_path = os.getenv("JJ_PARQUET_PATH",
+    "my.parquet" if sys.platform.startswith("win") else "/tmp/my.parquet")
+
+benchmarks_to_run = os.getenv("JJ_BENCHMARKS", "all").split(",")
+run_all = "all" in benchmarks_to_run
 column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
 row_groups_to_read = random.sample(range(row_groups), 1)
 
@@ -252,7 +262,7 @@ def measure_reading(max_workers, worker):
     thread_local_data = threading.local()
 
     # measure multiple times and take the fastest run
-    for _ in range(5):
+    for _ in range(measure_iterations):
 
         if purge_cache:
             for i in range(n_files):
@@ -292,6 +302,8 @@ print(f"row_groups = {row_groups}")
 print(f"n_columns = {n_columns}")
 print(f"chunk_size = {chunk_size}")
 print(f"purge_cache = {purge_cache}")
+print(f"measure_iterations = {measure_iterations}")
+print(f"benchmarks = {benchmarks_to_run}")
 
 print(f"pyarrow.version = {pa.__version__}")
 print(f"jollyjack.version = {jj.__version__}")
@@ -316,7 +328,7 @@ for compression, dtype in [
     print(f"dtype:{dtype}, compression={compression}:")
     print(f".")
 
-    if not sys.platform.startswith("win"):
+    if (run_all or "raw_bytes" in benchmarks_to_run) and not sys.platform.startswith("win"):
         print(f".")
         for n_workers in worker_counts:
             for read_metadata in [False, True]:
@@ -324,51 +336,56 @@ for compression, dtype in [
                     f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path, read_metadata = read_metadata))}"
                 )
 
-    print(f".")
-    for n_workers in worker_counts:
-        for pre_buffer in [False, True]:
-            for use_threads in [False, True]:
-                print(
-                    f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
-                )
-
-    print(f".")
-    for jj_reader in (
-        [None]
-        if sys.platform.startswith("win")
-        else [None, "io_uring", "io_uring_odirect"]
-    ):
-
-        if jj_reader is None:
-            os.environ.pop("JJ_READER_BACKEND", None)
-        else:
-            os.environ["JJ_READER_BACKEND"] = jj_reader
-
+    if run_all or "arrow" in benchmarks_to_run:
         print(f".")
         for n_workers in worker_counts:
             for pre_buffer in [False, True]:
                 for use_threads in [False, True]:
                     print(
-                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                        f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
                     )
 
-    print(f".")
-    for n_workers in worker_counts:
-        for pre_buffer in [False, True]:
-            print(
-                f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
-            )
+    if run_all or "jj_numpy" in benchmarks_to_run:
+        print(f".")
+        for jj_reader in (
+            [None]
+            if sys.platform.startswith("win")
+            else [None, "io_uring", "io_uring_odirect"]
+        ):
 
-    print(f".")
-    for jj_variant in [1, 2]:
-        os.environ["JJ_copy_to_row_major"] = str(jj_variant)
+            if jj_reader is None:
+                os.environ.pop("JJ_READER_BACKEND", None)
+            else:
+                os.environ["JJ_READER_BACKEND"] = jj_reader
+
+            print(f".")
+            for n_workers in worker_counts:
+                for pre_buffer in [False, True]:
+                    for use_threads in [False, True]:
+                        print(
+                            f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                        )
+
+    if run_all or "jj_torch" in benchmarks_to_run:
+        print(f".")
+        for n_workers in worker_counts:
+            for pre_buffer in [False, True]:
+                print(
+                    f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                )
+
+    if run_all or "copy_to_row_major" in benchmarks_to_run:
+        print(f".")
+        for jj_variant in [1, 2]:
+            os.environ["JJ_copy_to_row_major"] = str(jj_variant)
+            for n_workers in worker_counts:
+                print(
+                    f"`jj.copy_to_row_major` n_workers:{n_workers}, jj_variant={jj_variant} duration:{measure_reading(n_workers, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}"
+                )
+
+    if run_all or "np_copy" in benchmarks_to_run:
+        print(f".")
         for n_workers in worker_counts:
             print(
-                f"`jj.copy_to_row_major` n_workers:{n_workers}, jj_variant={jj_variant} duration:{measure_reading(n_workers, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}"
+                f"`np.copy_to_row_major` compression={compression}, duration:{measure_reading(n_workers, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}"
             )
-
-    print(f".")
-    for n_workers in worker_counts:
-        print(
-            f"`np.copy_to_row_major` compression={compression}, duration:{measure_reading(n_workers, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}"
-        )
