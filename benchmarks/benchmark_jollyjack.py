@@ -11,62 +11,66 @@ import time
 import sys
 import os
 
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-def apply_env_overrides(prefix="JJB_"):
-    g = globals()
-    for key, value in os.environ.items():
-        if not key.startswith(prefix):
-            continue
-        var_name = key[len(prefix) :].lower()
-        if var_name not in g:
-            print(f"WARNING: {key} does not match any global variable '{var_name}'")
-            continue
-        current = g[var_name]
-        if isinstance(current, bool):
-            g[var_name] = value in ("1", "true", "True")
-        elif isinstance(current, int):
-            g[var_name] = int(value)
-        elif isinstance(current, float):
-            g[var_name] = float(value)
-        elif isinstance(current, set):
-            g[var_name] = set(value.split(","))
-        elif isinstance(current, list):
-            if current and isinstance(current[0], int):
-                g[var_name] = [int(x) for x in value.split(",")]
-            else:
-                g[var_name] = value.split(",")
+class BenchmarkSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="JJB_")
+
+    benchmark_mode: str = "CPU"
+    n_files: int | None = None
+    n_repeats: int | None = None
+    purge_cache: bool | None = None
+    worker_counts: list[int] = [1, 2]
+    row_groups: int = 1
+    n_columns: int = 7_000
+    n_columns_to_read: int = 3_000
+    chunk_size: int = 32_000
+    measure_iterations: int = 5
+    parquet_path: str = (
+        "my.parquet" if sys.platform.startswith("win") else "/tmp/my.parquet"
+    )
+    benchmarks_to_run: set[str] = {"all"}
+
+    @field_validator("worker_counts", mode="before")
+    @classmethod
+    def parse_worker_counts(cls, v):
+        if isinstance(v, str):
+            return [int(x) for x in v.split(",")]
+        return v
+
+    @field_validator("benchmarks_to_run", mode="before")
+    @classmethod
+    def parse_benchmarks(cls, v):
+        if isinstance(v, str):
+            return set(v.split(","))
+        return v
+
+    @model_validator(mode="after")
+    def apply_mode_defaults(self):
+        if self.benchmark_mode == "FILE_SYSTEM":
+            if self.n_files is None:
+                self.n_files = 6
+            if self.n_repeats is None:
+                self.n_repeats = 1
+            if self.purge_cache is None:
+                self.purge_cache = not sys.platform.startswith("win")
+        elif self.benchmark_mode == "CPU":
+            if self.n_files is None:
+                self.n_files = 1
+            if self.n_repeats is None:
+                self.n_repeats = 6
+            if self.purge_cache is None:
+                self.purge_cache = False
         else:
-            g[var_name] = value
+            raise ValueError(f"Invalid benchmark_mode: {self.benchmark_mode}")
+        return self
 
 
-benchmark_mode = os.getenv("JJ_benchmark_mode", "CPU")
+cfg = BenchmarkSettings()
 
-if benchmark_mode == "FILE_SYSTEM":
-    # FILE_SYSTEM, unable to fit everything into page cache, no repeats
-    n_files = 6
-    n_repeats = 1
-    purge_cache = False if sys.platform.startswith("win") else True
-elif benchmark_mode == "CPU":
-    # "CPU" -> one file, goes into page cache, many repeats
-    n_files = 1
-    n_repeats = 6
-    purge_cache = False
-else:
-    raise RuntimeError(f"Invalid JJ_benchmark_mode:{benchmark_mode}")
-
-worker_counts = [1, 2]
-row_groups = 1
-n_columns = 7_000
-n_columns_to_read = 3_000
-chunk_size = 32_000
-measure_iterations = 5
-parquet_path = "my.parquet" if sys.platform.startswith("win") else "/tmp/my.parquet"
-benchmarks_to_run = {"all"}
-
-apply_env_overrides()
-
-column_indices_to_read = random.sample(range(n_columns), n_columns_to_read)
-row_groups_to_read = random.sample(range(row_groups), 1)
+column_indices_to_read = random.sample(range(cfg.n_columns), cfg.n_columns_to_read)
+row_groups_to_read = random.sample(range(cfg.row_groups), 1)
 
 
 def purge_file_from_cache(path: str):
@@ -128,7 +132,7 @@ def generate_data(n_columns, n_row_groups, path, compression, dtype):
         filename=path,
         n_columns=n_columns,
         n_row_groups=n_row_groups,
-        chunk_size=chunk_size,
+        chunk_size=cfg.chunk_size,
         compression=compression,
         dtype=dtype,
     )
@@ -156,7 +160,7 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
 def get_thread_local_np_array(dtype):
     np_array = getattr(thread_local_data, "np_array", None)
     if np_array is None:
-        np_array = np.empty((chunk_size, n_columns_to_read), dtype=dtype, order="F")
+        np_array = np.empty((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="F")
         # By writing all zeros we make sure that the memory is properly allocated and mapped to physical RAM (avoid Memory Allocation Contention)
         np_array[:] = 0
         thread_local_data.np_array = np_array
@@ -180,9 +184,9 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
 
 def worker_jollyjack_copy_to_row_major(dtype, path):
 
-    np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order="F")
-    dst_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order="C")
-    row_indices = list(range(chunk_size))
+    np_array = np.zeros((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="F")
+    dst_array = np.zeros((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="C")
+    row_indices = list(range(cfg.chunk_size))
     random.shuffle(row_indices)
 
     pr = pq.ParquetReader()
@@ -203,8 +207,8 @@ def worker_jollyjack_copy_to_row_major(dtype, path):
 
 def worker_numpy_copy_to_row_major(dtype, path):
 
-    np_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order="F")
-    dst_array = np.zeros((chunk_size, n_columns_to_read), dtype=dtype, order="C")
+    np_array = np.zeros((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="F")
+    dst_array = np.zeros((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="C")
 
     pr = pq.ParquetReader()
     pr.open(path)
@@ -256,7 +260,7 @@ def worker_jollyjack_torch(pre_buffer, dtype, path):
     }
 
     tensor = torch.zeros(
-        n_columns_to_read, chunk_size, dtype=numpy_to_torch_dtype_dict[dtype]
+        cfg.n_columns_to_read, cfg.chunk_size, dtype=numpy_to_torch_dtype_dict[dtype]
     ).transpose(0, 1)
 
     pr = pq.ParquetReader()
@@ -274,7 +278,7 @@ def worker_jollyjack_torch(pre_buffer, dtype, path):
 
 
 def calculate_data_size(dtype):
-    return chunk_size * n_columns_to_read * dtype.byte_width
+    return cfg.chunk_size * cfg.n_columns_to_read * dtype.byte_width
 
 
 def measure_reading(max_workers, worker):
@@ -285,20 +289,20 @@ def measure_reading(max_workers, worker):
     thread_local_data = threading.local()
 
     # measure multiple times and take the fastest run
-    for _ in range(measure_iterations):
+    for _ in range(cfg.measure_iterations):
 
-        if purge_cache:
-            for i in range(n_files):
-                purge_file_from_cache(path=f"{parquet_path}{i}")
+        if cfg.purge_cache:
+            for i in range(cfg.n_files):
+                purge_file_from_cache(path=f"{cfg.parquet_path}{i}")
 
         # Submit the work
         t = time.time()
         work_results = []
-        for _ in range(n_repeats):
+        for _ in range(cfg.n_repeats):
             work_results.extend(
                 [
-                    pool.submit(worker, path=f"{parquet_path}{i}")
-                    for i in range(0, n_files)
+                    pool.submit(worker, path=f"{cfg.parquet_path}{i}")
+                    for i in range(0, cfg.n_files)
                 ]
             )
 
@@ -315,21 +319,14 @@ def measure_reading(max_workers, worker):
     throughput_gbps = data_set_bytes / min(tt) / (1024 * 1024 * 1024) * 8
     return f"{min(tt):.2f}s, {throughput_gbps:.2f} Gb/s -> {tts}"
 
-
 print(f".")
-print(
-    f"benchmark_mode = {benchmark_mode}, n_files = {n_files}, n_repeats = {n_repeats}"
-)
-print(f"worker_counts = {worker_counts}")
-print(f"row_groups = {row_groups}")
-print(f"n_columns = {n_columns}")
-print(f"chunk_size = {chunk_size}")
-print(f"purge_cache = {purge_cache}")
-print(f"measure_iterations = {measure_iterations}")
-print(f"benchmarks = {benchmarks_to_run}")
-
 print(f"pyarrow.version = {pa.__version__}")
 print(f"jollyjack.version = {jj.__version__}")
+
+print(f".")
+for name, value in cfg.model_dump().items():
+    print(f"{name} = {value}")
+print(f".")
 
 for compression, dtype in [
     (None, pa.float32()),
@@ -337,12 +334,12 @@ for compression, dtype in [
     (None, pa.float16()),
 ]:
 
-    for f in range(n_files):
-        path = f"{parquet_path}{f}"
+    for f in range(cfg.n_files):
+        path = f"{cfg.parquet_path}{f}"
         generate_data(
             path=path,
-            n_row_groups=row_groups,
-            n_columns=n_columns,
+            n_row_groups=cfg.row_groups,
+            n_columns=cfg.n_columns,
             compression=compression,
             dtype=dtype,
         )
@@ -351,24 +348,24 @@ for compression, dtype in [
     print(f"dtype:{dtype}, compression={compression}:")
     print(f".")
 
-    if {"all", "raw_bytes"} & benchmarks_to_run and not sys.platform.startswith("win"):
+    if {"all", "raw_bytes"} & cfg.benchmarks_to_run and not sys.platform.startswith("win"):
         print(f".")
-        for n_workers in worker_counts:
+        for n_workers in cfg.worker_counts:
             for read_metadata in [False, True]:
                 print(
                     f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path, read_metadata = read_metadata))}"
                 )
 
-    if {"all", "arrow"} & benchmarks_to_run:
+    if {"all", "arrow"} & cfg.benchmarks_to_run:
         print(f".")
-        for n_workers in worker_counts:
+        for n_workers in cfg.worker_counts:
             for pre_buffer in [False, True]:
                 for use_threads in [False, True]:
                     print(
                         f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
                     )
 
-    if {"all", "jj_numpy"} & benchmarks_to_run:
+    if {"all", "jj_numpy"} & cfg.benchmarks_to_run:
         print(f".")
         for jj_reader in (
             [None]
@@ -382,33 +379,33 @@ for compression, dtype in [
                 os.environ["JJ_READER_BACKEND"] = jj_reader
 
             print(f".")
-            for n_workers in worker_counts:
+            for n_workers in cfg.worker_counts:
                 for pre_buffer in [False, True]:
                     for use_threads in [False, True]:
                         print(
                             f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
                         )
 
-    if {"all", "jj_torch"} & benchmarks_to_run:
+    if {"all", "jj_torch"} & cfg.benchmarks_to_run:
         print(f".")
-        for n_workers in worker_counts:
+        for n_workers in cfg.worker_counts:
             for pre_buffer in [False, True]:
                 print(
                     f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
                 )
 
-    if {"all", "copy_to_row_major"} & benchmarks_to_run:
+    if {"all", "copy_to_row_major"} & cfg.benchmarks_to_run:
         print(f".")
         for jj_variant in [1, 2]:
             os.environ["JJ_copy_to_row_major"] = str(jj_variant)
-            for n_workers in worker_counts:
+            for n_workers in cfg.worker_counts:
                 print(
                     f"`jj.copy_to_row_major` n_workers:{n_workers}, jj_variant={jj_variant} duration:{measure_reading(n_workers, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}"
                 )
 
-    if {"all", "np_copy"} & benchmarks_to_run:
+    if {"all", "np_copy"} & cfg.benchmarks_to_run:
         print(f".")
-        for n_workers in worker_counts:
+        for n_workers in cfg.worker_counts:
             print(
                 f"`np.copy_to_row_major` compression={compression}, duration:{measure_reading(n_workers, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}"
             )
