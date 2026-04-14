@@ -46,7 +46,7 @@ class BenchmarkSettings(BaseSettings):
         else ["default", "io_uring", "io_uring_odirect"]
     )
     dtypes: list[str] = ["float32", "float16"]
-    compressions: list[str] = ["none", "snappy"]
+    compressions: list[str] = ["none"]
 
     @classmethod
     def settings_customise_sources(
