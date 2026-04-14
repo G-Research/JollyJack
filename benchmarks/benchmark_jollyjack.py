@@ -41,13 +41,28 @@ class BenchmarkSettings(BaseSettings):
     )
     benchmarks_to_run: set[str] = {"all"}
     reader_backends: list[str] = (
-        ["default"] if sys.platform.startswith("win") else ["default", "io_uring", "io_uring_odirect"]
+        ["default"]
+        if sys.platform.startswith("win")
+        else ["default", "io_uring", "io_uring_odirect"]
     )
-    dtypes: list[str] = ["float32", "snappy_float32", "float16"]
+    dtypes: list[str] = ["float32", "float16"]
+    compressions: list[str] = ["none", "snappy"]
 
     @classmethod
-    def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
-        return (init_settings, CommaSeparatedEnvSource(settings_cls), dotenv_settings, file_secret_settings)
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        return (
+            init_settings,
+            CommaSeparatedEnvSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
     @model_validator(mode="after")
     def apply_mode_defaults(self):
@@ -136,7 +151,9 @@ def parquet_matches(path, n_columns, n_row_groups, chunk_size, compression, dtyp
         schema = pq.read_schema(path)
     except Exception:
         return False
-    expected_compression = "UNCOMPRESSED" if compression is None else compression.upper()
+    expected_compression = (
+        "UNCOMPRESSED" if compression is None else compression.upper()
+    )
     return (
         meta.num_columns == n_columns
         and meta.num_row_groups == n_row_groups
@@ -148,7 +165,9 @@ def parquet_matches(path, n_columns, n_row_groups, chunk_size, compression, dtyp
 
 def generate_data(n_columns, n_row_groups, path, compression, dtype):
 
-    if parquet_matches(path, n_columns, n_row_groups, cfg.chunk_size, compression, dtype):
+    if parquet_matches(
+        path, n_columns, n_row_groups, cfg.chunk_size, compression, dtype
+    ):
         print(f"Reusing existing {path}")
         return
 
@@ -198,8 +217,8 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
 
     np_array = get_thread_local_np_array(dtype)
     cache_options = pa.CacheOptions(
-        hole_size_limit=8192,           # default
-        range_size_limit=16*1024*1024,  # 16 MB, fits in mimalloc arena
+        hole_size_limit=8192,  # default
+        range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
         lazy=False,
     )
     jj.read_into_numpy(
@@ -365,87 +384,81 @@ for name, value in cfg.model_dump().items():
     print(f"{name} = {value}")
 print(f".")
 
-dtype_map = {
-    "float32": (None, pa.float32()),
-    "snappy_float32": ("snappy", pa.float32()),
-    "float16": (None, pa.float16()),
-}
-
 for dtype_key in cfg.dtypes:
-    if dtype_key not in dtype_map:
-        raise RuntimeError(f"Unknown dtype key: {dtype_key}. Valid: {list(dtype_map.keys())}")
-    compression, dtype = dtype_map[dtype_key]
+    for comp_key in cfg.compressions:
+        dtype = pa.from_numpy_dtype(dtype_key)
+        compression = None if comp_key == "none" else comp_key
 
-    for f in range(cfg.n_files):
-        path = f"{cfg.parquet_path}{f}"
-        generate_data(
-            path=path,
-            n_row_groups=cfg.row_groups,
-            n_columns=cfg.n_columns,
-            compression=compression,
-            dtype=dtype,
-        )
+        for f in range(cfg.n_files):
+            path = f"{cfg.parquet_path}{f}"
+            generate_data(
+                path=path,
+                n_row_groups=cfg.row_groups,
+                n_columns=cfg.n_columns,
+                compression=compression,
+                dtype=dtype,
+            )
 
-    print(f"....................................")
-    print(f"dtype:{dtype}, compression={compression}:")
-    print(f".")
-
-    if {"all", "raw_bytes"} & cfg.benchmarks_to_run and not sys.platform.startswith(
-        "win"
-    ):
+        print(f"....................................")
+        print(f"dtype:{dtype}, compression={compression}:")
         print(f".")
-        for n_workers in cfg.worker_counts:
-            for read_metadata in [False, True]:
-                print(
-                    f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path, read_metadata = read_metadata))}"
-                )
 
-    if {"all", "arrow"} & cfg.benchmarks_to_run:
-        print(f".")
-        for n_workers in cfg.worker_counts:
-            for pre_buffer in [False, True]:
-                for use_threads in [False, True]:
+        if {"all", "raw_bytes"} & cfg.benchmarks_to_run and not sys.platform.startswith(
+            "win"
+        ):
+            print(f".")
+            for n_workers in cfg.worker_counts:
+                for read_metadata in [False, True]:
                     print(
-                        f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
+                        f"`raw_bytes_read` n_workers:{n_workers}, read_metadata:{read_metadata}, duration:{measure_reading(n_workers, lambda path: worker_raw_bytes_read(dtype.to_pandas_dtype(), path, read_metadata = read_metadata))}"
                     )
 
-    if {"all", "jj_numpy"} & cfg.benchmarks_to_run:
-        print(f".")
-        for jj_reader in cfg.reader_backends:
-
-            if jj_reader == "default":
-                os.environ.pop("JJ_READER_BACKEND", None)
-            else:
-                os.environ["JJ_READER_BACKEND"] = jj_reader
-
+        if {"all", "arrow"} & cfg.benchmarks_to_run:
             print(f".")
             for n_workers in cfg.worker_counts:
                 for pre_buffer in [False, True]:
                     for use_threads in [False, True]:
                         print(
-                            f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                            f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
                         )
 
-    if {"all", "jj_torch"} & cfg.benchmarks_to_run:
-        print(f".")
-        for n_workers in cfg.worker_counts:
-            for pre_buffer in [False, True]:
-                print(
-                    f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
-                )
+        if {"all", "jj_numpy"} & cfg.benchmarks_to_run:
+            print(f".")
+            for jj_reader in cfg.reader_backends:
 
-    if {"all", "copy_to_row_major"} & cfg.benchmarks_to_run:
-        print(f".")
-        for jj_variant in [1, 2]:
-            os.environ["JJ_copy_to_row_major"] = str(jj_variant)
+                if jj_reader == "default":
+                    os.environ.pop("JJ_READER_BACKEND", None)
+                else:
+                    os.environ["JJ_READER_BACKEND"] = jj_reader
+
+                print(f".")
+                for n_workers in cfg.worker_counts:
+                    for pre_buffer in [False, True]:
+                        for use_threads in [False, True]:
+                            print(
+                                f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                            )
+
+        if {"all", "jj_torch"} & cfg.benchmarks_to_run:
+            print(f".")
+            for n_workers in cfg.worker_counts:
+                for pre_buffer in [False, True]:
+                    print(
+                        f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                    )
+
+        if {"all", "copy_to_row_major"} & cfg.benchmarks_to_run:
+            print(f".")
+            for jj_variant in [1, 2]:
+                os.environ["JJ_copy_to_row_major"] = str(jj_variant)
+                for n_workers in cfg.worker_counts:
+                    print(
+                        f"`jj.copy_to_row_major` n_workers:{n_workers}, jj_variant={jj_variant} duration:{measure_reading(n_workers, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}"
+                    )
+
+        if {"all", "np_copy"} & cfg.benchmarks_to_run:
+            print(f".")
             for n_workers in cfg.worker_counts:
                 print(
-                    f"`jj.copy_to_row_major` n_workers:{n_workers}, jj_variant={jj_variant} duration:{measure_reading(n_workers, lambda path:worker_jollyjack_copy_to_row_major(dtype.to_pandas_dtype(), path = path))}"
+                    f"`np.copy_to_row_major` duration:{measure_reading(n_workers, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}"
                 )
-
-    if {"all", "np_copy"} & cfg.benchmarks_to_run:
-        print(f".")
-        for n_workers in cfg.worker_counts:
-            print(
-                f"`np.copy_to_row_major` compression={compression}, duration:{measure_reading(n_workers, lambda path:worker_numpy_copy_to_row_major(dtype.to_pandas_dtype(), path))}"
-            )
