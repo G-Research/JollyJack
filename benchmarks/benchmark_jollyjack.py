@@ -43,6 +43,7 @@ class BenchmarkSettings(BaseSettings):
     reader_backends: list[str] = (
         ["default"] if sys.platform.startswith("win") else ["default", "io_uring", "io_uring_odirect"]
     )
+    dtypes: list[str] = ["float32", "snappy_float32", "float16"]
 
     @classmethod
     def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
@@ -127,7 +128,29 @@ def generate_random_parquet(
             writer.close()
 
 
+def parquet_matches(path, n_columns, n_row_groups, chunk_size, compression, dtype):
+    if not os.path.exists(path):
+        return False
+    try:
+        meta = pq.read_metadata(path)
+        schema = pq.read_schema(path)
+    except Exception:
+        return False
+    expected_compression = "UNCOMPRESSED" if compression is None else compression.upper()
+    return (
+        meta.num_columns == n_columns
+        and meta.num_row_groups == n_row_groups
+        and meta.row_group(0).num_rows == chunk_size
+        and meta.row_group(0).column(0).compression == expected_compression
+        and schema[0].type == dtype
+    )
+
+
 def generate_data(n_columns, n_row_groups, path, compression, dtype):
+
+    if parquet_matches(path, n_columns, n_row_groups, cfg.chunk_size, compression, dtype):
+        print(f"Reusing existing {path}")
+        return
 
     t = time.time()
     generate_random_parquet(
@@ -342,11 +365,16 @@ for name, value in cfg.model_dump().items():
     print(f"{name} = {value}")
 print(f".")
 
-for compression, dtype in [
-    (None, pa.float32()),
-    ("snappy", pa.float32()),
-    (None, pa.float16()),
-]:
+dtype_map = {
+    "float32": (None, pa.float32()),
+    "snappy_float32": ("snappy", pa.float32()),
+    "float16": (None, pa.float16()),
+}
+
+for dtype_key in cfg.dtypes:
+    if dtype_key not in dtype_map:
+        raise RuntimeError(f"Unknown dtype key: {dtype_key}. Valid: {list(dtype_map.keys())}")
+    compression, dtype = dtype_map[dtype_key]
 
     for f in range(cfg.n_files):
         path = f"{cfg.parquet_path}{f}"
