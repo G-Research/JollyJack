@@ -47,6 +47,8 @@ class BenchmarkSettings(BaseSettings):
     )
     dtypes: list[str] = ["float32", "float16"]
     compressions: list[str] = ["none"]
+    pre_buffer: list[bool] = [False, True]
+    use_threads: list[bool] = [False, True]
 
     @classmethod
     def settings_customise_sources(
@@ -416,8 +418,8 @@ for dtype_key in cfg.dtypes:
         if {"all", "arrow"} & cfg.benchmarks_to_run:
             print(f".")
             for n_workers in cfg.worker_counts:
-                for pre_buffer in [False, True]:
-                    for use_threads in [False, True]:
+                for pre_buffer in cfg.pre_buffer:
+                    for use_threads in cfg.use_threads:
                         print(
                             f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
                         )
@@ -433,8 +435,8 @@ for dtype_key in cfg.dtypes:
 
                 print(f".")
                 for n_workers in cfg.worker_counts:
-                    for pre_buffer in [False, True]:
-                        for use_threads in [False, True]:
+                    for pre_buffer in cfg.pre_buffer:
+                        for use_threads in cfg.use_threads:
                             print(
                                 f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
                             )
@@ -442,7 +444,7 @@ for dtype_key in cfg.dtypes:
         if {"all", "jj_torch"} & cfg.benchmarks_to_run:
             print(f".")
             for n_workers in cfg.worker_counts:
-                for pre_buffer in [False, True]:
+                for pre_buffer in cfg.pre_buffer:
                     print(
                         f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
                     )
