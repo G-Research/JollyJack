@@ -14,6 +14,7 @@ import os
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class BenchmarkSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="JJB_")
 
@@ -160,7 +161,9 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
 def get_thread_local_np_array(dtype):
     np_array = getattr(thread_local_data, "np_array", None)
     if np_array is None:
-        np_array = np.empty((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="F")
+        np_array = np.empty(
+            (cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="F"
+        )
         # By writing all zeros we make sure that the memory is properly allocated and mapped to physical RAM (avoid Memory Allocation Contention)
         np_array[:] = 0
         thread_local_data.np_array = np_array
@@ -185,7 +188,9 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
 def worker_jollyjack_copy_to_row_major(dtype, path):
 
     np_array = np.zeros((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="F")
-    dst_array = np.zeros((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="C")
+    dst_array = np.zeros(
+        (cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="C"
+    )
     row_indices = list(range(cfg.chunk_size))
     random.shuffle(row_indices)
 
@@ -208,7 +213,9 @@ def worker_jollyjack_copy_to_row_major(dtype, path):
 def worker_numpy_copy_to_row_major(dtype, path):
 
     np_array = np.zeros((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="F")
-    dst_array = np.zeros((cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="C")
+    dst_array = np.zeros(
+        (cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="C"
+    )
 
     pr = pq.ParquetReader()
     pr.open(path)
@@ -319,6 +326,7 @@ def measure_reading(max_workers, worker):
     throughput_gbps = data_set_bytes / min(tt) / (1024 * 1024 * 1024) * 8
     return f"{min(tt):.2f}s, {throughput_gbps:.2f} Gb/s -> {tts}"
 
+
 print(f".")
 print(f"pyarrow.version = {pa.__version__}")
 print(f"jollyjack.version = {jj.__version__}")
@@ -348,7 +356,9 @@ for compression, dtype in [
     print(f"dtype:{dtype}, compression={compression}:")
     print(f".")
 
-    if {"all", "raw_bytes"} & cfg.benchmarks_to_run and not sys.platform.startswith("win"):
+    if {"all", "raw_bytes"} & cfg.benchmarks_to_run and not sys.platform.startswith(
+        "win"
+    ):
         print(f".")
         for n_workers in cfg.worker_counts:
             for read_metadata in [False, True]:
