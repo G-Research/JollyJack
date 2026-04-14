@@ -104,7 +104,7 @@ To debug allocator issues with mimalloc, run with `MIMALLOC_SHOW_STATS=1` and
 
 When `pre_buffer=True`, Arrow dispatches reads to its IO thread pooll,
 configured via the `ARROW_IO_THREADS` environment variable (default: 8). 
-Increasing this value may improve performance.
+Tuning this value may improve performance.
 
 ## Requirements
 
