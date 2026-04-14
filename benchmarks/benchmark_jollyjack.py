@@ -11,8 +11,16 @@ import time
 import sys
 import os
 
-from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, EnvSettingsSource, SettingsConfigDict
+
+
+class CommaSeparatedEnvSource(EnvSettingsSource):
+    def decode_complex_value(self, field_name, field, value):
+        try:
+            return super().decode_complex_value(field_name, field, value)
+        except Exception:
+            return value.split(",")
 
 
 class BenchmarkSettings(BaseSettings):
@@ -33,19 +41,9 @@ class BenchmarkSettings(BaseSettings):
     )
     benchmarks_to_run: set[str] = {"all"}
 
-    @field_validator("worker_counts", mode="before")
     @classmethod
-    def parse_worker_counts(cls, v):
-        if isinstance(v, str):
-            return [int(x) for x in v.split(",")]
-        return v
-
-    @field_validator("benchmarks_to_run", mode="before")
-    @classmethod
-    def parse_benchmarks(cls, v):
-        if isinstance(v, str):
-            return set(v.split(","))
-        return v
+    def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
+        return (init_settings, CommaSeparatedEnvSource(settings_cls), dotenv_settings, file_secret_settings)
 
     @model_validator(mode="after")
     def apply_mode_defaults(self):
