@@ -171,7 +171,11 @@ def get_thread_local_np_array(dtype):
 def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
 
     np_array = get_thread_local_np_array(dtype)
-
+    cache_options = pa.CacheOptions(
+        hole_size_limit=8192,           # default
+        range_size_limit=16*1024*1024,  # 16 MB, fits in mimalloc arena
+        lazy=False,
+    )
     jj.read_into_numpy(
         source=path,
         metadata=None,
@@ -180,6 +184,7 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
         column_indices=column_indices_to_read,
         pre_buffer=pre_buffer,
         use_threads=use_threads,
+        cache_options=cache_options,
     )
 
 
@@ -201,8 +206,8 @@ def worker_jollyjack_copy_to_row_major(dtype, path):
         np_array=np_array,
         row_group_indices=row_groups_to_read,
         column_indices=column_indices_to_read,
-        pre_buffer=True,
-        use_threads=False,
+        pre_buffer=False,
+        use_threads=True,
     )
 
     jj.copy_to_numpy_row_major(np_array, dst_array, row_indices)
@@ -224,8 +229,8 @@ def worker_numpy_copy_to_row_major(dtype, path):
         np_array=np_array,
         row_group_indices=row_groups_to_read,
         column_indices=column_indices_to_read,
-        pre_buffer=True,
-        use_threads=False,
+        pre_buffer=False,
+        use_threads=True,
     )
 
     np.copyto(dst_array, np_array)
