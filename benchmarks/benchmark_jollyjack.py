@@ -11,6 +11,34 @@ import time
 import sys
 import os
 
+
+def apply_env_overrides(prefix="JJB_"):
+    g = globals()
+    for key, value in os.environ.items():
+        if not key.startswith(prefix):
+            continue
+        var_name = key[len(prefix) :].lower()
+        if var_name not in g:
+            print(f"WARNING: {key} does not match any global variable '{var_name}'")
+            continue
+        current = g[var_name]
+        if isinstance(current, bool):
+            g[var_name] = value in ("1", "true", "True")
+        elif isinstance(current, int):
+            g[var_name] = int(value)
+        elif isinstance(current, float):
+            g[var_name] = float(value)
+        elif isinstance(current, set):
+            g[var_name] = set(value.split(","))
+        elif isinstance(current, list):
+            if current and isinstance(current[0], int):
+                g[var_name] = [int(x) for x in value.split(",")]
+            else:
+                g[var_name] = value.split(",")
+        else:
+            g[var_name] = value
+
+
 benchmark_mode = os.getenv("JJ_benchmark_mode", "CPU")
 
 if benchmark_mode == "FILE_SYSTEM":
@@ -46,33 +74,6 @@ def purge_file_from_cache(path: str):
     with open(path, "r") as f:
         fd = f.fileno()
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
-
-
-def apply_env_overrides(prefix="JJB_"):
-    g = globals()
-    for key, value in os.environ.items():
-        if not key.startswith(prefix):
-            continue
-        var_name = key[len(prefix) :].lower()
-        if var_name not in g:
-            print(f"WARNING: {key} does not match any global variable '{var_name}'")
-            continue
-        current = g[var_name]
-        if isinstance(current, bool):
-            g[var_name] = value in ("1", "true", "True")
-        elif isinstance(current, int):
-            g[var_name] = int(value)
-        elif isinstance(current, float):
-            g[var_name] = float(value)
-        elif isinstance(current, set):
-            g[var_name] = set(value.split(","))
-        elif isinstance(current, list):
-            if current and isinstance(current[0], int):
-                g[var_name] = [int(x) for x in value.split(",")]
-            else:
-                g[var_name] = value.split(",")
-        else:
-            g[var_name] = value
 
 
 def generate_random_parquet(
