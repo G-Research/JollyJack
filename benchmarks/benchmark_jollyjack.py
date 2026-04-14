@@ -40,6 +40,9 @@ class BenchmarkSettings(BaseSettings):
         "my.parquet" if sys.platform.startswith("win") else "/tmp/my.parquet"
     )
     benchmarks_to_run: set[str] = {"all"}
+    reader_backends: list[str] = (
+        ["default"] if sys.platform.startswith("win") else ["default", "io_uring", "io_uring_odirect"]
+    )
 
     @classmethod
     def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
@@ -380,13 +383,9 @@ for compression, dtype in [
 
     if {"all", "jj_numpy"} & cfg.benchmarks_to_run:
         print(f".")
-        for jj_reader in (
-            [None]
-            if sys.platform.startswith("win")
-            else [None, "io_uring", "io_uring_odirect"]
-        ):
+        for jj_reader in cfg.reader_backends:
 
-            if jj_reader is None:
+            if jj_reader == "default":
                 os.environ.pop("JJ_READER_BACKEND", None)
             else:
                 os.environ["JJ_READER_BACKEND"] = jj_reader
