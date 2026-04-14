@@ -100,11 +100,11 @@ jj.read_into_numpy(
 To debug allocator issues with mimalloc, run with `MIMALLOC_SHOW_STATS=1` and
 `MIMALLOC_VERBOSE=1`. This prints allocation statistics at process exit.
 
- ### Pre-buffering and `ARROW_IO_THREADS`
+### Pre-buffering and `ARROW_IO_THREADS`
 
-When `pre_buffer=True`, Arrow dispatches reads to its IO thread pool. The
-number of threads is controlled by the `ARROW_IO_THREADS` environment variable
-and defaults to 8.
+When `pre_buffer=True`, Arrow dispatches reads to its IO thread pooll,
+configured via the `ARROW_IO_THREADS` environment variable (default: 8). 
+Increasing this value may improve performance.
 
 ## Requirements
 
