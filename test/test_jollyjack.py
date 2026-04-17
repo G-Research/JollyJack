@@ -691,7 +691,7 @@ class TestJollyJack(unittest.TestCase):
     )
     def test_read_filesystem(self, pre_buffer, use_threads, use_memory_map, dtype):
 
-        if os.environ.get("JJ_READER_BACKEND") != None:
+        if os.environ.get("JJ_READER_BACKEND") in ("io_uring", "io_uring_odirect"):
             self.skipTest(
                 "io_uring is enabled but this test is not compatible with io_uring"
             )

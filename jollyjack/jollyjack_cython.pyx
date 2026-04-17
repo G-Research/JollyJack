@@ -106,7 +106,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef bool cuse_o_direct
     # Please note that the `JJ_READER_BACKEND` variable is experimental and may be changed or removed in future versions
     jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
-    if jj_reader_backend is None:
+    if jj_reader_backend is None or jj_reader_backend == 'coalesced_sync':
         get_reader(source, use_memory_map, &rd_handle)
     elif (jj_reader_backend == 'io_uring' or jj_reader_backend == 'io_uring_odirect'):
         pathstr = source.encode("utf-8")
@@ -131,6 +131,25 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             return
     else:
         raise ValueError(f"Unsupported JJ_READER_BACKEND={jj_reader_backend}")
+
+    if jj_reader_backend == 'coalesced_sync':
+        with nogil:
+            cjollyjack.ReadIntoMemoryCoalescedSync (rd_handle
+                , c_metadata
+                , np_array.data
+                , cbuffer_size
+                , cstride0_size
+                , cstride1_size
+                , ccolumn_indices
+                , crow_group_indices
+                , ctarget_row_ranges
+                , ccolumn_names
+                , ctarget_column_indices
+                , cpre_buffer
+                , cuse_threads
+                , cexpected_rows
+                , c_cache_options)
+            return
 
     with nogil:
         cjollyjack.ReadIntoMemory (rd_handle

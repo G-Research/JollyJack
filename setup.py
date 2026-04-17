@@ -18,7 +18,11 @@ print("library_dirs=", library_dirs)
 extra_compile_args = []
 extra_link_args = []
 debug = (False,)
-files = ["jollyjack/jollyjack_cython.pyx", "jollyjack/jollyjack.cc"]
+files = [
+    "jollyjack/jollyjack_cython.pyx",
+    "jollyjack/jollyjack.cc",
+    "jollyjack/coalesced_sync_reader.cc",
+]
 libraries = ["arrow", "parquet"]
 cython_compile_time_env = {}
 
