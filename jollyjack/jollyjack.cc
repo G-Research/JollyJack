@@ -649,7 +649,7 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
 
 }
 
-void Prefetch(
+void ExperimentalAdviseWillNeed(
     std::shared_ptr<arrow::io::RandomAccessFile> source,
     std::shared_ptr<parquet::FileMetaData> file_metadata,
     std::vector<int> column_indices,

@@ -150,7 +150,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , c_cache_options)
         return
 
-cpdef void prefetch (object source, FileMetaData metadata, row_group_indices, column_indices = [], column_names = [], use_memory_map = False, CacheOptions cache_options = None):
+cpdef void experimental_advise_will_need (object source, FileMetaData metadata, row_group_indices, column_indices = [], column_names = [], use_memory_map = False, CacheOptions cache_options = None):
 
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices
@@ -178,7 +178,7 @@ cpdef void prefetch (object source, FileMetaData metadata, row_group_indices, co
     get_reader(source, use_memory_map, &rd_handle)
 
     with nogil:
-        cjollyjack.Prefetch (rd_handle
+        cjollyjack.ExperimentalAdviseWillNeed (rd_handle
             , c_metadata
             , ccolumn_indices
             , crow_group_indices

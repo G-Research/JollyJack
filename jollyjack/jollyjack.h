@@ -26,7 +26,7 @@ void CopyToRowMajor (void* src_buffer,
     size_t dst_stride1_size,
     std::vector<int> row_indices);
 
-void Prefetch(
+void ExperimentalAdviseWillNeed(
     std::shared_ptr<arrow::io::RandomAccessFile> source,
     std::shared_ptr<parquet::FileMetaData> file_metadata,
     std::vector<int> column_indices,

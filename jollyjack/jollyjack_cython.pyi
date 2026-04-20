@@ -127,7 +127,7 @@ def read_into_numpy(
     )
     return
 
-def prefetch(
+def experimental_advise_will_need(
     source,
     metadata,
     row_group_indices,
