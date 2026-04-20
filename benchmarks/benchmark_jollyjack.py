@@ -239,27 +239,31 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
 def worker_jollyjack_numpy_fadv(use_threads, pre_buffer, dtype, path):
 
     np_array = get_thread_local_np_array(dtype)
-    pr = pq.ParquetReader()
-    pr.open(path)
+    source = pa.OSFile(path, 'rb')
+    metadata = pq.read_metadata(source)
+    cache_options = pa.CacheOptions(
+        hole_size_limit=8192,  # default
+        range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
+        lazy=False,
+    )
     
     if pre_buffer:
         jj.experimental_advise_will_need(
-            source=path,
-            metadata=pr.metadata,
+            source=source,
+            metadata=metadata,
             row_group_indices=row_groups_to_read,
             column_indices=column_indices_to_read,
             )
 
     jj.read_into_numpy(
-        source=path,
-        metadata=pr.metadata,
+        source=source,
+        metadata=metadata,
         np_array=np_array,
         row_group_indices=row_groups_to_read,
         column_indices=column_indices_to_read,
         use_threads=use_threads,
+        cache_options=cache_options,
     )
-    
-    pr.close()
 
 
 def worker_jollyjack_copy_to_row_major(dtype, path):
