@@ -127,40 +127,6 @@ def read_into_numpy(
     )
     return
 
-def experimental_advise_will_need(
-    source,
-    metadata,
-    row_group_indices,
-    column_indices=[],
-    column_names=[],
-    use_memory_map=False,
-    cache_options=None,
-):
-    """
-    Prefetch parquet column data into the OS page cache.
-
-    Computes coalesced byte ranges for the requested row groups and columns,
-    then issues posix_fadvise(WILLNEED) so the kernel starts background
-    readahead.  Call this before read_into_numpy / read_into_torch with
-    pre_buffer=False to warm the page cache without incurring NUMA-hostile
-    buffer allocations.
-
-    Parameters
-    ----------
-    source : str, pathlib.Path, pyarrow.NativeFile, or file-like object
-    metadata : FileMetaData, optional
-    row_group_indices : list[int]
-    column_indices : list[int], optional
-    column_names : list[str], optional
-    use_memory_map : bool, default False
-    cache_options : pa.CacheOptions(), default None -> CCacheOptions.LazyDefaults()
-
-    Notes
-    -----
-    Either column_indices or column_names must be provided, but not both.
-    """
-    return
-
 def copy_to_torch_row_major(src_tensor, dst_tensor, row_indices):
     """
     Copy source column-major tensor to a row-major tensor and shuffle its rows according to provided indices.
