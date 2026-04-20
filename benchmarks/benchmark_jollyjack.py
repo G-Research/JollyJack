@@ -223,7 +223,6 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
         range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
         lazy=False,
     )
-
     jj.read_into_numpy(
         source=path,
         metadata=None,
@@ -231,36 +230,6 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
         row_group_indices=row_groups_to_read,
         column_indices=column_indices_to_read,
         pre_buffer=pre_buffer,
-        use_threads=use_threads,
-        cache_options=cache_options,
-    )
-
-
-def worker_jollyjack_numpy_fadv(use_threads, pre_buffer, dtype, path):
-
-    np_array = get_thread_local_np_array(dtype)
-    source = pa.OSFile(path, "rb")
-    metadata = pq.read_metadata(source)
-    cache_options = pa.CacheOptions(
-        hole_size_limit=8192,  # default
-        range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
-        lazy=False,
-    )
-
-    if pre_buffer:
-        jj.experimental_advise_will_need(
-            source=source,
-            metadata=metadata,
-            row_group_indices=row_groups_to_read,
-            column_indices=column_indices_to_read,
-        )
-
-    jj.read_into_numpy(
-        source=source,
-        metadata=metadata,
-        np_array=np_array,
-        row_group_indices=row_groups_to_read,
-        column_indices=column_indices_to_read,
         use_threads=use_threads,
         cache_options=cache_options,
     )
@@ -470,18 +439,6 @@ for dtype_key in cfg.dtypes:
                         for use_threads in cfg.use_threads:
                             print(
                                 f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
-                            )
-
-        if {"all", "jj_numpy_fadv"} & cfg.benchmarks_to_run:
-            print(f".")
-            for jj_reader in cfg.reader_backends:
-
-                print(f".")
-                for n_workers in cfg.worker_counts:
-                    for pre_buffer in cfg.pre_buffer:
-                        for use_threads in cfg.use_threads:
-                            print(
-                                f"`jj.read_into_numpy_fadv` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy_fadv(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
                             )
 
         if {"all", "jj_torch"} & cfg.benchmarks_to_run:
