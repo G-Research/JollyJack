@@ -657,8 +657,7 @@ void ExperimentalAdviseWillNeed(
     const std::vector<std::string>& column_names,
     arrow::io::CacheOptions cache_options) {
   parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
-  auto reader =
-      parquet::ParquetFileReader::Open(source, reader_properties, file_metadata);
+  auto reader = parquet::ParquetFileReader::Open(source, reader_properties, file_metadata);
   auto metadata = reader->metadata();
 
   if (!column_names.empty()) {
@@ -673,16 +672,13 @@ void ExperimentalAdviseWillNeed(
     }
   }
 
-  auto ranges_result =
-      reader->GetReadRanges(row_groups, column_indices,
+  auto read_ranges = reader->GetReadRanges(row_groups, 
+                            column_indices,
                             cache_options.hole_size_limit,
-                            cache_options.range_size_limit);
-  if (!ranges_result.ok()) {
-    throw std::logic_error(ranges_result.status().message());
-  }
-  auto ranges = ranges_result.MoveValueUnsafe();
+                            cache_options.range_size_limit
+                          ).ValueOrDie();
 
-  auto status = source->WillNeed(ranges);
+  auto status = source->WillNeed(read_ranges);
   if (!status.ok()) {
     throw std::logic_error(status.message());
   }
