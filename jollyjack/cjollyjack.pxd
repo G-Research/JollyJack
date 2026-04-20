@@ -32,6 +32,14 @@ cdef extern from "jollyjack.h":
         size_t dst_stride1_size,
         vector[int] row_indices) except + nogil
 
+    cdef void Prefetch (shared_ptr[CRandomAccessFile] source
+        , shared_ptr[CFileMetaData] file_metadata
+        , vector[int] column_indices
+        , const vector[int] &row_groups
+        , const vector[string] &column_names
+        , CCacheOptions cache_options
+        ) except + nogil
+
     cdef shared_ptr[CRandomAccessFile] GetIOUringReader1 (const string& path) except + nogil
     cdef shared_ptr[CRandomAccessFile] GetDirectReader (const string& path) except + nogil
 

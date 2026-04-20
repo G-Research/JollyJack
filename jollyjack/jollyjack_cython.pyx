@@ -150,6 +150,41 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , c_cache_options)
         return
 
+cpdef void prefetch (object source, FileMetaData metadata, row_group_indices, column_indices = [], column_names = [], use_memory_map = False, CacheOptions cache_options = None):
+
+    cdef vector[int] crow_group_indices = row_group_indices
+    cdef vector[int] ccolumn_indices
+    cdef vector[string] ccolumn_names
+    cdef shared_ptr[CFileMetaData] c_metadata
+    cdef shared_ptr[CRandomAccessFile] rd_handle
+
+    if metadata is not None:
+        c_metadata = metadata.sp_metadata
+
+    if column_indices:
+        ccolumn_indices = column_indices
+
+    if column_names:
+        ccolumn_names = [c.encode('utf8') for c in column_names]
+
+    assert (column_indices or column_names) and (not column_indices or not column_names), f"Either column_indices or column_names needs to be set"
+
+    cdef CCacheOptions c_cache_options
+    if cache_options is not None:
+        c_cache_options = cache_options.unwrap()
+    else:
+        c_cache_options = CCacheOptions.LazyDefaults()
+
+    get_reader(source, use_memory_map, &rd_handle)
+
+    with nogil:
+        cjollyjack.Prefetch (rd_handle
+            , c_metadata
+            , ccolumn_indices
+            , crow_group_indices
+            , ccolumn_names
+            , c_cache_options)
+
 cpdef void copy_to_torch_row_major (src_tensor, dst_tensor, row_indices):
     import torch
 

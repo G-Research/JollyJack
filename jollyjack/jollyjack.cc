@@ -649,6 +649,45 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
 
 }
 
+void Prefetch(
+    std::shared_ptr<arrow::io::RandomAccessFile> source,
+    std::shared_ptr<parquet::FileMetaData> file_metadata,
+    std::vector<int> column_indices,
+    const std::vector<int>& row_groups,
+    const std::vector<std::string>& column_names,
+    arrow::io::CacheOptions cache_options) {
+  parquet::ReaderProperties reader_properties = parquet::default_reader_properties();
+  auto reader =
+      parquet::ParquetFileReader::Open(source, reader_properties, file_metadata);
+  auto metadata = reader->metadata();
+
+  if (!column_names.empty()) {
+    column_indices.reserve(column_names.size());
+    auto schema = metadata->schema();
+    for (const auto& name : column_names) {
+      int idx = schema->ColumnIndex(name);
+      if (idx < 0) {
+        throw std::logic_error(std::string("Column '") + name + "' was not found!");
+      }
+      column_indices.push_back(idx);
+    }
+  }
+
+  auto ranges_result =
+      reader->GetReadRanges(row_groups, column_indices,
+                            cache_options.hole_size_limit,
+                            cache_options.range_size_limit);
+  if (!ranges_result.ok()) {
+    throw std::logic_error(ranges_result.status().message());
+  }
+  auto ranges = ranges_result.MoveValueUnsafe();
+
+  auto status = source->WillNeed(ranges);
+  if (!status.ok()) {
+    throw std::logic_error(status.message());
+  }
+}
+
 #ifdef WITH_IO_URING
 #include "io_uring_reader_1.h"
 std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename)

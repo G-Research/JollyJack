@@ -26,6 +26,14 @@ void CopyToRowMajor (void* src_buffer,
     size_t dst_stride1_size,
     std::vector<int> row_indices);
 
+void Prefetch(
+    std::shared_ptr<arrow::io::RandomAccessFile> source,
+    std::shared_ptr<parquet::FileMetaData> file_metadata,
+    std::vector<int> column_indices,
+    const std::vector<int>& row_groups,
+    const std::vector<std::string>& column_names,
+    arrow::io::CacheOptions cache_options);
+
 std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename);
 std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename);
 
