@@ -2,7 +2,7 @@
 requires = [
   "setuptools>=55",
   "Cython>=3",
-  "pyarrow~=23.0.0",
+  "pyarrow~=24.0.0",
   "numpy>=1.16.6",
 ]
 
@@ -20,7 +20,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "pyarrow~=23.0.0",
+  "pyarrow~=24.0.0",
   "numpy>=1.16.6",
 ]
 
@@ -51,7 +51,7 @@ manylinux-aarch64-image = "manylinux_2_28"
 ########################### cibuildwheel Linux #####################
 [tool.cibuildwheel.linux]
 repair-wheel-command = [
- "auditwheel repair --exclude libarrow.so.2300 --exclude libparquet.so.2300 -w {dest_dir} {wheel}",
+ "auditwheel repair --exclude libarrow.so.2400 --exclude libparquet.so.2400 -w {dest_dir} {wheel}",
 ]
 
 before-all = [
