@@ -1,5 +1,5 @@
-pyarrow~=23.0.0
-palletjack>=2.10.0
+pyarrow~=24.0.0
+palletjack>=2.11.0
 numpy>=1.16.6
 parameterized
 humanize
