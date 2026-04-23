@@ -2,7 +2,7 @@
 requires = [
   "setuptools>=55",
   "Cython>=3",
-  "pyarrow~=23.0.0",
+  "pyarrow~=24.0.0",
   "numpy>=1.16.6",
 ]
 
@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jollyjack"
-version = "0.22.2"
+version = "0.23.1"
 description = "High-performance Parquet reader for loading data directly into NumPy arrays and PyTorch tensors"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -20,7 +20,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  "pyarrow~=23.0.0",
+  "pyarrow~=24.0.0",
   "numpy>=1.16.6",
 ]
 
@@ -51,7 +51,7 @@ manylinux-aarch64-image = "manylinux_2_28"
 ########################### cibuildwheel Linux #####################
 [tool.cibuildwheel.linux]
 repair-wheel-command = [
- "auditwheel repair --exclude libarrow.so.2300 --exclude libparquet.so.2300 -w {dest_dir} {wheel}",
+ "auditwheel repair --exclude libarrow.so.2400 --exclude libparquet.so.2400 -w {dest_dir} {wheel}",
 ]
 
 before-all = [
