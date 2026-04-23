@@ -172,7 +172,6 @@ def generate_data(n_columns, n_row_groups, path, compression, dtype):
     if parquet_matches(
         path, n_columns, n_row_groups, cfg.chunk_size, compression, dtype
     ):
-        print(f"Reusing existing {path}")
         return
 
     t = time.time()
