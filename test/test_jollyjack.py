@@ -100,9 +100,11 @@ def get_table(n_rows, n_columns, data_type=pa.float32()):
 class TestJollyJack(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True])
+        itertools.product([False, True], [False, True], [False, True], [False, True])
     )
-    def test_read_entire_table(self, pre_buffer, use_threads, use_memory_map):
+    def test_read_entire_table(
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+    ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -138,6 +140,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             expected_data = pr.read_all()
@@ -153,15 +156,18 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             self.assertTrue(np.array_equal(np_array2, expected_data))
             pr.close()
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True])
+        itertools.product([False, True], [False, True], [False, True], [False, True])
     )
-    def test_read_with_palletjack(self, pre_buffer, use_threads, use_memory_map):
+    def test_read_with_palletjack(
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+    ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -202,6 +208,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             pr = pq.ParquetReader()
@@ -211,9 +218,11 @@ class TestJollyJack(unittest.TestCase):
             pr.close()
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True])
+        itertools.product([False, True], [False, True], [False, True], [False, True])
     )
-    def test_read_nonzero_column_offset(self, pre_buffer, use_threads, use_memory_map):
+    def test_read_nonzero_column_offset(
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+    ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -241,6 +250,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             pr = pq.ParquetReader()
@@ -250,10 +260,10 @@ class TestJollyJack(unittest.TestCase):
             pr.close()
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True])
+        itertools.product([False, True], [False, True], [False, True], [False, True])
     )
     def test_read_unsupported_column_types(
-        self, pre_buffer, use_threads, use_memory_map
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -283,6 +293,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             self.assertTrue(
@@ -310,6 +321,7 @@ class TestJollyJack(unittest.TestCase):
                     np_array=np_array,
                     row_group_indices=[0],
                     column_indices=range(n_columns),
+                    prefetch_page_cache=False,
                 )
 
             self.assertTrue(
@@ -345,6 +357,7 @@ class TestJollyJack(unittest.TestCase):
                     np_array=np_array,
                     row_group_indices=[0],
                     column_indices=range(n_columns),
+                    prefetch_page_cache=False,
                 )
 
             self.assertTrue(
@@ -355,11 +368,20 @@ class TestJollyJack(unittest.TestCase):
 
     @parameterized.expand(
         itertools.product(
-            [False, True], [False, True], [False, True], supported_dtype_encodings
+            [False, True],
+            [False, True],
+            [False, True],
+            [False, True],
+            supported_dtype_encodings,
         )
     )
     def test_read_dtype_numpy(
-        self, pre_buffer, use_threads, use_memory_map, dtype_encoding
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype_encoding,
     ):
 
         for n_row_groups, n_columns, chunk_size in [
@@ -430,6 +452,7 @@ class TestJollyJack(unittest.TestCase):
                         pre_buffer=pre_buffer,
                         use_threads=use_threads,
                         use_memory_map=use_memory_map,
+                        prefetch_page_cache=prefetch_page_cache,
                     )
 
                     pr = pq.ParquetReader()
@@ -522,11 +545,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()],
         )
     )
     def test_read_numpy_column_names(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -555,6 +579,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             pr = pq.ParquetReader()
@@ -623,9 +648,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [False, True],
         )
     )
-    def test_read_invalid_column(self, pre_buffer, use_threads, use_memory_map, dtype):
+    def test_read_invalid_column(
+        self, pre_buffer, use_threads, use_memory_map, dtype, prefetch_page_cache
+    ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -654,6 +682,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             self.assertTrue(
@@ -671,6 +700,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             ss = [
@@ -687,9 +717,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [False, True],
         )
     )
-    def test_read_filesystem(self, pre_buffer, use_threads, use_memory_map, dtype):
+    def test_read_filesystem(
+        self, pre_buffer, use_threads, use_memory_map, dtype, prefetch_page_cache
+    ):
 
         if os.environ.get("JJ_READER_BACKEND") != None:
             self.skipTest(
@@ -723,6 +756,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             pr = pq.ParquetReader()
@@ -738,11 +772,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_invalid_row_group(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -772,6 +807,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             ss = [
@@ -784,11 +820,20 @@ class TestJollyJack(unittest.TestCase):
 
     @parameterized.expand(
         itertools.product(
-            [False, True], [False, True], [False, True], supported_dtype_encodings
+            [False, True],
+            [False, True],
+            [False, True],
+            [False, True],
+            supported_dtype_encodings,
         )
     )
     def test_read_data_with_nulls(
-        self, pre_buffer, use_threads, use_memory_map, dtype_encoding
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype_encoding,
     ):
 
         dtype = dtype_encoding[0]
@@ -839,6 +884,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             self.assertTrue(
@@ -851,9 +897,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [False, True],
         )
     )
-    def test_read_not_enough_rows(self, pre_buffer, use_threads, use_memory_map, dtype):
+    def test_read_not_enough_rows(
+        self, pre_buffer, use_threads, use_memory_map, dtype, prefetch_page_cache
+    ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -882,6 +931,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             self.assertTrue(
@@ -895,11 +945,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_numpy_column_names_mapping(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -930,6 +981,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             pr = pq.ParquetReader()
@@ -954,6 +1006,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             self.assertTrue(
@@ -967,11 +1020,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_numpy_column_indices_mapping(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -999,6 +1053,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             pr = pq.ParquetReader()
@@ -1023,6 +1078,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             self.assertTrue(
@@ -1036,11 +1092,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_numpy_column_indices_multi_mapping(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1072,6 +1129,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             jj.read_into_numpy(
@@ -1083,6 +1141,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             self.assertTrue(
@@ -1096,11 +1155,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_numpy_column_names_multi_mapping(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1132,6 +1192,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             jj.read_into_numpy(
@@ -1143,6 +1204,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             self.assertTrue(
@@ -1210,11 +1272,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_not_enough_buffer(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1244,6 +1307,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             self.assertTrue(
@@ -1262,6 +1326,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
 
             self.assertTrue(
@@ -1275,11 +1340,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_entire_table_with_slices(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1321,6 +1387,7 @@ class TestJollyJack(unittest.TestCase):
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
                 row_ranges=row_ranges,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             self.assertTrue(np.array_equal(np_array, expected_array))
@@ -1340,6 +1407,7 @@ class TestJollyJack(unittest.TestCase):
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
                 row_ranges=[slice(x, x + 1) for x in range(n_rows)],
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             self.assertTrue(np.array_equal(np_array, expected_data))
@@ -1351,11 +1419,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_partial_table_with_slices(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1394,6 +1463,7 @@ class TestJollyJack(unittest.TestCase):
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
                 row_ranges=row_ranges,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             self.assertTrue(np.array_equal(np_array, expected_array))
@@ -1463,11 +1533,12 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [False, True],
+            [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
         )
     )
     def test_read_with_slices_error_handling(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1501,6 +1572,7 @@ class TestJollyJack(unittest.TestCase):
                     row_ranges=[
                         slice(0, 2 * chunk_size),
                     ],
+                    prefetch_page_cache=prefetch_page_cache,
                 )
             self.assertTrue(
                 f"Requested to read {2 * chunk_size} rows, but the current row group has only {chunk_size} rows"
@@ -1522,6 +1594,7 @@ class TestJollyJack(unittest.TestCase):
                         slice(0, chunk_size),
                         slice(chunk_size, 2 * chunk_size - 1),
                     ],
+                    prefetch_page_cache=prefetch_page_cache,
                 )
             self.assertTrue(
                 f"Requested to read {chunk_size - 1} rows, but the current row group has {chunk_size} rows"
@@ -1540,6 +1613,7 @@ class TestJollyJack(unittest.TestCase):
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
                     row_ranges=[slice(0, chunk_size, 2)],
+                    prefetch_page_cache=prefetch_page_cache,
                 )
             self.assertTrue(
                 f"Row range 'slice(0, {chunk_size}, 2)' is not contiguous"
@@ -1558,6 +1632,7 @@ class TestJollyJack(unittest.TestCase):
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
                     row_ranges=[slice(None, chunk_size)],
+                    prefetch_page_cache=prefetch_page_cache,
                 )
             self.assertTrue(
                 f"Row range 'slice(None, {chunk_size}, None)' is not a valid range"
@@ -1576,6 +1651,7 @@ class TestJollyJack(unittest.TestCase):
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
                     row_ranges=[slice(chunk_size, None)],
+                    prefetch_page_cache=prefetch_page_cache,
                 )
             self.assertTrue(
                 f"Row range 'slice({chunk_size}, None, None)' is not a valid range"
@@ -1594,6 +1670,7 @@ class TestJollyJack(unittest.TestCase):
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
                     row_ranges=[slice(chunk_size, chunk_size - 1)],
+                    prefetch_page_cache=prefetch_page_cache,
                 )
             self.assertTrue(
                 f"Row range 'slice({chunk_size}, {chunk_size - 1}, None)' is not a valid range"
@@ -1612,6 +1689,7 @@ class TestJollyJack(unittest.TestCase):
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
                     row_ranges=[slice(0, chunk_size), slice(0, chunk_size)],
+                    prefetch_page_cache=prefetch_page_cache,
                 )
             self.assertTrue(
                 f"Expected to read 2 row ranges, but read only 1!"
@@ -1843,9 +1921,11 @@ class TestJollyJack(unittest.TestCase):
         )
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True])
+        itertools.product([False, True], [False, True], [False, True], [False, True])
     )
-    def test_read_backends(self, pre_buffer, use_threads, use_memory_map):
+    def test_read_backends(
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+    ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
@@ -1873,6 +1953,7 @@ class TestJollyJack(unittest.TestCase):
                 pre_buffer=pre_buffer,
                 use_threads=use_threads,
                 use_memory_map=use_memory_map,
+                prefetch_page_cache=prefetch_page_cache,
             )
 
             expected_data = pr.read_all()
@@ -1889,6 +1970,7 @@ class TestJollyJack(unittest.TestCase):
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
                     use_memory_map=use_memory_map,
+                    prefetch_page_cache=prefetch_page_cache,
                 )
             self.assertTrue(
                 f"Unsupported JJ_READER_BACKEND=foo_bar" in str(context.exception),
@@ -1899,6 +1981,88 @@ class TestJollyJack(unittest.TestCase):
             os.environ.pop("JJ_READER_BACKEND", None)
             if jj_backend is not None:
                 os.environ["JJ_READER_BACKEND"] = jj_backend
+
+    @parameterized.expand(itertools.product([False, True]))
+    def test_prefetch_page_cache_standalone(self, use_memory_map):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows, n_columns)
+            pq.write_table(
+                table,
+                path,
+                row_group_size=chunk_size,
+                use_dictionary=False,
+                write_statistics=False,
+                store_schema=False,
+            )
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+
+            jj.prefetch_page_cache(
+                source=path,
+                metadata=pr.metadata,
+                row_group_indices=range(pr.metadata.num_row_groups),
+                column_indices=range(pr.metadata.num_columns),
+                use_memory_map=use_memory_map,
+            )
+            pr.close()
+
+    @parameterized.expand(itertools.product([False, True]))
+    def test_prefetch_page_cache_with_column_names(self, use_memory_map):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows, n_columns)
+            pq.write_table(
+                table,
+                path,
+                row_group_size=chunk_size,
+                use_dictionary=False,
+                write_statistics=False,
+                store_schema=False,
+            )
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+
+            column_names = [f"column_{i}" for i in range(n_columns)]
+            jj.prefetch_page_cache(
+                source=path,
+                metadata=pr.metadata,
+                row_group_indices=range(pr.metadata.num_row_groups),
+                column_names=column_names,
+                use_memory_map=use_memory_map,
+            )
+            pr.close()
+
+    def test_prefetch_page_cache_invalid_column_name(self):
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows, n_columns)
+            pq.write_table(
+                table,
+                path,
+                row_group_size=chunk_size,
+                use_dictionary=False,
+                write_statistics=False,
+                store_schema=False,
+            )
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+
+            with self.assertRaises(RuntimeError) as context:
+                jj.prefetch_page_cache(
+                    source=path,
+                    metadata=pr.metadata,
+                    row_group_indices=range(pr.metadata.num_row_groups),
+                    column_names=["nonexistent_column"],
+                )
+            self.assertIn("was not found", str(context.exception))
+            pr.close()
 
 
 if __name__ == "__main__":

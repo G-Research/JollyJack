@@ -19,7 +19,7 @@ from collections.abc import Iterable
 def is_iterable_of_iterables(obj):
     return isinstance(obj, Iterable) and isinstance(obj[0], Iterable) and not isinstance(obj[0], str)
 
-cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None):
+cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None, prefetch_page_cache = False):
 
     import torch
 
@@ -34,11 +34,12 @@ cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_gr
         , use_threads = use_threads
         , use_memory_map = use_memory_map
         , cache_options = cache_options
+        , prefetch_page_cache = prefetch_page_cache
     )
 
     return
 
-cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None):
+cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None, prefetch_page_cache = False):
 
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices
@@ -104,6 +105,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef shared_ptr[CRandomAccessFile] rd_handle
     cdef c_string pathstr
     cdef bool cuse_o_direct
+    cdef bool cprefetch_page_cache = prefetch_page_cache
     # Please note that the `JJ_READER_BACKEND` variable is experimental and may be changed or removed in future versions
     jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
     if jj_reader_backend is None:
@@ -145,12 +147,13 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , ccolumn_names
             , ctarget_column_indices
             , cpre_buffer
+            , cprefetch_page_cache
             , cuse_threads
             , cexpected_rows
             , c_cache_options)
         return
 
-cpdef void experimental_advise_will_need (object source, FileMetaData metadata, row_group_indices, column_indices = [], column_names = [], use_memory_map = False, CacheOptions cache_options = None):
+cpdef void prefetch_page_cache (object source, FileMetaData metadata, row_group_indices, column_indices = [], column_names = [], use_memory_map = False, CacheOptions cache_options = None):
 
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices
@@ -178,7 +181,7 @@ cpdef void experimental_advise_will_need (object source, FileMetaData metadata, 
     get_reader(source, use_memory_map, &rd_handle)
 
     with nogil:
-        cjollyjack.ExperimentalAdviseWillNeed (rd_handle
+        cjollyjack.PrefetchPageCache (rd_handle
             , c_metadata
             , ccolumn_indices
             , crow_group_indices

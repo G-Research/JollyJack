@@ -295,6 +295,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<std::string> &column_names
     , const std::vector<int> &target_column_indices
     , bool pre_buffer
+    , bool prefetch_page_cache
     , bool use_threads
     , int64_t expected_rows
     , arrow::io::CacheOptions cache_options)
@@ -326,6 +327,19 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
         column_indices.push_back(column_index);
       }
+  }
+
+  if (prefetch_page_cache)
+  {
+    auto read_ranges = parquet_reader->GetReadRanges(row_groups,
+                              column_indices,
+                              cache_options.hole_size_limit,
+                              cache_options.range_size_limit
+                            ).ValueOrDie();
+    auto status = source->WillNeed(read_ranges);
+    if (!status.ok()) {
+      throw std::logic_error(status.message());
+    }
   }
 
   if (pre_buffer)
@@ -649,7 +663,7 @@ void CopyToRowMajor (void* src_buffer, size_t src_stride0_size, size_t src_strid
 
 }
 
-void ExperimentalAdviseWillNeed(
+void PrefetchPageCache(
     std::shared_ptr<arrow::io::RandomAccessFile> source,
     std::shared_ptr<parquet::FileMetaData> file_metadata,
     std::vector<int> column_indices,

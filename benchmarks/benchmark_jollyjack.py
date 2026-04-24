@@ -48,6 +48,7 @@ class BenchmarkSettings(BaseSettings):
     dtypes: list[str] = ["float32", "float16"]
     compressions: list[str] = ["none"]
     pre_buffer: list[bool] = [False, True]
+    prefetch_page_cache: list[bool] = [False, True]
     use_threads: list[bool] = [False, True]
 
     @classmethod
@@ -170,7 +171,6 @@ def generate_data(n_columns, n_row_groups, path, compression, dtype):
     if parquet_matches(
         path, n_columns, n_row_groups, cfg.chunk_size, compression, dtype
     ):
-        print(f"Reusing existing {path}")
         return
 
     t = time.time()
@@ -215,7 +215,7 @@ def get_thread_local_np_array(dtype):
     return np_array
 
 
-def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
+def worker_jollyjack_numpy(use_threads, pre_buffer, prefetch_page_cache, dtype, path):
 
     np_array = get_thread_local_np_array(dtype)
     cache_options = pa.CacheOptions(
@@ -223,6 +223,7 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
         range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
         lazy=False,
     )
+
     jj.read_into_numpy(
         source=path,
         metadata=None,
@@ -230,6 +231,7 @@ def worker_jollyjack_numpy(use_threads, pre_buffer, dtype, path):
         row_group_indices=row_groups_to_read,
         column_indices=column_indices_to_read,
         pre_buffer=pre_buffer,
+        prefetch_page_cache=prefetch_page_cache,
         use_threads=use_threads,
         cache_options=cache_options,
     )
@@ -436,10 +438,12 @@ for dtype_key in cfg.dtypes:
                 print(f".")
                 for n_workers in cfg.worker_counts:
                     for pre_buffer in cfg.pre_buffer:
-                        for use_threads in cfg.use_threads:
-                            print(
-                                f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, dtype.to_pandas_dtype(), path = path))}"
-                            )
+                        for prefetch_page_cache in cfg.prefetch_page_cache:
+                            for use_threads in cfg.use_threads:
+
+                                print(
+                                    f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, prefetch_page_cache, dtype.to_pandas_dtype(), path = path))}"
+                                )
 
         if {"all", "jj_torch"} & cfg.benchmarks_to_run:
             print(f".")
