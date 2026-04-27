@@ -1,7 +1,13 @@
 import os
 import re
+import pytest
 
 README_PATH = os.path.join(os.path.dirname(__file__), "..", "README.md")
+if os.environ.get("JJ_READER_BACKEND") != None:
+    pytest.skip(
+        "this test is not compatible with non-default backend",
+        allow_module_level=True,
+    )
 
 
 def extract_code_with_line_numbers(readme_path, start_heading):
