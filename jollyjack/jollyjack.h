@@ -12,6 +12,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , const std::vector<std::string> &column_names
     , const std::vector<int> &target_column_indices
     , bool pre_buffer
+    , bool prefetch_page_cache
     , bool use_threads
     , int64_t expected_rows
     , arrow::io::CacheOptions cache_options);
@@ -26,7 +27,8 @@ void CopyToRowMajor (void* src_buffer,
     size_t dst_stride1_size,
     std::vector<int> row_indices);
 
-void ExperimentalAdviseWillNeed(
+// Calls posix_fadvise(POSIX_FADV_WILLNEED) on the byte ranges for the requested columns/row groups.
+void PrefetchPageCache(
     std::shared_ptr<arrow::io::RandomAccessFile> source,
     std::shared_ptr<parquet::FileMetaData> file_metadata,
     std::vector<int> column_indices,

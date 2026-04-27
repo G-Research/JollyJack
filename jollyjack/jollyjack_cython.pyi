@@ -11,6 +11,7 @@ def read_into_torch(
     use_threads=True,
     use_memory_map=False,
     cache_options=None,
+    prefetch_page_cache=False,
 ):
     """
     Read parquet data directly into a tensor.
@@ -40,6 +41,14 @@ def read_into_torch(
     use_threads : bool, default True
     use_memory_map : bool, default False
     cache_options : arrow::io::CacheOptions, default None -> CCacheOptions.LazyDefaults()
+    prefetch_page_cache : bool, default False
+        When True, calls posix_fadvise(POSIX_FADV_WILLNEED) on the byte ranges for
+        the requested columns and row groups before reading. This warms the OS page
+        cache so that the subsequent pread calls find data already resident in memory.
+        Use this when pre_buffer=True causes high LLC miss rates due to Arrow's
+        IO thread pool allocating buffers on cores different from the worker threads.
+        Only useful for local or network-mounted file systems that have a page cache.
+        Remote file systems such as S3 will not benefit from this.
 
     Notes:
     -----
@@ -59,6 +68,7 @@ def read_into_torch(
         pre_buffer,
         use_threads,
         use_memory_map,
+        prefetch_page_cache=prefetch_page_cache,
     )
     return
 
@@ -74,6 +84,7 @@ def read_into_numpy(
     use_threads=True,
     use_memory_map=False,
     cache_options=None,
+    prefetch_page_cache=False,
 ):
     """
     Read parquet data directly into a numpy array.
@@ -104,6 +115,14 @@ def read_into_numpy(
     use_threads : bool, default True
     use_memory_map : bool, default False
     cache_options : pa.CacheOptions(), default None -> CCacheOptions.LazyDefaults()
+    prefetch_page_cache : bool, default False
+        When True, calls posix_fadvise(POSIX_FADV_WILLNEED) on the byte ranges for
+        the requested columns and row groups before reading. This warms the OS page
+        cache so that the subsequent pread calls find data already resident in memory.
+        Use this when pre_buffer=True causes high LLC miss rates due to Arrow's
+        IO thread pool allocating buffers on cores different from the worker threads.
+        Only useful for local or network-mounted file systems that have a page cache.
+        Remote file systems such as S3 will not benefit from this.
 
     Notes:
     -----
@@ -124,8 +143,61 @@ def read_into_numpy(
         use_threads,
         use_memory_map,
         cache_options,
+        prefetch_page_cache=prefetch_page_cache,
     )
     return
+
+def prefetch_page_cache(
+    source,
+    metadata,
+    row_group_indices,
+    column_indices=[],
+    column_names=[],
+    use_memory_map=False,
+    cache_options=None,
+) -> None:
+    """
+    Prefetch parquet byte ranges into the OS page cache.
+
+    Calls posix_fadvise(POSIX_FADV_WILLNEED) on the byte ranges corresponding
+    to the requested row groups and columns. The kernel starts reading those
+    pages into the page cache asynchronously.
+
+    With pre_buffer=True, Arrow's IO thread pool allocates temporary buffers and
+    fills them on the IO thread's core. When worker threads on different cores
+    later consume those buffers, the data is cold in their caches, causing high
+    LLC miss rates.
+
+    prefetch_page_cache avoids this: the page cache is warmed, and each worker
+    thread reads via pread into its own locally-allocated buffer, keeping data
+    hot in the worker's local CPU caches.
+
+    Only useful for local or network-mounted file systems that have a page cache.
+    Remote file systems such as S3 will not benefit from this.
+
+    Parameters
+    ----------
+    source : str, pathlib.Path, pyarrow.NativeFile, or file-like object
+        Path to the parquet file or an already-opened Arrow file handle.
+    metadata : pyarrow.parquet.FileMetaData or None
+        Parquet file metadata. If None, metadata is read from the file.
+    row_group_indices : list[int]
+        Indices of the row groups whose data should be prefetched.
+    column_indices : list[int], optional
+        Column indices to prefetch. Mutually exclusive with column_names.
+    column_names : list[str], optional
+        Column names to prefetch. Mutually exclusive with column_indices.
+    use_memory_map : bool, default False
+        Whether to memory-map the file.
+    cache_options : pyarrow.CacheOptions, optional
+        Controls how nearby byte ranges are coalesced before the fadvise call.
+        Defaults to Arrow's lazy defaults (hole_size_limit=8192, range_size_limit=32MB).
+
+    Notes
+    -----
+    Either column_indices or column_names must be provided, but not both.
+    """
+    ...
 
 def copy_to_torch_row_major(src_tensor, dst_tensor, row_indices):
     """
