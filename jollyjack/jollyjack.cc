@@ -338,7 +338,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                             ).ValueOrDie();
     auto status = source->WillNeed(read_ranges);
     if (!status.ok()) {
-      throw std::logic_error(status.message());
+      throw std::runtime_error(status.message());
     }
   }
 
@@ -694,7 +694,7 @@ void PrefetchPageCache(
 
   auto status = source->WillNeed(read_ranges);
   if (!status.ok()) {
-    throw std::logic_error(status.message());
+    throw std::runtime_error(status.message());
   }
 }
 

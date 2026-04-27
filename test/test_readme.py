@@ -203,7 +203,7 @@ jj.read_into_numpy(
 # ```
 import torch
 
-# Create a tesnsor and transpose it to get Fortran-style order
+# Create a tensor and transpose it to get Fortran-style order
 tensor = torch.zeros(n_columns, n_rows, dtype=torch.float32).transpose(0, 1)
 # ```
 
