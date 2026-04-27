@@ -385,7 +385,7 @@ jj.read_into_torch(
     tensor=tensor,
     row_group_indices=range(pr.metadata.num_row_groups),
     column_indices=range(pr.metadata.num_columns),
-    prefetch_page_cache=True,
+    pre_buffer=True,
     use_threads=True,
 )
 
