@@ -225,7 +225,7 @@ jobs:
         pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
         python3 ./benchmarks/benchmark_jollyjack.py
       env:
-        JJ_benchmark_mode: ${{ matrix.mode }}
+        JJB_benchmark_mode: ${{ matrix.mode }}
 
   publish:
     if: ${{ !github.event.repository.fork && startsWith(github.ref, 'refs/tags/v') }}

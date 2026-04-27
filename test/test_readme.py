@@ -157,11 +157,53 @@ with fs.LocalFileSystem().open_input_file(path) as f:
 print(np_array)
 # ```
 
+### Using page cache prefetching
+# ```
+np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
+pr = pq.ParquetReader()
+pr.open(path)
+
+# cache_options controls which byte ranges are prefetched into the page cache
+cache_options = pa.CacheOptions(
+    hole_size_limit=8192,
+    range_size_limit=16 * 1024 * 1024,
+    lazy=False,
+)
+
+# Prefetch and read in one call
+jj.read_into_numpy(
+    source=path,
+    metadata=pr.metadata,
+    np_array=np_array,
+    row_group_indices=range(pr.metadata.num_row_groups),
+    column_indices=range(pr.metadata.num_columns),
+    cache_options=cache_options,
+    prefetch_page_cache=True,
+)
+
+# Or prefetch separately, then read
+jj.prefetch_page_cache(
+    source=path,
+    metadata=pr.metadata,
+    row_group_indices=range(pr.metadata.num_row_groups),
+    column_indices=range(pr.metadata.num_columns),
+    cache_options=cache_options,
+)
+jj.read_into_numpy(
+    source=path,
+    metadata=pr.metadata,
+    np_array=np_array,
+    row_group_indices=range(pr.metadata.num_row_groups),
+    column_indices=range(pr.metadata.num_columns),
+    pre_buffer=False,
+)
+# ```
+
 ### Generating a torch tensor to read into:
 # ```
 import torch
 
-# Create a tesnsor and transpose it to get Fortran-style order
+# Create a tensor and transpose it to get Fortran-style order
 tensor = torch.zeros(n_columns, n_rows, dtype=torch.float32).transpose(0, 1)
 # ```
 

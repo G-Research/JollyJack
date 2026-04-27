@@ -20,9 +20,9 @@ into NumPy arrays and PyTorch tensors with minimal overhead.
 By default, the reader uses the regular file API via
 `parquet::ParquetFileReader`. In most cases, this is the recommended choice.
 
-An alternative reader backend based on **io_uring** is also available. It can
-provide better performance, especially for very large datasets and when used
-together with **O_DIRECT**.
+An alternative reader backend based on **io_uring** is also available. It may
+provide better performance for some workloads, particularly when used together
+with **O_DIRECT**.
 
 To enable the alternative backend, set the `JJ_READER_BACKEND` environment
 variable to one of the following values:
@@ -48,23 +48,94 @@ your workload is I/O-bound or memory-/CPU-bound.
 
 ### Large datasets (exceed filesystem cache)
 
-For datasets larger than the available page cache, performance is typically I/O-bound.
+For datasets larger than the available page cache, performance is typically
+I/O-bound. Enabling either `pre_buffer=True` or `prefetch_page_cache=True`
+brings throughput close to the raw I/O ceiling, but `prefetch_page_cache`
+avoids the increased LLC miss rate caused by `pre_buffer`
+(see [Page cache prefetching](#page-cache-prefetching-with-prefetch_page_cache) below).
 
 Recommended configuration:
 
-- `use_threads = True`, `pre_buffer = True`, `JJ_READER_BACKEND = io_uring_odirect`
-
-This combination bypasses the page cache, reduces double-buffering, and allows deeper I/O queues via io_uring.
+- `use_threads = True`, `prefetch_page_cache = True`, `pre_buffer = False`,
+  with the default reader backend.
 
 ### Small datasets (fit in filesystem cache)
 
-For datasets that comfortably fit in RAM, performance is typically CPU- or memory-bound.
+For datasets that comfortably fit in RAM, performance is typically CPU- or
+memory-bound. Using `pre_buffer` is not recommended because it leads to an
+increased LLC miss rate and suboptimal performance
+(see [Page cache prefetching](#page-cache-prefetching-with-prefetch_page_cache) below).
 
 Recommended configuration:
 
-- `use_threads = False`, `pre_buffer = False`, and the default reader backend (no io_uring).
+- `use_threads = True`, `prefetch_page_cache = True`, `pre_buffer = False`,
+  with the default reader backend.
+
+### Page cache prefetching with `prefetch_page_cache`
+
+The `prefetch_page_cache` option calls `posix_fadvise(POSIX_FADV_WILLNEED)` to tell
+the kernel to start loading the relevant byte ranges into the page cache.
+Each worker thread then reads directly via `pread` into its own
+locally-allocated buffer, keeping data hot in its local CPU caches.
+
+This avoids the LLC (Last Level Cache) miss problem with `pre_buffer=True`,
+where Arrow's IO thread pool fills temporary buffers on one core and worker
+threads on different cores later consume cold data.
+
+This is only useful for local or network-mounted file systems that have a
+page cache. Remote file systems such as S3 will not benefit from this.
+
+There are two ways to enable page cache prefetching:
+
+**As a parameter on `read_into_numpy`:**
+
+```python
+jj.read_into_numpy(
+    source=path,
+    metadata=pr.metadata,
+    np_array=np_array,
+    row_group_indices=range(pr.metadata.num_row_groups),
+    column_indices=range(pr.metadata.num_columns),
+    prefetch_page_cache=True,
+)
+```
+
+**As a standalone call:**
+
+```python
+jj.prefetch_page_cache(
+    source=path,
+    metadata=pr.metadata,
+    row_group_indices=range(pr.metadata.num_row_groups),
+    column_indices=range(pr.metadata.num_columns),
+)
+```
+
+Useful for sliding-window prefetching, where you prefetch the next files
+while processing the current one:
+
+```python
+# Prime the pump
+for path in file_paths[:PREFETCH_DEPTH]:
+    jj.prefetch_page_cache(source=path, ...)
+
+# Main loop
+for i, path in enumerate(file_paths):
+    # Slide the window
+    ahead_index = i + PREFETCH_DEPTH
+    if ahead_index < len(file_paths):
+        jj.prefetch_page_cache(source=file_paths[ahead_index], ...)
+
+    # Page cache should already be warm
+    jj.read_into_numpy(source=path, np_array=np_array, ...)
+
+    process(np_array)
+```
 
 ### Pre-buffering and `cache_options`
+
+If you use `pre_buffer=True` instead of `prefetch_page_cache`, the following
+tuning applies.
 
 When `pre_buffer=True`, Arrow merges nearby column ranges and reads them into
 temporary buffers. The default maximum merged range is 32 MB
@@ -102,8 +173,8 @@ To debug allocator issues with mimalloc, run with `MIMALLOC_SHOW_STATS=1` and
 
 ### Pre-buffering and `ARROW_IO_THREADS`
 
-When `pre_buffer=True`, Arrow dispatches reads to its IO thread pooll,
-configured via the `ARROW_IO_THREADS` environment variable (default: 8). 
+When `pre_buffer=True`, Arrow dispatches reads to its IO thread pool,
+configured via the `ARROW_IO_THREADS` environment variable (default: 8).
 Tuning this value may improve performance.
 
 ## Requirements
@@ -251,6 +322,48 @@ with fs.LocalFileSystem().open_input_file(path) as f:
         pre_buffer=True,
     )
 print(np_array)
+```
+
+### Using page cache prefetching
+```python
+np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
+pr = pq.ParquetReader()
+pr.open(path)
+
+# cache_options controls which byte ranges are prefetched into the page cache
+cache_options = pa.CacheOptions(
+    hole_size_limit=8192,
+    range_size_limit=16*1024*1024,
+    lazy=False,
+)
+
+# Prefetch and read in one call
+jj.read_into_numpy(
+    source=path,
+    metadata=pr.metadata,
+    np_array=np_array,
+    row_group_indices=range(pr.metadata.num_row_groups),
+    column_indices=range(pr.metadata.num_columns),
+    cache_options=cache_options,
+    prefetch_page_cache=True,
+)
+
+# Or prefetch separately, then read
+jj.prefetch_page_cache(
+    source=path,
+    metadata=pr.metadata,
+    row_group_indices=range(pr.metadata.num_row_groups),
+    column_indices=range(pr.metadata.num_columns),
+    cache_options=cache_options,
+)
+jj.read_into_numpy(
+    source=path,
+    metadata=pr.metadata,
+    np_array=np_array,
+    row_group_indices=range(pr.metadata.num_row_groups),
+    column_indices=range(pr.metadata.num_columns),
+    pre_buffer=False,
+)
 ```
 
 ### Generating a PyTorch tensor to read into
