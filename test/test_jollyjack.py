@@ -321,7 +321,6 @@ class TestJollyJack(unittest.TestCase):
                     np_array=np_array,
                     row_group_indices=[0],
                     column_indices=range(n_columns),
-                    prefetch_page_cache=False,
                 )
 
             self.assertTrue(
@@ -357,7 +356,6 @@ class TestJollyJack(unittest.TestCase):
                     np_array=np_array,
                     row_group_indices=[0],
                     column_indices=range(n_columns),
-                    prefetch_page_cache=False,
                 )
 
             self.assertTrue(
