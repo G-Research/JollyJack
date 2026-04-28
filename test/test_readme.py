@@ -1,226 +1,47 @@
-# ```
-
-## How to use:
-
-### Generating a sample parquet file:
-# ```
-import jollyjack as jj
-import pyarrow.parquet as pq
-import pyarrow as pa
-import numpy as np
-import pytest
 import os
-import unittest
-from pyarrow import fs
+import re
+import pytest
 
+README_PATH = os.path.join(os.path.dirname(__file__), "..", "README.md")
 if os.environ.get("JJ_READER_BACKEND") != None:
     pytest.skip(
-        "io_uring is enabled but this test is not compatible with io_uring",
+        "this test is not compatible with non-default backend",
         allow_module_level=True,
     )
 
 
-chunk_size = 3
-n_row_groups = 2
-n_columns = 5
-n_rows = n_row_groups * chunk_size
-path = "my.parquet"
+def extract_code_with_line_numbers(readme_path, start_heading):
+    """Extract python code blocks, returning combined source with line numbers preserved."""
+    with open(readme_path, "r") as f:
+        text = f.read()
 
-data = np.random.rand(n_rows, n_columns).astype(np.float32)
-pa_arrays = [pa.array(data[:, i]) for i in range(n_columns)]
-schema = pa.schema([(f"column_{i}", pa.float32()) for i in range(n_columns)])
-table = pa.Table.from_arrays(pa_arrays, schema=schema)
-pq.write_table(
-    table,
-    path,
-    row_group_size=chunk_size,
-    use_dictionary=False,
-    write_statistics=True,
-    store_schema=False,
-    write_page_index=True,
-)
-# ```
+    start = text.find(start_heading)
+    if start == -1:
+        raise ValueError(f"Heading {start_heading!r} not found in {readme_path}")
 
-### Generating a numpy array to read into:
-# ```
-# Create an array of zeros
-np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
-# ```
+    lines_before = text[:start].count("\n")
+    section = text[start:]
 
-### Reading entire file into numpy array:
-# ```
-pr = pq.ParquetReader()
-pr.open(path)
+    matches = list(re.finditer(r"```python\n(.*?)```", section, re.DOTALL))
+    if not matches:
+        raise ValueError(f"No python code blocks found after {start_heading!r}")
 
-row_begin = 0
-row_end = 0
+    current_line = 0
+    parts = []
+    for m in matches:
+        # +1 for the ```python line itself
+        block_line = lines_before + section[: m.start()].count("\n") + 1
+        code = m.group(1)
+        padding = block_line - current_line
+        if padding > 0:
+            parts.append("\n" * padding)
+            current_line += padding
+        parts.append(code)
+        current_line += code.count("\n")
 
-for rg in range(pr.metadata.num_row_groups):
-    row_begin = row_end
-    row_end = row_begin + pr.metadata.row_group(rg).num_rows
+    return "".join(parts)
 
-    # To define which subset of the numpy array we want read into,
-    # we need to create a view which shares underlying memory with the target numpy array
-    subset_view = np_array[row_begin:row_end, :]
-    jj.read_into_numpy(
-        source=path,
-        metadata=pr.metadata,
-        np_array=subset_view,
-        row_group_indices=[rg],
-        column_indices=range(pr.metadata.num_columns),
-    )
 
-# Alternatively
-with fs.LocalFileSystem().open_input_file(path) as f:
-    jj.read_into_numpy(
-        source=f,
-        metadata=None,
-        np_array=np_array,
-        row_group_indices=range(pr.metadata.num_row_groups),
-        column_indices=range(pr.metadata.num_columns),
-    )
-
-### Reading columns in reversed order:
-# ```
-with fs.LocalFileSystem().open_input_file(path) as f:
-    jj.read_into_numpy(
-        source=f,
-        metadata=None,
-        np_array=np_array,
-        row_group_indices=range(pr.metadata.num_row_groups),
-        column_indices={
-            i: pr.metadata.num_columns - i - 1 for i in range(pr.metadata.num_columns)
-        },
-    )
-# ```
-
-### Reading column 3 into multiple destination columns
-# ```
-with fs.LocalFileSystem().open_input_file(path) as f:
-    jj.read_into_numpy(
-        source=f,
-        metadata=None,
-        np_array=np_array,
-        row_group_indices=range(pr.metadata.num_row_groups),
-        column_indices=((3, 0), (3, 1)),
-    )
-# ```
-
-### Sparse reading
-# ```
-np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
-with fs.LocalFileSystem().open_input_file(path) as f:
-    jj.read_into_numpy(
-        source=f,
-        metadata=None,
-        np_array=np_array,
-        row_group_indices=[0],
-        row_ranges=[slice(0, 1), slice(4, 6)],
-        column_indices=range(pr.metadata.num_columns),
-    )
-print(np_array)
-# ```
-
-### Using cache options
-# ```
-np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
-cache_options = pa.CacheOptions(hole_size_limit=1024, range_size_limit=2048, lazy=True)
-with fs.LocalFileSystem().open_input_file(path) as f:
-    jj.read_into_numpy(
-        source=f,
-        metadata=None,
-        np_array=np_array,
-        row_group_indices=[0],
-        row_ranges=[slice(0, 1), slice(4, 6)],
-        column_indices=range(pr.metadata.num_columns),
-        cache_options=cache_options,
-        pre_buffer=True,
-    )
-print(np_array)
-# ```
-
-### Using cache options
-# ```
-np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
-cache_options = pa.CacheOptions(hole_size_limit=1024, range_size_limit=2048, lazy=True)
-with fs.LocalFileSystem().open_input_file(path) as f:
-    jj.read_into_numpy(
-        source=f,
-        metadata=None,
-        np_array=np_array,
-        row_group_indices=[0],
-        row_ranges=[slice(0, 1), slice(4, 6)],
-        column_indices=range(pr.metadata.num_columns),
-        cache_options=cache_options,
-        pre_buffer=True,
-    )
-print(np_array)
-# ```
-
-### Using page cache prefetching
-# ```
-np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
-pr = pq.ParquetReader()
-pr.open(path)
-
-# cache_options controls which byte ranges are prefetched into the page cache
-cache_options = pa.CacheOptions(
-    hole_size_limit=8192,
-    range_size_limit=16 * 1024 * 1024,
-    lazy=False,
-)
-
-# Prefetch and read in one call
-jj.read_into_numpy(
-    source=path,
-    metadata=pr.metadata,
-    np_array=np_array,
-    row_group_indices=range(pr.metadata.num_row_groups),
-    column_indices=range(pr.metadata.num_columns),
-    cache_options=cache_options,
-    prefetch_page_cache=True,
-)
-
-# Or prefetch separately, then read
-jj.prefetch_page_cache(
-    source=path,
-    metadata=pr.metadata,
-    row_group_indices=range(pr.metadata.num_row_groups),
-    column_indices=range(pr.metadata.num_columns),
-    cache_options=cache_options,
-)
-jj.read_into_numpy(
-    source=path,
-    metadata=pr.metadata,
-    np_array=np_array,
-    row_group_indices=range(pr.metadata.num_row_groups),
-    column_indices=range(pr.metadata.num_columns),
-    pre_buffer=False,
-)
-# ```
-
-### Generating a torch tensor to read into:
-# ```
-import torch
-
-# Create a tensor and transpose it to get Fortran-style order
-tensor = torch.zeros(n_columns, n_rows, dtype=torch.float32).transpose(0, 1)
-# ```
-
-### Reading entire file into the tensor:
-# ```
-pr = pq.ParquetReader()
-pr.open(path)
-
-jj.read_into_torch(
-    source=path,
-    metadata=pr.metadata,
-    tensor=tensor,
-    row_group_indices=range(pr.metadata.num_row_groups),
-    column_indices=range(pr.metadata.num_columns),
-    pre_buffer=True,
-    use_threads=True,
-)
-
-print(tensor)
-# ```
+def test_readme_code():
+    source = extract_code_with_line_numbers(README_PATH, "## How to use")
+    exec(compile(source, README_PATH, "exec"), {})
