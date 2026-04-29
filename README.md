@@ -13,7 +13,7 @@ into NumPy arrays and PyTorch tensors with minimal overhead.
 ## Known limitations
 
 - Data must not contain null values
-- Destination NumPy arrays and PyTorch tensors must be column-major (Fortran-style) 
+- Destination NumPy arrays and PyTorch tensors must be column-major (Fortran-style)
 
 ## Selecting a reader backend
 
@@ -46,7 +46,7 @@ your workload is I/O-bound or memory-/CPU-bound.
 - Reusing NumPy arrays or PyTorch tensors avoids repeated memory allocation.
 - While allocation itself is fast, it can trigger kernel contention and degrade performance.
 
-### Large datasets (exceed filesystem cache)
+### Large datasets (exceeding filesystem cache)
 
 For datasets larger than the available page cache, performance is typically
 I/O-bound. Enabling either `pre_buffer=True` or `prefetch_page_cache=True`
@@ -59,7 +59,7 @@ Recommended configuration:
 - `use_threads = True`, `prefetch_page_cache = True`, `pre_buffer = False`,
   with the default reader backend.
 
-### Small datasets (fit in filesystem cache)
+### Small datasets (fitting in filesystem cache)
 
 For datasets that comfortably fit in RAM, performance is typically CPU- or
 memory-bound. Using `pre_buffer` is not recommended because it leads to an
@@ -107,13 +107,6 @@ cache_options = pa.CacheOptions(
 )
 ```
 
-Alternatively, increase the device's readahead window (requires root, not
-persistent across reboots):
-
-```bash
-echo 8192 > /sys/block/<device>/queue/read_ahead_kb
-```
-
 There are two ways to enable page cache prefetching:
 
 **As a parameter on `read_into_numpy`:**
@@ -126,6 +119,7 @@ jj.read_into_numpy(
     row_group_indices=range(pr.metadata.num_row_groups),
     column_indices=range(pr.metadata.num_columns),
     prefetch_page_cache=True,
+    cache_options=cache_options,
 )
 ```
 
@@ -137,11 +131,12 @@ jj.prefetch_page_cache(
     metadata=pr.metadata,
     row_group_indices=range(pr.metadata.num_row_groups),
     column_indices=range(pr.metadata.num_columns),
+    cache_options=cache_options,
 )
 ```
 
-Useful for sliding-window prefetching, where you prefetch the next files
-while processing the current one:
+The standalone call is useful for sliding-window prefetching, where you
+prefetch the next files while processing the current one:
 
 ```python
 # Prime the pump
