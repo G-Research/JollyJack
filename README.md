@@ -85,6 +85,35 @@ threads on different cores later consume cold data.
 This is only useful for local or network-mounted file systems that have a
 page cache. Remote file systems such as S3 will not benefit from this.
 
+The Linux kernel's [`force_page_cache_ra`](https://github.com/torvalds/linux/blob/57b8e2d666a31fa201432d58f5fe3469a0dd83ba/mm/readahead.c#L353-L358)
+caps the number of pages read per `posix_fadvise` call to the block device's
+[readahead window](https://www.kernel.org/doc/html/v5.3/block/queue-sysfs.html#read-ahead-kb-rw).
+Any bytes beyond this cap are silently ignored. The readahead window is
+typically 128 KB or higher. Check the value for your device:
+
+```bash
+cat /sys/block/<device>/queue/read_ahead_kb
+```
+
+If `range_size_limit` exceeds this value, most of each coalesced range will
+not be prefetched. Set `range_size_limit` to match or stay below the device's
+`read_ahead_kb`:
+
+```python
+cache_options = pa.CacheOptions(
+    hole_size_limit=8192,
+    range_size_limit=128*1024,  # must not exceed read_ahead_kb
+    lazy=False,
+)
+```
+
+Alternatively, increase the device's readahead window (requires root, not
+persistent across reboots):
+
+```bash
+echo 8192 > /sys/block/<device>/queue/read_ahead_kb
+```
+
 There are two ways to enable page cache prefetching:
 
 **As a parameter on `read_into_numpy`:**
@@ -330,10 +359,12 @@ np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
 pr = pq.ParquetReader()
 pr.open(path)
 
-# cache_options controls which byte ranges are prefetched into the page cache
+# cache_options controls which byte ranges are prefetched into the page cache.
+# range_size_limit should not exceed the device's read_ahead_kb,
+# because the kernel silently ignores readahead beyond that cap.
 cache_options = pa.CacheOptions(
     hole_size_limit=8192,
-    range_size_limit=16*1024*1024,
+    range_size_limit=128*1024,  # must not exceed read_ahead_kb
     lazy=False,
 )
 
