@@ -47,7 +47,7 @@ class BenchmarkSettings(BaseSettings):
     )
     dtypes: list[str] = ["float32", "float16"]
     compressions: list[str] = ["none"]
-    pre_buffer: list[bool] = [False]
+    pre_buffer: list[bool] = [False, True]
     prefetch_page_cache: list[bool] = [False, True]
     use_threads: list[bool] = [False, True]
     sort_column_indices: list[bool] = [True]
