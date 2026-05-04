@@ -216,24 +216,31 @@ def get_thread_local_np_array(dtype):
     return np_array
 
 
-def worker_jollyjack_numpy(use_threads, pre_buffer, prefetch_page_cache, sort_column_indices, dtype, path):
+def worker_jollyjack_numpy(
+    use_threads, pre_buffer, prefetch_page_cache, sort_column_indices, dtype, path
+):
 
     np_array = get_thread_local_np_array(dtype)
     cache_options = None
     if pre_buffer:
-         cache_options = pa.CacheOptions(
-            hole_size_limit=8192,       # default
-            range_size_limit=16*1024*1024,  # 16 MB, fits in mimalloc arena
+        cache_options = pa.CacheOptions(
+            hole_size_limit=8192,  # default
+            range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
             lazy=False,
-         )
+        )
     elif prefetch_page_cache:
         cache_options = pa.CacheOptions(
-            hole_size_limit=8192,       # default
-            range_size_limit=512*1024,  # must not exceed read_ahead_kb
+            hole_size_limit=8192,  # default
+            range_size_limit=512 * 1024,  # must not exceed read_ahead_kb
         )
 
     if sort_column_indices:
-        col_indices = {src: dst for src, dst in sorted(zip(column_indices_to_read, range(len(column_indices_to_read))))}
+        col_indices = {
+            src: dst
+            for src, dst in sorted(
+                zip(column_indices_to_read, range(len(column_indices_to_read)))
+            )
+        }
     else:
         col_indices = column_indices_to_read
 
