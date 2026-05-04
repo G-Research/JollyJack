@@ -50,6 +50,7 @@ class BenchmarkSettings(BaseSettings):
     pre_buffer: list[bool] = [False, True]
     prefetch_page_cache: list[bool] = [False, True]
     use_threads: list[bool] = [False, True]
+    sort_column_indices: list[bool] = [True]
 
     @classmethod
     def settings_customise_sources(
@@ -215,21 +216,40 @@ def get_thread_local_np_array(dtype):
     return np_array
 
 
-def worker_jollyjack_numpy(use_threads, pre_buffer, prefetch_page_cache, dtype, path):
+def worker_jollyjack_numpy(
+    use_threads, pre_buffer, prefetch_page_cache, sort_column_indices, dtype, path
+):
 
     np_array = get_thread_local_np_array(dtype)
-    cache_options = pa.CacheOptions(
-        hole_size_limit=8192,  # default
-        range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
-        lazy=False,
-    )
+    cache_options = None
+    if pre_buffer:
+        cache_options = pa.CacheOptions(
+            hole_size_limit=8192,  # default
+            range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
+            lazy=False,
+        )
+    elif prefetch_page_cache:
+        cache_options = pa.CacheOptions(
+            hole_size_limit=8192,  # default
+            range_size_limit=512 * 1024,  # must not exceed read_ahead_kb
+        )
+
+    if sort_column_indices:
+        col_indices = {
+            src: dst
+            for src, dst in sorted(
+                zip(column_indices_to_read, range(len(column_indices_to_read)))
+            )
+        }
+    else:
+        col_indices = column_indices_to_read
 
     jj.read_into_numpy(
         source=path,
         metadata=None,
         np_array=np_array,
         row_group_indices=row_groups_to_read,
-        column_indices=column_indices_to_read,
+        column_indices=col_indices,
         pre_buffer=pre_buffer,
         prefetch_page_cache=prefetch_page_cache,
         use_threads=use_threads,
@@ -440,10 +460,11 @@ for dtype_key in cfg.dtypes:
                     for pre_buffer in cfg.pre_buffer:
                         for prefetch_page_cache in cfg.prefetch_page_cache:
                             for use_threads in cfg.use_threads:
+                                for sort_col in cfg.sort_column_indices:
 
-                                print(
-                                    f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads, pre_buffer, prefetch_page_cache, dtype.to_pandas_dtype(), path = path))}"
-                                )
+                                    print(
+                                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path = path))}"
+                                    )
 
         if {"all", "jj_torch"} & cfg.benchmarks_to_run:
             print(f".")
