@@ -175,16 +175,6 @@ col_indices = {
 }
 # Result: {2: 1, 5: 0, 8: 2} — reads columns in file order,
 # writes each to the same target column as the unsorted list.
-jj.read_into_numpy(
-    source=path,
-    metadata=None,
-    np_array=np_array,
-    row_group_indices=[0],
-    column_indices=col_indices,
-    prefetch_page_cache=True,
-    cache_options=cache_options,
-)
-```
 
 For similar reasons, avoid setting `use_threads=True` with
 `prefetch_page_cache`. Arrow's internal thread pool dispatches column reads
