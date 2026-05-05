@@ -175,6 +175,7 @@ col_indices = {
 }
 # Result: {2: 1, 5: 0, 8: 2} — reads columns in file order,
 # writes each to the same target column as the unsorted list.
+```
 
 For similar reasons, avoid setting `use_threads=True` with
 `prefetch_page_cache`. Arrow's internal thread pool dispatches column reads
