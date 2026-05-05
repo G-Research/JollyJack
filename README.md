@@ -156,6 +156,46 @@ for i, path in enumerate(file_paths):
     process(np_array)
 ```
 
+**Column ordering and `use_threads`:**
+
+When using `prefetch_page_cache`, the order in which columns are read matters.
+The kernel readahead triggered by `posix_fadvise` works best when byte ranges
+are accessed sequentially. If `column_indices` are not sorted by their Parquet
+column index, the resulting I/O pattern jumps back and forth through the file,
+defeating the readahead and degrading throughput.
+
+Pass `column_indices` as a dict sorted by source column index so that reads
+proceed in file order while each column still lands in the correct position in
+the destination array:
+
+```python
+# column_indices_to_read is an unsorted list, e.g. [5, 2, 8]
+# Sort by source column index, preserving the original target mapping.
+col_indices = {
+    src: dst
+    for src, dst in sorted(
+        zip(column_indices_to_read, range(len(column_indices_to_read)))
+    )
+}
+# Result: {2: 1, 5: 0, 8: 2} — reads columns in file order,
+# writes each to the same target column as the unsorted list.
+jj.read_into_numpy(
+    source=path,
+    metadata=None,
+    np_array=np_array,
+    row_group_indices=[0],
+    column_indices=col_indices,
+    prefetch_page_cache=True,
+    cache_options=cache_options,
+)
+```
+
+For similar reasons, avoid setting `use_threads=True` with
+`prefetch_page_cache`. Arrow's internal thread pool dispatches column reads
+across cores in an unpredictable order, breaking the sequential I/O pattern
+that makes prefetching effective. Use multiple worker threads at the
+application level instead, each reading its own file with `use_threads=False`.
+
 ### Pre-buffering and `cache_options`
 
 If you use `pre_buffer=True` instead of `prefetch_page_cache`, the following
