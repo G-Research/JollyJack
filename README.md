@@ -159,14 +159,10 @@ for i, path in enumerate(file_paths):
 **Column ordering and `use_threads`:**
 
 When using `prefetch_page_cache`, the order in which columns are read matters.
-The kernel readahead triggered by `posix_fadvise` works best when byte ranges
-are accessed sequentially. If `column_indices` are not sorted by their Parquet
-column index, the resulting I/O pattern jumps back and forth through the file,
-defeating the readahead and degrading throughput.
-
-Pass `column_indices` as a dict sorted by source column index so that reads
-proceed in file order while each column still lands in the correct position in
-the destination array:
+Sorting `column_indices` by source column index produces a sequential I/O
+pattern, which can significantly improve throughput. The effect depends on the
+storage device and kernel readahead settings. Use a dict to preserve the
+original target mapping:
 
 ```python
 # column_indices_to_read is an unsorted list, e.g. [5, 2, 8]
