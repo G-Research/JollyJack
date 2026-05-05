@@ -156,6 +156,33 @@ for i, path in enumerate(file_paths):
     process(np_array)
 ```
 
+**Column ordering and `use_threads`:**
+
+When using `prefetch_page_cache`, the order in which columns are read matters.
+Sorting `column_indices` by source column index produces a sequential I/O
+pattern, which can significantly improve throughput. The effect depends on the
+storage device and kernel readahead settings. Use a dict to preserve the
+original target mapping:
+
+```python
+# column_indices_to_read is an unsorted list, e.g. [5, 2, 8]
+# Sort by source column index, preserving the original target mapping.
+col_indices = {
+    src: dst
+    for src, dst in sorted(
+        zip(column_indices_to_read, range(len(column_indices_to_read)))
+    )
+}
+# Result: {2: 1, 5: 0, 8: 2} — reads columns in file order,
+# writes each to the same target column as the unsorted list.
+```
+
+For similar reasons, avoid setting `use_threads=True` with
+`prefetch_page_cache`. Arrow's internal thread pool dispatches column reads
+across cores in an unpredictable order, breaking the sequential I/O pattern
+that makes prefetching effective. Use multiple worker threads at the
+application level instead, each reading its own file or row group with `use_threads=False`.
+
 ### Pre-buffering and `cache_options`
 
 If you use `pre_buffer=True` instead of `prefetch_page_cache`, the following
