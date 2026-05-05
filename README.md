@@ -181,7 +181,7 @@ For similar reasons, avoid setting `use_threads=True` with
 `prefetch_page_cache`. Arrow's internal thread pool dispatches column reads
 across cores in an unpredictable order, breaking the sequential I/O pattern
 that makes prefetching effective. Use multiple worker threads at the
-application level instead, each reading its own file with `use_threads=False`.
+application level instead, each reading its own file or row group with `use_threads=False`.
 
 ### Pre-buffering and `cache_options`
 
