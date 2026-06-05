@@ -1,6 +1,10 @@
 #include "arrow/status.h"
 #include "arrow/util/parallel.h"
+#include "arrow/array/array_binary.h"
+#include "arrow/memory_pool.h"
 #include "parquet/column_reader.h"
+#include "parquet/file_reader.h"
+#include "parquet/level_conversion.h"
 #include "parquet/types.h"
 
 #include "jollyjack.h"
@@ -32,6 +36,7 @@ arrow::Status ReadColumn (int column_index
     , const std::vector<int> &target_column_indices
     , const std::vector<int64_t> &target_row_ranges
     , size_t target_row_ranges_idx
+    , parquet::RowGroupReader *row_group_reader
     )
 {
   std::string column_name;
@@ -180,6 +185,38 @@ arrow::Status ReadColumn (int column_index
             auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(column_reader->descr()->type_length()) + 
               ", but the target value size is " + std::to_string(stride0_size) + "!");
             return arrow::Status::UnknownError(msg);
+          }
+
+          bool use_record_reader = true;
+          if (use_record_reader)
+          {
+            auto leaf_info = parquet::internal::LevelInfo::ComputeLevelInfo(column_reader->descr());
+            auto record_reader = parquet::internal::RecordReader::Make(
+                column_reader->descr(), leaf_info, arrow::default_memory_pool(),
+                /*read_dictionary=*/false, /*read_dense_for_nullable=*/true);
+            record_reader->SetPageReader(row_group_reader->GetColumnPageReader(parquet_column));
+
+            while (rows_to_read > 0)
+            {
+              int64_t tmp_values_read = record_reader->ReadRecords(rows_to_read);
+              if (tmp_values_read == 0)
+                break;
+              rows_to_read -= tmp_values_read;
+            }
+
+            auto *binary_reader = dynamic_cast<parquet::internal::BinaryRecordReader *>(record_reader.get());
+            if (binary_reader == nullptr)
+              return arrow::Status::UnknownError("Column[" + std::to_string(parquet_column) + "] ('" + column_name + "'): FLBA RecordReader is not a BinaryRecordReader!");
+
+            for (const auto &chunk : binary_reader->GetBuilderChunks())
+            {
+              const auto fsb = std::static_pointer_cast<arrow::FixedSizeBinaryArray>(chunk);
+              const int64_t len = fsb->length();
+              memcpy(&base_ptr[target_offset], fsb->raw_values(), len * stride0_size);
+              target_offset += len * stride0_size;
+              values_read += len;
+            }
+            break;
           }
 
           const int64_t warp_size = 1024;
@@ -397,7 +434,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                   , column_indices
                   , target_column_indices
                   , target_row_ranges
-                  , target_row_ranges_idx);
+                  , target_row_ranges_idx
+                  , row_group_reader.get());
               }
               catch(const parquet::ParquetException& e)
               {
