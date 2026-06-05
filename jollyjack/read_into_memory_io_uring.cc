@@ -347,6 +347,7 @@ void ProcessSingleIOCompletion(
   int64_t current_target_row,
   CoalescedIORequest& completed_request,
   const std::shared_ptr<FantomReader>& fantom_reader,
+  parquet::RowGroupReader* row_group_reader,
   parquet::RowGroupMetaData* row_group_metadata,
   const std::vector<int>& column_indices,
   const std::vector<int64_t>& target_row_ranges,
@@ -371,7 +372,8 @@ void ProcessSingleIOCompletion(
       column_indices,
       target_column_indices,
       target_row_ranges,
-      target_row_ranges_index
+      target_row_ranges_index,
+      row_group_reader
     );
 
     if (!read_status.ok()) {
@@ -482,7 +484,7 @@ void ProcessAllCompletedRequests(
         try {
           size_t request_index = completed_requests[i];
           ProcessSingleIOCompletion(
-            current_target_row, io_requests[request_index], fantom_reader, row_group_metadata,
+            current_target_row, io_requests[request_index], fantom_reader, row_group_reader, row_group_metadata,
             column_indices, target_row_ranges, target_column_indices,
             out, buffer_size, stride0_size, stride1_size, target_row_ranges_index
           );
