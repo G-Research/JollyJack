@@ -213,11 +213,6 @@ arrow::Status ReadColumn (int column_index
               if (tmp_values_read == 0)
                 break;
 
-              std::cerr
-                << " rows_to_read:" << rows_to_read
-                << " tmp_values_read:" <<  tmp_values_read
-                << std::endl;
-
               rows_to_read -= tmp_values_read;
 
               auto *binary_reader = dynamic_cast<parquet::internal::BinaryRecordReader *>(record_reader.get());
@@ -233,9 +228,6 @@ arrow::Status ReadColumn (int column_index
                 target_offset += len * stride0_size;
                 values_read += len;
                 tmp_values_read_2 += len;
-                std::cerr
-                  << " values_read:" <<  values_read
-                  << std::endl;
               }
 
               if (tmp_values_read != tmp_values_read_2)
