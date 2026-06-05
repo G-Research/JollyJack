@@ -37,6 +37,7 @@ arrow::Status ReadColumn (int column_index
     , const std::vector<int64_t> &target_row_ranges
     , size_t target_row_ranges_idx
     , parquet::RowGroupReader *row_group_reader
+    , std::unique_ptr<parquet::PageReader> page_reader
     )
 {
   std::string column_name;
@@ -194,27 +195,55 @@ arrow::Status ReadColumn (int column_index
             auto record_reader = parquet::internal::RecordReader::Make(
                 column_reader->descr(), leaf_info, arrow::default_memory_pool(),
                 /*read_dictionary=*/false, /*read_dense_for_nullable=*/true);
-            record_reader->SetPageReader(row_group_reader->GetColumnPageReader(parquet_column));
 
-            while (rows_to_read > 0)
+            // The standard path supplies a RowGroupReader and the page reader is created here.
+            // The io_uring path supplies a pre-built page reader, because its FantomReader only
+            // serves the single buffer cached at column-setup time.
+            if (page_reader == nullptr)
             {
+              if (row_group_reader == nullptr)
+                return arrow::Status::UnknownError("Column[" + std::to_string(parquet_column) + "] ('" + column_name + "'): no page reader available for FLBA RecordReader!");
+              page_reader = row_group_reader->GetColumnPageReader(parquet_column);
+            }
+            record_reader->SetPageReader(std::move(page_reader));
+
+          while (rows_to_read > 0)
+          {
               int64_t tmp_values_read = record_reader->ReadRecords(rows_to_read);
               if (tmp_values_read == 0)
                 break;
+
+              std::cerr
+                << " rows_to_read:" << rows_to_read
+                << " tmp_values_read:" <<  tmp_values_read
+                << std::endl;
+
               rows_to_read -= tmp_values_read;
-            }
 
-            auto *binary_reader = dynamic_cast<parquet::internal::BinaryRecordReader *>(record_reader.get());
-            if (binary_reader == nullptr)
-              return arrow::Status::UnknownError("Column[" + std::to_string(parquet_column) + "] ('" + column_name + "'): FLBA RecordReader is not a BinaryRecordReader!");
+              auto *binary_reader = dynamic_cast<parquet::internal::BinaryRecordReader *>(record_reader.get());
+              if (binary_reader == nullptr)
+                return arrow::Status::UnknownError("Column[" + std::to_string(parquet_column) + "] ('" + column_name + "'): FLBA RecordReader is not a BinaryRecordReader!");
 
-            for (const auto &chunk : binary_reader->GetBuilderChunks())
-            {
-              const auto fsb = std::static_pointer_cast<arrow::FixedSizeBinaryArray>(chunk);
-              const int64_t len = fsb->length();
-              memcpy(&base_ptr[target_offset], fsb->raw_values(), len * stride0_size);
-              target_offset += len * stride0_size;
-              values_read += len;
+              int64_t tmp_values_read_2 = 0;
+              for (const auto &chunk : binary_reader->GetBuilderChunks())
+              {
+                const auto fsb = std::static_pointer_cast<arrow::FixedSizeBinaryArray>(chunk);
+                const int64_t len = fsb->length();
+                memcpy(&base_ptr[target_offset], fsb->raw_values(), len * stride0_size);
+                target_offset += len * stride0_size;
+                values_read += len;
+                tmp_values_read_2 += len;
+                std::cerr
+                  << " values_read:" <<  values_read
+                  << std::endl;
+              }
+
+              if (tmp_values_read != tmp_values_read_2)
+              {
+                auto msg = std::string(std::string(". Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') contains null values? Unexpected end of stream"));
+                return arrow::Status::UnknownError(msg);
+              }
+
             }
             break;
           }

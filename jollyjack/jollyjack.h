@@ -52,4 +52,5 @@ arrow::Status ReadColumn (int column_index
     , const std::vector<int64_t> &target_row_ranges
     , size_t target_row_ranges_idx
     , parquet::RowGroupReader *row_group_reader = nullptr
+    , std::unique_ptr<parquet::PageReader> page_reader = nullptr
     );

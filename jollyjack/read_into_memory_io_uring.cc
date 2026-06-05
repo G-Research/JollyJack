@@ -163,6 +163,9 @@ struct ColumnReadOperation {
   int column_array_index;     // Index in the output column array
   int parquet_column_index;   // Index in the Parquet file schema
   std::shared_ptr<parquet::ColumnReader> column_reader;
+  // Built at setup time for FLBA columns, while this request's buffer is the
+  // one cached in the FantomReader. ReadColumn's RecordReader path consumes it.
+  std::unique_ptr<parquet::PageReader> page_reader;
 };
 
 // Represents a coalesced I/O request that reads multiple columns in one operation
@@ -347,7 +350,6 @@ void ProcessSingleIOCompletion(
   int64_t current_target_row,
   CoalescedIORequest& completed_request,
   const std::shared_ptr<FantomReader>& fantom_reader,
-  parquet::RowGroupReader* row_group_reader,
   parquet::RowGroupMetaData* row_group_metadata,
   const std::vector<int>& column_indices,
   const std::vector<int64_t>& target_row_ranges,
@@ -359,12 +361,12 @@ void ProcessSingleIOCompletion(
   size_t target_row_ranges_index
 ) {    
   // Process each column covered by this coalesced read
-  for (const auto& column_operation : completed_request.column_operations) {
+  for (auto& column_operation : completed_request.column_operations) {
     auto read_status = ReadColumn(
       column_operation.column_array_index,
       current_target_row,
       column_operation.column_reader.get(),
-      row_group_metadata, 
+      row_group_metadata,
       out,
       buffer_size,
       stride0_size,
@@ -373,7 +375,8 @@ void ProcessSingleIOCompletion(
       target_column_indices,
       target_row_ranges,
       target_row_ranges_index,
-      row_group_reader
+      /*row_group_reader=*/nullptr,
+      std::move(column_operation.page_reader)
     );
 
     if (!read_status.ok()) {
@@ -438,6 +441,14 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
     // Create column readers for each column in this request
     for (auto& column_operation : completed_request.column_operations) {
       column_operation.column_reader = row_group_reader->Column(column_operation.parquet_column_index);
+
+      // FLBA columns are read via a RecordReader in ReadColumn, which needs a PageReader.
+      // It must be created now, while this request's buffer is the one cached in the
+      // FantomReader; creating it later (during parallel processing) would request bytes
+      // the single-buffer FantomReader can no longer serve.
+      if (column_operation.column_reader->descr()->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY) {
+        column_operation.page_reader = row_group_reader->GetColumnPageReader(column_operation.parquet_column_index);
+      }
     }
 
     io_uring_cqe_seen(&ring, completion_entry);
@@ -484,7 +495,7 @@ void ProcessAllCompletedRequests(
         try {
           size_t request_index = completed_requests[i];
           ProcessSingleIOCompletion(
-            current_target_row, io_requests[request_index], fantom_reader, row_group_reader, row_group_metadata,
+            current_target_row, io_requests[request_index], fantom_reader, row_group_metadata,
             column_indices, target_row_ranges, target_column_indices,
             out, buffer_size, stride0_size, stride1_size, target_row_ranges_index
           );
