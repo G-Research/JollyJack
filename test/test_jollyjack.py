@@ -100,10 +100,12 @@ def get_table(n_rows, n_columns, data_type=pa.float32()):
 class TestJollyJack(unittest.TestCase):
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True], [False, True])
+        itertools.product(
+            [False, True], [False, True], [False, True], [False, True], [None, "snappy"]
+        )
     )
     def test_read_entire_table(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, compression
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -116,6 +118,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             pr = pq.ParquetReader()
@@ -163,10 +166,12 @@ class TestJollyJack(unittest.TestCase):
             pr.close()
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True], [False, True])
+        itertools.product(
+            [False, True], [False, True], [False, True], [False, True], [None, "snappy"]
+        )
     )
     def test_read_with_palletjack(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, compression
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -179,6 +184,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             index_path = path + ".index"
@@ -218,10 +224,12 @@ class TestJollyJack(unittest.TestCase):
             pr.close()
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True], [False, True])
+        itertools.product(
+            [False, True], [False, True], [False, True], [False, True], [None, "snappy"]
+        )
     )
     def test_read_nonzero_column_offset(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, compression
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -234,6 +242,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an array of zeros
@@ -260,10 +269,12 @@ class TestJollyJack(unittest.TestCase):
             pr.close()
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True], [False, True])
+        itertools.product(
+            [False, True], [False, True], [False, True], [False, True], [None, "snappy"]
+        )
     )
     def test_read_unsupported_column_types(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, compression
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -278,6 +289,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an array of zerosx
@@ -301,13 +313,21 @@ class TestJollyJack(unittest.TestCase):
                 context.exception,
             )
 
-    @parameterized.expand(itertools.product([pa.float16(), pa.float32(), pa.float64()]))
-    def test_read_unsupported_encoding_dictionary(self, dtype):
+    @parameterized.expand(
+        itertools.product([pa.float16(), pa.float32(), pa.float64()], [None, "snappy"])
+    )
+    def test_read_unsupported_encoding_dictionary(self, dtype, compression):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             path = os.path.join(tmpdirname, "my.parquet")
             table = get_table(n_rows=chunk_size, n_columns=n_columns, data_type=dtype)
-            pq.write_table(table, path, row_group_size=chunk_size, use_dictionary=True)
+            pq.write_table(
+                table,
+                path,
+                row_group_size=chunk_size,
+                use_dictionary=True,
+                compression=compression,
+            )
 
             # Create an array of zerosx
             np_array = np.zeros(
@@ -371,6 +391,7 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             supported_dtype_encodings,
+            [None, "snappy"],
         )
     )
     def test_read_dtype_numpy(
@@ -380,6 +401,7 @@ class TestJollyJack(unittest.TestCase):
         use_memory_map,
         prefetch_page_cache,
         dtype_encoding,
+        compression,
     ):
 
         for n_row_groups, n_columns, chunk_size in [
@@ -434,6 +456,7 @@ class TestJollyJack(unittest.TestCase):
                         write_statistics=False,
                         store_schema=False,
                         column_encoding=column_encoding,
+                        compression=compression,
                     )
 
                     # Create an empty array
@@ -464,11 +487,15 @@ class TestJollyJack(unittest.TestCase):
 
     @parameterized.expand(
         itertools.product(
-            [False, True], [False, True], [False, True], supported_dtype_encodings
+            [False, True],
+            [False, True],
+            [False, True],
+            supported_dtype_encodings,
+            [None, "snappy"],
         )
     )
     def test_read_dtype_torch(
-        self, pre_buffer, use_threads, use_memory_map, dtype_encoding
+        self, pre_buffer, use_threads, use_memory_map, dtype_encoding, compression
     ):
 
         for n_row_groups, n_columns, chunk_size in [
@@ -510,6 +537,7 @@ class TestJollyJack(unittest.TestCase):
                         write_statistics=False,
                         store_schema=False,
                         column_encoding=column_encoding,
+                        compression=compression,
                     )
 
                     tensor = torch.zeros(
@@ -545,10 +573,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()],
+            [None, "snappy"],
         )
     )
     def test_read_numpy_column_names(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -561,6 +596,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -595,10 +631,11 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64(), pa.int32(), pa.int64()],
+            [None, "snappy"],
         )
     )
     def test_read_torch_column_names(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, dtype, compression
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -611,6 +648,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -647,10 +685,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
             [False, True],
+            [None, "snappy"],
         )
     )
     def test_read_invalid_column(
-        self, pre_buffer, use_threads, use_memory_map, dtype, prefetch_page_cache
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        dtype,
+        prefetch_page_cache,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -663,6 +708,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -716,10 +762,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
             [False, True],
+            [None, "snappy"],
         )
     )
     def test_read_filesystem(
-        self, pre_buffer, use_threads, use_memory_map, dtype, prefetch_page_cache
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        dtype,
+        prefetch_page_cache,
+        compression,
     ):
 
         if os.environ.get("JJ_READER_BACKEND") != None:
@@ -737,6 +790,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -772,10 +826,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_invalid_row_group(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -788,6 +849,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -823,6 +885,7 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             supported_dtype_encodings,
+            [None, "snappy"],
         )
     )
     def test_read_data_with_nulls(
@@ -832,6 +895,7 @@ class TestJollyJack(unittest.TestCase):
         use_memory_map,
         prefetch_page_cache,
         dtype_encoding,
+        compression,
     ):
 
         dtype = dtype_encoding[0]
@@ -858,6 +922,7 @@ class TestJollyJack(unittest.TestCase):
                 write_statistics=False,
                 store_schema=True,
                 column_encoding=column_encoding,
+                compression=compression,
             )
 
             # Create an empty array
@@ -896,10 +961,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
             [False, True],
+            [None, "snappy"],
         )
     )
     def test_read_not_enough_rows(
-        self, pre_buffer, use_threads, use_memory_map, dtype, prefetch_page_cache
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        dtype,
+        prefetch_page_cache,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -912,6 +984,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -945,10 +1018,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_numpy_column_names_mapping(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -962,6 +1042,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -1020,10 +1101,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_numpy_column_indices_mapping(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1036,6 +1124,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -1092,10 +1181,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_numpy_column_indices_multi_mapping(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1108,6 +1204,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             pr = pq.ParquetReader()
@@ -1155,10 +1252,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_numpy_column_names_multi_mapping(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1171,6 +1275,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             pr = pq.ParquetReader()
@@ -1213,14 +1318,18 @@ class TestJollyJack(unittest.TestCase):
 
     # over 4GB
     @parameterized.expand(
-        [
-            (200_000_000, pa.float16()),
-            (1_100_000_000, pa.float32()),
-            (550_000_000, pa.float64()),
-        ]
+        itertools.product(
+            [
+                (200_000_000, pa.float16()),
+                (1_100_000_000, pa.float32()),
+                (550_000_000, pa.float64()),
+            ],
+            [None, "snappy"],
+        )
     )
-    def test_read_large_array(self, chunk_size, dtype):
+    def test_read_large_array(self, chunk_size_dtype, compression):
 
+        chunk_size, dtype = chunk_size_dtype
         n_row_groups = 1
         n_columns = 1
         n_rows = n_row_groups * chunk_size
@@ -1242,6 +1351,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
             table = None
 
@@ -1272,10 +1382,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_not_enough_buffer(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1288,6 +1405,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             # Create an empty array
@@ -1340,10 +1458,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_entire_table_with_slices(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1356,6 +1481,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
             pr = pq.ParquetReader()
             pr.open(path)
@@ -1419,10 +1545,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_partial_table_with_slices(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1435,6 +1568,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
             pr = pq.ParquetReader()
             pr.open(path)
@@ -1473,10 +1607,11 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_entire_tensor_with_slices(
-        self, pre_buffer, use_threads, use_memory_map, dtype
+        self, pre_buffer, use_threads, use_memory_map, dtype, compression
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1489,6 +1624,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
             pr = pq.ParquetReader()
             pr.open(path)
@@ -1533,10 +1669,17 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             [pa.float16(), pa.float32(), pa.float64()],
+            [None, "snappy"],
         )
     )
     def test_read_with_slices_error_handling(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, dtype
+        self,
+        pre_buffer,
+        use_threads,
+        use_memory_map,
+        prefetch_page_cache,
+        dtype,
+        compression,
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1549,6 +1692,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
             pr = pq.ParquetReader()
             pr.open(path)
@@ -1919,10 +2063,12 @@ class TestJollyJack(unittest.TestCase):
         )
 
     @parameterized.expand(
-        itertools.product([False, True], [False, True], [False, True], [False, True])
+        itertools.product(
+            [False, True], [False, True], [False, True], [False, True], [None, "snappy"]
+        )
     )
     def test_read_backends(
-        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache
+        self, pre_buffer, use_threads, use_memory_map, prefetch_page_cache, compression
     ):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -1935,6 +2081,7 @@ class TestJollyJack(unittest.TestCase):
                 use_dictionary=False,
                 write_statistics=False,
                 store_schema=False,
+                compression=compression,
             )
 
             pr = pq.ParquetReader()
