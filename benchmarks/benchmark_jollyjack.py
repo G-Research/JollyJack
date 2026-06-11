@@ -493,7 +493,9 @@ for dtype_key in cfg.dtypes:
 
         if {"all", "arrow"} & cfg.benchmarks_to_run:
             print(f".")
-            for n_workers, pre_buffer, use_threads in itertools.product(cfg.worker_counts, cfg.pre_buffer, cfg.use_threads):
+            for n_workers, pre_buffer, use_threads in itertools.product(
+                cfg.worker_counts, cfg.pre_buffer, cfg.use_threads
+            ):
                 print(
                     f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
                 )
@@ -508,8 +510,20 @@ for dtype_key in cfg.dtypes:
                     os.environ["JJ_READER_BACKEND"] = jj_reader
 
                 print(f".")
-                for n_workers, pre_buffer, prefetch_page_cache, use_threads, sort_col, cache_meta in itertools.product(
-                    cfg.worker_counts, cfg.pre_buffer, cfg.prefetch_page_cache, cfg.use_threads, cfg.sort_column_indices, cfg.cache_metadata
+                for (
+                    n_workers,
+                    pre_buffer,
+                    prefetch_page_cache,
+                    use_threads,
+                    sort_col,
+                    cache_meta,
+                ) in itertools.product(
+                    cfg.worker_counts,
+                    cfg.pre_buffer,
+                    cfg.prefetch_page_cache,
+                    cfg.use_threads,
+                    cfg.sort_column_indices,
+                    cfg.cache_metadata,
                 ):
                     metadata_cache = {}
                     if cache_meta:
@@ -531,8 +545,20 @@ for dtype_key in cfg.dtypes:
                     os.environ["JJ_READER_BACKEND"] = jj_reader
 
                 print(f".")
-                for n_workers, pre_buffer, prefetch_page_cache, use_threads, sort_col, cache_meta in itertools.product(
-                    cfg.worker_counts, cfg.pre_buffer, cfg.prefetch_page_cache, cfg.use_threads, cfg.sort_column_indices, cfg.cache_metadata
+                for (
+                    n_workers,
+                    pre_buffer,
+                    prefetch_page_cache,
+                    use_threads,
+                    sort_col,
+                    cache_meta,
+                ) in itertools.product(
+                    cfg.worker_counts,
+                    cfg.pre_buffer,
+                    cfg.prefetch_page_cache,
+                    cfg.use_threads,
+                    cfg.sort_column_indices,
+                    cfg.cache_metadata,
                 ):
                     metadata_cache = {}
                     if cache_meta:
