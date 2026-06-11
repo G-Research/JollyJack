@@ -1,3 +1,4 @@
+import itertools
 import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
@@ -492,12 +493,10 @@ for dtype_key in cfg.dtypes:
 
         if {"all", "arrow"} & cfg.benchmarks_to_run:
             print(f".")
-            for n_workers in cfg.worker_counts:
-                for pre_buffer in cfg.pre_buffer:
-                    for use_threads in cfg.use_threads:
-                        print(
-                            f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
-                        )
+            for n_workers, pre_buffer, use_threads in itertools.product(cfg.worker_counts, cfg.pre_buffer, cfg.use_threads):
+                print(
+                    f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
+                )
 
         if {"all", "jj_numpy"} & cfg.benchmarks_to_run:
             print(f".")
@@ -509,21 +508,18 @@ for dtype_key in cfg.dtypes:
                     os.environ["JJ_READER_BACKEND"] = jj_reader
 
                 print(f".")
-                for n_workers in cfg.worker_counts:
-                    for pre_buffer in cfg.pre_buffer:
-                        for prefetch_page_cache in cfg.prefetch_page_cache:
-                            for use_threads in cfg.use_threads:
-                                for sort_col in cfg.sort_column_indices:
-                                    for cache_meta in cfg.cache_metadata:
-                                        metadata_cache = {}
-                                        if cache_meta:
-                                            for i in range(cfg.n_files):
-                                                p = f"{cfg.parquet_path}{i}"
-                                                metadata_cache[p] = pq.read_metadata(p)
+                for n_workers, pre_buffer, prefetch_page_cache, use_threads, sort_col, cache_meta in itertools.product(
+                    cfg.worker_counts, cfg.pre_buffer, cfg.prefetch_page_cache, cfg.use_threads, cfg.sort_column_indices, cfg.cache_metadata
+                ):
+                    metadata_cache = {}
+                    if cache_meta:
+                        for i in range(cfg.n_files):
+                            p = f"{cfg.parquet_path}{i}"
+                            metadata_cache[p] = pq.read_metadata(p)
 
-                                        print(
-                                            f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, cache_metadata:{cache_meta}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path=path, metadata=metadata_cache.get(path)))}"
-                                        )
+                    print(
+                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, cache_metadata:{cache_meta}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path=path, metadata=metadata_cache.get(path)))}"
+                    )
 
         if {"all", "jj_torch"} & cfg.benchmarks_to_run:
             print(f".")
@@ -535,21 +531,18 @@ for dtype_key in cfg.dtypes:
                     os.environ["JJ_READER_BACKEND"] = jj_reader
 
                 print(f".")
-                for n_workers in cfg.worker_counts:
-                    for pre_buffer in cfg.pre_buffer:
-                        for prefetch_page_cache in cfg.prefetch_page_cache:
-                            for use_threads in cfg.use_threads:
-                                for sort_col in cfg.sort_column_indices:
-                                    for cache_meta in cfg.cache_metadata:
-                                        metadata_cache = {}
-                                        if cache_meta:
-                                            for i in range(cfg.n_files):
-                                                p = f"{cfg.parquet_path}{i}"
-                                                metadata_cache[p] = pq.read_metadata(p)
+                for n_workers, pre_buffer, prefetch_page_cache, use_threads, sort_col, cache_meta in itertools.product(
+                    cfg.worker_counts, cfg.pre_buffer, cfg.prefetch_page_cache, cfg.use_threads, cfg.sort_column_indices, cfg.cache_metadata
+                ):
+                    metadata_cache = {}
+                    if cache_meta:
+                        for i in range(cfg.n_files):
+                            p = f"{cfg.parquet_path}{i}"
+                            metadata_cache[p] = pq.read_metadata(p)
 
-                                        print(
-                                            f"`jj.read_into_torch` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, cache_metadata:{cache_meta}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path=path, metadata=metadata_cache.get(path)))}"
-                                        )
+                    print(
+                        f"`jj.read_into_torch` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, cache_metadata:{cache_meta}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path=path, metadata=metadata_cache.get(path)))}"
+                    )
 
         if {"all", "copy_to_row_major"} & cfg.benchmarks_to_run:
             print(f".")
