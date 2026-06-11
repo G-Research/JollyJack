@@ -1,3 +1,4 @@
+import itertools
 import jollyjack as jj
 import pyarrow.parquet as pq
 import pyarrow as pa
@@ -40,17 +41,14 @@ class BenchmarkSettings(BaseSettings):
         "my.parquet" if sys.platform.startswith("win") else "/tmp/my.parquet"
     )
     benchmarks_to_run: set[str] = {"all"}
-    reader_backends: list[str] = (
-        ["default"]
-        if sys.platform.startswith("win")
-        else ["default", "io_uring", "io_uring_odirect"]
-    )
+    reader_backends: list[str] | None = None
     dtypes: list[str] = ["float32", "float16"]
     compressions: list[str] = ["none"]
     pre_buffer: list[bool] = [False, True]
     prefetch_page_cache: list[bool] = [False, True]
     use_threads: list[bool] = [False, True]
     sort_column_indices: list[bool] = [True]
+    cache_metadata: list[bool] = [False]
 
     @classmethod
     def settings_customise_sources(
@@ -72,11 +70,17 @@ class BenchmarkSettings(BaseSettings):
     def apply_mode_defaults(self):
         if self.benchmark_mode == "FILE_SYSTEM":
             if self.n_files is None:
-                self.n_files = 6
+                self.n_files = 2
             if self.n_repeats is None:
                 self.n_repeats = 1
             if self.purge_cache is None:
                 self.purge_cache = not sys.platform.startswith("win")
+            if self.reader_backends is None:
+                self.reader_backends = (
+                    ["default"]
+                    if sys.platform.startswith("win")
+                    else ["default", "io_uring", "io_uring_odirect"]
+                )
         elif self.benchmark_mode == "CPU":
             if self.n_files is None:
                 self.n_files = 1
@@ -84,6 +88,12 @@ class BenchmarkSettings(BaseSettings):
                 self.n_repeats = 6
             if self.purge_cache is None:
                 self.purge_cache = False
+            if self.reader_backends is None:
+                self.reader_backends = (
+                    ["default"]
+                    if sys.platform.startswith("win")
+                    else ["default", "io_uring"]
+                )
         else:
             raise ValueError(f"Invalid benchmark_mode: {self.benchmark_mode}")
         return self
@@ -216,8 +226,41 @@ def get_thread_local_np_array(dtype):
     return np_array
 
 
+def get_thread_local_torch_tensor(dtype):
+    import torch
+
+    tensor = getattr(thread_local_data, "torch_tensor", None)
+    if tensor is None:
+        numpy_to_torch_dtype_dict = {
+            np.bool_: torch.bool,
+            np.uint8: torch.uint8,
+            np.int8: torch.int8,
+            np.int16: torch.int16,
+            np.int32: torch.int32,
+            np.int64: torch.int64,
+            np.float16: torch.float16,
+            np.float32: torch.float32,
+            np.float64: torch.float64,
+            np.complex64: torch.complex64,
+            np.complex128: torch.complex128,
+        }
+        tensor = torch.zeros(
+            cfg.n_columns_to_read,
+            cfg.chunk_size,
+            dtype=numpy_to_torch_dtype_dict[dtype],
+        ).transpose(0, 1)
+        thread_local_data.torch_tensor = tensor
+    return tensor
+
+
 def worker_jollyjack_numpy(
-    use_threads, pre_buffer, prefetch_page_cache, sort_column_indices, dtype, path
+    use_threads,
+    pre_buffer,
+    prefetch_page_cache,
+    sort_column_indices,
+    dtype,
+    path,
+    metadata=None,
 ):
 
     np_array = get_thread_local_np_array(dtype)
@@ -246,7 +289,7 @@ def worker_jollyjack_numpy(
 
     jj.read_into_numpy(
         source=path,
-        metadata=None,
+        metadata=metadata,
         np_array=np_array,
         row_group_indices=row_groups_to_read,
         column_indices=col_indices,
@@ -320,39 +363,50 @@ def worker_raw_bytes_read(dtype, path, read_metadata):
         os.preadv(fd, [buf], 0)
 
 
-def worker_jollyjack_torch(pre_buffer, dtype, path):
+def worker_jollyjack_torch(
+    use_threads,
+    pre_buffer,
+    prefetch_page_cache,
+    sort_column_indices,
+    dtype,
+    path,
+    metadata=None,
+):
 
-    import torch
+    tensor = get_thread_local_torch_tensor(dtype)
+    cache_options = None
+    if pre_buffer:
+        cache_options = pa.CacheOptions(
+            hole_size_limit=8192,
+            range_size_limit=16 * 1024 * 1024,
+            lazy=False,
+        )
+    elif prefetch_page_cache:
+        cache_options = pa.CacheOptions(
+            hole_size_limit=8192,
+            range_size_limit=512 * 1024,
+        )
 
-    numpy_to_torch_dtype_dict = {
-        np.bool: torch.bool,
-        np.uint8: torch.uint8,
-        np.int8: torch.int8,
-        np.int16: torch.int16,
-        np.int32: torch.int32,
-        np.int64: torch.int64,
-        np.float16: torch.float16,
-        np.float32: torch.float32,
-        np.float64: torch.float64,
-        np.complex64: torch.complex64,
-        np.complex128: torch.complex128,
-    }
-
-    tensor = torch.zeros(
-        cfg.n_columns_to_read, cfg.chunk_size, dtype=numpy_to_torch_dtype_dict[dtype]
-    ).transpose(0, 1)
-
-    pr = pq.ParquetReader()
-    pr.open(path)
+    if sort_column_indices:
+        col_indices = {
+            src: dst
+            for src, dst in sorted(
+                zip(column_indices_to_read, range(len(column_indices_to_read)))
+            )
+        }
+    else:
+        col_indices = column_indices_to_read
 
     jj.read_into_torch(
         source=path,
-        metadata=pr.metadata,
+        metadata=metadata,
         tensor=tensor,
         row_group_indices=row_groups_to_read,
-        column_indices=column_indices_to_read,
+        column_indices=col_indices,
         pre_buffer=pre_buffer,
-        use_threads=False,
+        prefetch_page_cache=prefetch_page_cache,
+        use_threads=use_threads,
+        cache_options=cache_options,
     )
 
 
@@ -439,12 +493,12 @@ for dtype_key in cfg.dtypes:
 
         if {"all", "arrow"} & cfg.benchmarks_to_run:
             print(f".")
-            for n_workers in cfg.worker_counts:
-                for pre_buffer in cfg.pre_buffer:
-                    for use_threads in cfg.use_threads:
-                        print(
-                            f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
-                        )
+            for n_workers, pre_buffer, use_threads in itertools.product(
+                cfg.worker_counts, cfg.pre_buffer, cfg.use_threads
+            ):
+                print(
+                    f"`pq.read_row_groups` n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_arrow_row_group(use_threads = use_threads, pre_buffer = pre_buffer, path = path))}"
+                )
 
         if {"all", "jj_numpy"} & cfg.benchmarks_to_run:
             print(f".")
@@ -456,22 +510,64 @@ for dtype_key in cfg.dtypes:
                     os.environ["JJ_READER_BACKEND"] = jj_reader
 
                 print(f".")
-                for n_workers in cfg.worker_counts:
-                    for pre_buffer in cfg.pre_buffer:
-                        for prefetch_page_cache in cfg.prefetch_page_cache:
-                            for use_threads in cfg.use_threads:
-                                for sort_col in cfg.sort_column_indices:
+                for (
+                    n_workers,
+                    pre_buffer,
+                    prefetch_page_cache,
+                    use_threads,
+                    sort_col,
+                    cache_meta,
+                ) in itertools.product(
+                    cfg.worker_counts,
+                    cfg.pre_buffer,
+                    cfg.prefetch_page_cache,
+                    cfg.use_threads,
+                    cfg.sort_column_indices,
+                    cfg.cache_metadata,
+                ):
+                    metadata_cache = {}
+                    if cache_meta:
+                        for i in range(cfg.n_files):
+                            p = f"{cfg.parquet_path}{i}"
+                            metadata_cache[p] = pq.read_metadata(p)
 
-                                    print(
-                                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path = path))}"
-                                    )
+                    print(
+                        f"`jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, cache_metadata:{cache_meta}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_numpy(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path=path, metadata=metadata_cache.get(path)))}"
+                    )
 
         if {"all", "jj_torch"} & cfg.benchmarks_to_run:
             print(f".")
-            for n_workers in cfg.worker_counts:
-                for pre_buffer in cfg.pre_buffer:
+            for jj_reader in ["default"]:
+
+                if jj_reader == "default":
+                    os.environ.pop("JJ_READER_BACKEND", None)
+                else:
+                    os.environ["JJ_READER_BACKEND"] = jj_reader
+
+                print(f".")
+                for (
+                    n_workers,
+                    pre_buffer,
+                    prefetch_page_cache,
+                    use_threads,
+                    sort_col,
+                    cache_meta,
+                ) in itertools.product(
+                    cfg.worker_counts,
+                    cfg.pre_buffer,
+                    cfg.prefetch_page_cache,
+                    cfg.use_threads,
+                    cfg.sort_column_indices,
+                    cfg.cache_metadata,
+                ):
+                    metadata_cache = {}
+                    if cache_meta:
+                        for i in range(cfg.n_files):
+                            p = f"{cfg.parquet_path}{i}"
+                            metadata_cache[p] = pq.read_metadata(p)
+
                     print(
-                        f"`jj.read_into_torch` n_workers:{n_workers}, pre_buffer:{pre_buffer}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(pre_buffer, dtype.to_pandas_dtype(), path = path))}"
+                        f"`jj.read_into_torch` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, cache_metadata:{cache_meta}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path=path, metadata=metadata_cache.get(path)))}"
                     )
 
         if {"all", "copy_to_row_major"} & cfg.benchmarks_to_run:
