@@ -271,7 +271,7 @@ arrow::Status ReadColumn (int column_index
   }
   catch(const parquet::ParquetException& e)
   {
-    if (e.what() == std::string("Unexpected end of stream"))
+    if (std::string(e.what()).find("Unexpected end of stream") != std::string::npos)
     {
       auto msg = std::string(e.what() + std::string(". Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') contains null values?"));
       return arrow::Status::UnknownError(msg);
