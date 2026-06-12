@@ -3,7 +3,6 @@
 #include "parquet/column_reader.h"
 #include "parquet/column_page.h"
 #include "parquet/file_reader.h"
-#include "parquet/statistics.h"
 #include "parquet/types.h"
 
 #include "jollyjack.h"
@@ -203,13 +202,6 @@ private:
   int64_t page_values_ = 0;
   int64_t page_pos_ = 0;
 };
-
-std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *row_group_reader,
-    int column_index, const parquet::ColumnDescriptor *descr,
-    const parquet::ColumnChunkMetaData *column_chunk_metadata)
-{
-  return std::make_shared<ContiguousFLBAReader>(row_group_reader, column_index, descr, column_chunk_metadata);
-}
 
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
@@ -570,7 +562,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                 const auto *descr = row_group_metadata->schema()->Column(parquet_column);
                 std::shared_ptr<parquet::ColumnReader> column_reader;
                 if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
-                  column_reader = MakeFLBAReader(row_group_reader.get(), parquet_column, descr, column_chunk_metadata.get());
+                  column_reader = std::make_shared<ContiguousFLBAReader>(row_group_reader.get(), parquet_column, descr, column_chunk_metadata.get());
                 else
                   column_reader = row_group_reader->Column(parquet_column);
 
