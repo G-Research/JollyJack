@@ -39,10 +39,15 @@ void PrefetchPageCache(
 std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename);
 std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename);
 
+std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *row_group_reader,
+    int column_index, const parquet::ColumnDescriptor *descr,
+    const parquet::ColumnChunkMetaData *column_chunk_metadata);
+
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
     , parquet::ColumnReader* column_reader
     , parquet::RowGroupMetaData *row_group_metadata
+    , const parquet::ColumnChunkMetaData *column_chunk_metadata
     , void* buffer
     , size_t buffer_size
     , size_t stride0_size
