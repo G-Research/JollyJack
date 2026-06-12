@@ -43,6 +43,7 @@ arrow::Status ReadColumn (int column_index
     , int64_t target_row
     , parquet::ColumnReader* column_reader
     , parquet::RowGroupMetaData *row_group_metadata
+    , const parquet::ColumnChunkMetaData *column_chunk_metadata
     , void* buffer
     , size_t buffer_size
     , size_t stride0_size
