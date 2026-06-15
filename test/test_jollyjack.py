@@ -951,7 +951,9 @@ class TestJollyJack(unittest.TestCase):
                 )
 
             self.assertTrue(
-                f"Unexpected end of stream" in str(context.exception), context.exception
+                f"Column[0] ('column_0') contains null values?"
+                in str(context.exception),
+                context.exception,
             )
 
     @parameterized.expand(
