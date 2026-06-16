@@ -163,6 +163,7 @@ struct ColumnReadOperation {
   int column_array_index;     // Index in the output column array
   int parquet_column_index;   // Index in the Parquet file schema
   std::shared_ptr<parquet::ColumnReader> column_reader;
+  std::shared_ptr<parquet::ColumnChunkMetaData> column_chunk_metadata;
 };
 
 // Represents a coalesced I/O request that reads multiple columns in one operation
@@ -363,7 +364,8 @@ void ProcessSingleIOCompletion(
       column_operation.column_array_index,
       current_target_row,
       column_operation.column_reader.get(),
-      row_group_metadata, 
+      row_group_metadata,
+      column_operation.column_chunk_metadata.get(),
       out,
       buffer_size,
       stride0_size,
@@ -435,7 +437,12 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
 
     // Create column readers for each column in this request
     for (auto& column_operation : completed_request.column_operations) {
-      column_operation.column_reader = row_group_reader->Column(column_operation.parquet_column_index);
+      const auto *descr = row_group_reader->metadata()->schema()->Column(column_operation.parquet_column_index);
+      column_operation.column_chunk_metadata = row_group_reader->metadata()->ColumnChunk(column_operation.parquet_column_index);
+      if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
+        column_operation.column_reader = MakeFLBAReader(row_group_reader, column_operation.parquet_column_index, descr, column_operation.column_chunk_metadata.get());
+      else
+        column_operation.column_reader = row_group_reader->Column(column_operation.parquet_column_index);
     }
 
     io_uring_cqe_seen(&ring, completion_entry);

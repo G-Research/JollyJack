@@ -392,6 +392,7 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             supported_dtype_encodings,
             [None, "snappy"],
+            ["1.0", "2.0"],
         )
     )
     def test_read_dtype_numpy(
@@ -402,6 +403,7 @@ class TestJollyJack(unittest.TestCase):
         prefetch_page_cache,
         dtype_encoding,
         compression,
+        data_page_version,
     ):
 
         for n_row_groups, n_columns, chunk_size in [
@@ -457,6 +459,7 @@ class TestJollyJack(unittest.TestCase):
                         store_schema=False,
                         column_encoding=column_encoding,
                         compression=compression,
+                        data_page_version=data_page_version,
                     )
 
                     # Create an empty array
@@ -886,6 +889,7 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             supported_dtype_encodings,
             [None, "snappy"],
+            ["1.0", "2.0"],
         )
     )
     def test_read_data_with_nulls(
@@ -896,6 +900,7 @@ class TestJollyJack(unittest.TestCase):
         prefetch_page_cache,
         dtype_encoding,
         compression,
+        data_page_version,
     ):
 
         dtype = dtype_encoding[0]
@@ -923,6 +928,7 @@ class TestJollyJack(unittest.TestCase):
                 store_schema=True,
                 column_encoding=column_encoding,
                 compression=compression,
+                data_page_version=data_page_version,
             )
 
             # Create an empty array
