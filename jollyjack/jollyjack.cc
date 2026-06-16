@@ -37,12 +37,12 @@ public:
       , max_def_level_(descr->max_definition_level())
   {
     // The fast path only handles PLAIN-encoded, flat columns read as a whole chunk.
-    bool only_plain_values = true;
+    bool fast_path = true;
     for (const auto encoding : column_chunk_metadata->encodings())
       if (encoding != parquet::Encoding::PLAIN && encoding != parquet::Encoding::RLE)
-        only_plain_values = false;
+        fast_path = false;
 
-    if (only_plain_values && descr->max_repetition_level() == 0)
+    if (fast_path && descr->max_repetition_level() == 0)
       page_reader_ = row_group_reader->GetColumnPageReader(column_index);
     else
       fallback_reader_ = row_group_reader->Column(column_index);  // delegate to Arrow
@@ -72,10 +72,9 @@ public:
       return n;
     }
 
-    if (page_pos_ >= page_values_ && !NextDataPage())
+    if (page_pos_ >= page_values_)
     {
-      *values_read = 0;
-      return 0;
+      if (eof_ || !NextDataPage()) { eof_ = true; *values_read = 0; return 0; }
     }
 
     const int64_t n = std::min<int64_t>(batch_size, page_values_ - page_pos_);
@@ -89,7 +88,12 @@ public:
   {
     if (fallback_reader_)
       return fallback_reader_->HasNext();
-    return page_pos_ < page_values_ || NextDataPage();
+    if (page_pos_ < page_values_)
+      return true;
+    if (eof_)
+      return false;
+    eof_ = !NextDataPage();
+    return !eof_;
   }
 
   parquet::Type::type type() const override { return parquet::Type::FIXED_LEN_BYTE_ARRAY; }
@@ -167,6 +171,9 @@ private:
       if (values_ptr < page_data || values_ptr + page_values * type_length_ > page_end)
         throw parquet::ParquetException("Column contains null values");
 
+      if (page_values == 0)
+        continue;  // skip empty pages so page_values_ > 0 always holds after return
+
       page_values_ptr_ = values_ptr;
       page_values_ = page_values;
       page_pos_ = 0;
@@ -182,6 +189,7 @@ private:
   std::unique_ptr<parquet::PageReader> page_reader_;
   std::shared_ptr<parquet::ColumnReader> fallback_reader_;
 
+  bool eof_ = false;
   std::shared_ptr<parquet::Page> current_page_;  // keeps the current page buffer alive
   const uint8_t *page_values_ptr_ = nullptr;
   int64_t page_values_ = 0;
