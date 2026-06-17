@@ -2,6 +2,7 @@
 #include "arrow/util/parallel.h"
 #include "parquet/column_reader.h"
 #include "parquet/column_page.h"
+#include "parquet/encoding.h"
 #include "parquet/file_reader.h"
 #include "parquet/types.h"
 
@@ -9,6 +10,7 @@
 
 #include <iostream>
 #include <stdlib.h>
+#include <unordered_map>
 
 #if defined(__x86_64__)
   #include <immintrin.h>
@@ -22,30 +24,27 @@ struct ColumnIndex
   int index;
 };
 
-// Reader for FLBA columns. On the fast path (PLAIN-encoded, flat, null-free),
-// copies values directly from decompressed page buffers into the caller's
-// output. Otherwise delegates to a regular Arrow ColumnReader.
-class ContiguousFLBAReader : public parquet::ColumnReader
+// Reader for flat, null-free FLBA columns. Drives the column's PageReader and
+// decodes each data page's values straight into the caller's output buffer with
+// the dense parquet::FLBADecoder::Decode(uint8_t*, int) API, which writes packed
+// fixed-width values with no per-value pointers and no intermediate Arrow
+// allocation. Supports the PLAIN and BYTE_STREAM_SPLIT encodings that JollyJack
+// permits for FLBA columns; dictionary and DELTA_BYTE_ARRAY are rejected upstream
+// in ReadColumn before any value is read.
+class DenseFLBAReader : public parquet::ColumnReader
 {
 public:
-  ContiguousFLBAReader(parquet::RowGroupReader *row_group_reader,
-                       int column_index,
-                       const parquet::ColumnDescriptor *descr,
-                       const parquet::ColumnChunkMetaData *column_chunk_metadata)
+  DenseFLBAReader(parquet::RowGroupReader *row_group_reader,
+                  int column_index,
+                  const parquet::ColumnDescriptor *descr)
       : descr_(descr)
       , type_length_(descr->type_length())
       , max_def_level_(descr->max_definition_level())
   {
-    // The fast path only handles PLAIN-encoded, flat columns read as a whole chunk.
-    bool fast_path = true;
-    for (const auto encoding : column_chunk_metadata->encodings())
-      if (encoding != parquet::Encoding::PLAIN && encoding != parquet::Encoding::RLE)
-        fast_path = false;
+    if (descr->max_repetition_level() > 0)
+      throw parquet::ParquetException("Repeated FIXED_LEN_BYTE_ARRAY columns are not supported");
 
-    if (fast_path && descr->max_repetition_level() == 0)
-      page_reader_ = row_group_reader->GetColumnPageReader(column_index);
-    else
-      fallback_reader_ = row_group_reader->Column(column_index);  // delegate to Arrow
+    page_reader_ = row_group_reader->GetColumnPageReader(column_index);
   }
 
   int type_length() const { return type_length_; }
@@ -55,39 +54,20 @@ public:
   {
     uint8_t *dst = static_cast<uint8_t *>(dst_raw);
 
-    if (fallback_reader_)
-    {
-      constexpr int64_t kScratch = 1024;
-      parquet::FixedLenByteArray flba[kScratch];
-      int64_t n = 0;
-      static_cast<parquet::FixedLenByteArrayReader*>(fallback_reader_.get())->ReadBatch(
-          std::min<int64_t>(batch_size, kScratch), nullptr, nullptr, flba, &n);
-      if (n > 0)
-      {
-        if (flba[0].ptr + (n - 1) * type_length_ != flba[n - 1].ptr)
-          throw parquet::ParquetException("Unexpected, FLBA memory is not contiguous");
-        memcpy(dst, flba[0].ptr, n * type_length_);
-      }
-      *values_read = n;
-      return n;
-    }
-
     if (page_pos_ >= page_values_)
     {
       if (eof_ || !NextDataPage()) { eof_ = true; *values_read = 0; return 0; }
     }
 
-    const int64_t n = std::min<int64_t>(batch_size, page_values_ - page_pos_);
-    memcpy(dst, page_values_ptr_ + page_pos_ * type_length_, n * type_length_);
-    page_pos_ += n;
-    *values_read = n;
-    return n;
+    const int n = static_cast<int>(std::min<int64_t>(batch_size, page_values_ - page_pos_));
+    const int decoded = current_decoder_->Decode(dst, n);
+    page_pos_ += decoded;
+    *values_read = decoded;
+    return decoded;
   }
 
   bool HasNext() override
   {
-    if (fallback_reader_)
-      return fallback_reader_->HasNext();
     if (page_pos_ < page_values_)
       return true;
     if (eof_)
@@ -98,18 +78,34 @@ public:
 
   parquet::Type::type type() const override { return parquet::Type::FIXED_LEN_BYTE_ARRAY; }
   const parquet::ColumnDescriptor *descr() const override { return descr_; }
-  parquet::ExposedEncoding GetExposedEncoding() override
-  {
-    return fallback_reader_ ? fallback_reader_->GetExposedEncoding() : parquet::ExposedEncoding::NO_ENCODING;
-  }
+  parquet::ExposedEncoding GetExposedEncoding() override { return parquet::ExposedEncoding::NO_ENCODING; }
 
 protected:
   void SetExposedEncoding(parquet::ExposedEncoding /*encoding*/) override {}
 
 private:
 
-  // Advance to the next data page and locate its contiguous value region.
-  // Returns false at end of column. Throws on unexpected encodings/nulls.
+  // Return a decoder for the given encoding, creating and caching it on first use.
+  parquet::FLBADecoder *GetDecoder(parquet::Encoding::type encoding)
+  {
+    if (encoding != parquet::Encoding::PLAIN && encoding != parquet::Encoding::BYTE_STREAM_SPLIT)
+      throw parquet::ParquetException(std::string("Unsupported data page encoding ")
+          + parquet::EncodingToString(encoding)
+          + " on the FIXED_LEN_BYTE_ARRAY path");
+
+    auto it = decoders_.find(encoding);
+    if (it != decoders_.end())
+      return it->second.get();
+
+    auto decoder = parquet::MakeTypedDecoder<parquet::FLBAType>(encoding, descr_);
+    auto *raw = decoder.get();
+    decoders_.emplace(encoding, std::move(decoder));
+    return raw;
+  }
+
+  // Advance to the next data page, locate its value region, and point the
+  // matching decoder at it. Returns false at end of column. Throws on nulls or
+  // unexpected encodings.
   bool NextDataPage()
   {
     while (true)
@@ -124,10 +120,6 @@ private:
         continue;  // skip dictionary / other pages
 
       auto data_page = std::static_pointer_cast<parquet::DataPage>(current_page_);
-      if (data_page->encoding() != parquet::Encoding::PLAIN)
-        throw parquet::ParquetException(std::string("Unexpected data page encoding ")
-            + parquet::EncodingToString(data_page->encoding())
-            + " on the FIXED_LEN_BYTE_ARRAY fast path");
 
       const uint8_t *page_data = data_page->data();
       const uint8_t *page_end = page_data + data_page->size();
@@ -164,7 +156,7 @@ private:
         {
           throw parquet::ParquetException(std::string("Unsupported definition-level encoding ")
               + parquet::EncodingToString(def_encoding)
-              + " on the FIXED_LEN_BYTE_ARRAY fast path");
+              + " on the FIXED_LEN_BYTE_ARRAY path");
         }
       }
 
@@ -174,7 +166,9 @@ private:
       if (page_values == 0)
         continue;  // skip empty pages so page_values_ > 0 always holds after return
 
-      page_values_ptr_ = values_ptr;
+      current_decoder_ = GetDecoder(data_page->encoding());
+      current_decoder_->SetData(static_cast<int>(page_values), values_ptr,
+                                static_cast<int>(page_end - values_ptr));
       page_values_ = page_values;
       page_pos_ = 0;
       return true;
@@ -185,22 +179,22 @@ private:
   const int type_length_;
   const int16_t max_def_level_;
 
-  // Set when the fast path applies; otherwise fallback_reader_ is used.
   std::unique_ptr<parquet::PageReader> page_reader_;
-  std::shared_ptr<parquet::ColumnReader> fallback_reader_;
+  // One decoder per encoding seen in this column chunk, reused across pages.
+  std::unordered_map<int, std::unique_ptr<parquet::FLBADecoder>> decoders_;
+  parquet::FLBADecoder *current_decoder_ = nullptr;
 
   bool eof_ = false;
   std::shared_ptr<parquet::Page> current_page_;  // keeps the current page buffer alive
-  const uint8_t *page_values_ptr_ = nullptr;
   int64_t page_values_ = 0;
   int64_t page_pos_ = 0;
 };
 
 std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *row_group_reader,
     int column_index, const parquet::ColumnDescriptor *descr,
-    const parquet::ColumnChunkMetaData *column_chunk_metadata)
+    const parquet::ColumnChunkMetaData * /*column_chunk_metadata*/)
 {
-  return std::make_shared<ContiguousFLBAReader>(row_group_reader, column_index, descr, column_chunk_metadata);
+  return std::make_shared<DenseFLBAReader>(row_group_reader, column_index, descr);
 }
 
 arrow::Status ReadColumn (int column_index
@@ -357,7 +351,7 @@ arrow::Status ReadColumn (int column_index
 
         case parquet::Type::FIXED_LEN_BYTE_ARRAY:
         {
-          auto flba_reader = static_cast<ContiguousFLBAReader *>(column_reader);
+          auto flba_reader = static_cast<DenseFLBAReader *>(column_reader);
           if ((int32_t)stride0_size != flba_reader->type_length())
           {
             auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(flba_reader->type_length()) +
