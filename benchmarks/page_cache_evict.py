@@ -115,9 +115,12 @@ def make_filler(dir_path, total, prefix, chunk=1024 * 1024 * 1024):
 
 
 def measure_once(targets):
-    """Read the targets into cache, then evict them. Return a result dict."""
-    total_size = sum(os.path.getsize(p) for p in targets)
+    """Read the targets into cache, then evict them one at a time.
 
+    Returns a per-file list of dicts. `cached_before` is the global page-cache
+    size (/proc/meminfo Cached) captured just before that file is evicted, so
+    it falls as earlier files are dropped.
+    """
     # Start cold: writing the files leaves their pages cached, so drop them
     # first, otherwise the read finds everything already resident.
     for p in targets:
@@ -126,28 +129,41 @@ def measure_once(targets):
     for p in targets:
         populate(p)
 
-    evict_secs = 0.0
+    results = []
     for p in targets:
-        evict_secs += evict(p)
+        size = os.path.getsize(p)
+        cached_before = meminfo()["Cached"]
+        secs = evict(p)
+        results.append({
+            "path": p,
+            "size": size,
+            "pages": (size + PAGE - 1) // PAGE,
+            "cached_before": cached_before,
+            "evict_secs": secs,
+        })
+    return results
 
-    total_pages = (total_size + PAGE - 1) // PAGE
-    return {
-        "total_size": total_size,
-        "total_pages": total_pages,
-        "evict_secs": evict_secs,
-    }
 
-
-def print_result(r, label=""):
-    pages = r["total_pages"]
-    secs = r["evict_secs"]
-    thru = (r["total_size"] / secs) if secs > 0 else float("inf")
-    ns_per_page = (secs * 1e9 / pages) if pages else float("nan")
+def print_result(results, label=""):
+    if label:
+        print(f"[{label}]")
+    for r in results:
+        pages = r["pages"]
+        secs = r["evict_secs"]
+        thru = (r["size"] / secs) if secs > 0 else float("inf")
+        ns_per_page = (secs * 1e9 / pages) if pages else float("nan")
+        print(f"  {os.path.basename(r['path'])}: "
+              f"{fmt_bytes(r['size'])} ({pages} pages)  "
+              f"cache_before={fmt_bytes(r['cached_before'])}  "
+              f"evict={secs * 1e3:.3f} ms "
+              f"({ns_per_page:.0f} ns/page, {fmt_bytes(thru)}/s)")
+    if len(results) > 1:
+        tot_secs = sum(r["evict_secs"] for r in results)
+        tot_size = sum(r["size"] for r in results)
+        thru = (tot_size / tot_secs) if tot_secs > 0 else float("inf")
+        print(f"  total: {fmt_bytes(tot_size)}  "
+              f"evict={tot_secs * 1e3:.3f} ms ({fmt_bytes(thru)}/s)")
     m = meminfo()
-    head = f"[{label}] " if label else ""
-    print(f"{head}target {fmt_bytes(r['total_size'])} ({pages} pages)")
-    print(f"  evict time : {secs * 1e3:.3f} ms "
-          f"({ns_per_page:.0f} ns/page, {fmt_bytes(thru)}/s)")
     print(f"  meminfo Cached={fmt_bytes(m['Cached'])} "
           f"MemFree={fmt_bytes(m['MemFree'])}")
 
@@ -166,12 +182,12 @@ def self_check():
     p = os.path.join(d, "t.bin")
     create_file(p, 64 * 1024 * 1024)
     try:
-        r = measure_once([p])
+        results = measure_once([p])
     finally:
         cleanup([p])
         os.rmdir(d)
-    assert r["evict_secs"] >= 0
-    print_result(r, label="self-check")
+    assert results and results[0]["evict_secs"] >= 0
+    print_result(results, label="self-check")
     print("self-check OK")
     return 0
 
