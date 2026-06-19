@@ -48,17 +48,21 @@ def meminfo():
     return out
 
 
-def create_file(path, size, chunk=64 * 1024 * 1024, label=None):
+def create_file(path, size, chunk=64 * 1024 * 1024, label=None, on_write=None):
     """Create a file of exactly `size` bytes.
 
-    If `label` is given, print write progress on a single updating line.
     Reuse the file as-is if it already exists with exactly `size` bytes.
+    If `label` is given, print write progress on a single updating line.
+    If `on_write` is given, call it with each delta of bytes written (or with
+    `size` on reuse) instead of printing; the caller owns the output line.
     Return True if the file was written, False if an existing same-size file
     was reused.
     """
     try:
         if os.path.getsize(path) == size:
-            if label:
+            if on_write:
+                on_write(size)
+            elif label:
                 print(f"  {label}: reuse {fmt_bytes(size)} {path}")
             return False
     except FileNotFoundError:
@@ -70,14 +74,16 @@ def create_file(path, size, chunk=64 * 1024 * 1024, label=None):
         while written < size:
             n = os.write(fd, buf[: min(chunk, size - written)])
             written += n
-            if label:
+            if on_write:
+                on_write(n)
+            elif label:
                 pct = 100 * written / size if size else 100
                 print(f"\r  {label}: {fmt_bytes(written)} / "
                       f"{fmt_bytes(size)} ({pct:.0f}%)", end="", flush=True)
         os.fsync(fd)
     finally:
         os.close(fd)
-        if label:
+        if label and not on_write:
             print()
     return True
 
@@ -187,11 +193,6 @@ def measure_once(targets, workers=1):
     size (/proc/meminfo Cached) captured just before that file is evicted, so
     it falls as earlier files are dropped.
     """
-    # Start cold: writing the files leaves their pages cached, so drop them
-    # first, otherwise the read finds everything already resident.
-    for p in targets:
-        evict(p)
-
     populate(targets, workers)
 
     results = []
@@ -300,10 +301,20 @@ def main():
     try:
         print(f"creating {args.num_files} target file(s) of "
               f"{fmt_bytes(args.file_size)} in {args.dir}")
-        for i, p in enumerate(targets):
-            if create_file(p, args.file_size,
-                           label=f"target {i + 1}/{len(targets)}"):
+        total = args.file_size * len(targets)
+        done = 0
+
+        def on_write(n):
+            nonlocal done
+            done += n
+            pct = 100 * done / total if total else 100
+            print(f"\r  targets: {fmt_bytes(done)} / {fmt_bytes(total)} "
+                  f"({pct:.0f}%)", end="", flush=True)
+
+        for p in targets:
+            if create_file(p, args.file_size, on_write=on_write):
                 created.append(p)
+        print()
 
         m0 = meminfo()
         print(f"start: Cached={fmt_bytes(m0['Cached'])} "
