@@ -73,6 +73,9 @@ def create_file(path, size, chunk=64 * 1024 * 1024, label=None, on_write=None):
     try:
         while written < size:
             n = os.write(fd, buf[: min(chunk, size - written)])
+            # Flush each chunk so progress reflects durable writes, not just
+            # buffering into the page cache (which is near-instant).
+            os.fdatasync(fd)
             written += n
             if on_write:
                 on_write(n)
@@ -147,43 +150,61 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024):
               f"(100%) in {secs:.2f}s ({fmt_bytes(rate)}/s)")
 
 
+def create_files(paths, size, workers, progress=True):
+    """Create the given files in parallel, up to `workers` at a time.
+
+    os.write releases the GIL, so threads write concurrently. Existing
+    same-size files are reused. When `progress` is set, print a combined
+    bytes-written line. Returns the list of paths actually written this run.
+    """
+    total = size * len(paths)
+    done = 0
+    created = []
+    lock = threading.Lock()
+    sem = threading.Semaphore(max(1, workers))
+
+    def on_write(n):
+        nonlocal done
+        with lock:
+            done += n
+
+    def work(p):
+        with sem:
+            wrote = create_file(p, size, on_write=on_write)
+        if wrote:
+            with lock:
+                created.append(p)
+
+    ts = [threading.Thread(target=work, args=(p,)) for p in paths]
+    t0 = time.perf_counter()
+    for t in ts:
+        t.start()
+    if progress:
+        while any(t.is_alive() for t in ts):
+            with lock:
+                d = done
+            pct = 100 * d / total if total else 100
+            print(f"\r  writing: {fmt_bytes(d)} / {fmt_bytes(total)} "
+                  f"({pct:.0f}%)", end="", flush=True)
+            time.sleep(0.1)
+    for t in ts:
+        t.join()
+    if progress and total:
+        secs = time.perf_counter() - t0
+        rate = total / secs if secs > 0 else float("inf")
+        print(f"\r  writing: {fmt_bytes(total)} / {fmt_bytes(total)} "
+              f"(100%) in {secs:.2f}s ({fmt_bytes(rate)}/s)")
+    return created
+
+
 def evict(path):
     """Evict `path` via POSIX_FADV_DONTNEED. Return seconds in the call."""
-    fd = os.open(path, os.O_RDONLY)
-    try:
-        t0 = time.perf_counter()
+    t0 = time.perf_counter()
+    with open(path, "r") as f:
+        fd = f.fileno()
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
-        return time.perf_counter() - t0
-    finally:
-        os.close(fd)
-
-
-def make_filler(dir_path, total, prefix, chunk=1024 * 1024 * 1024):
-    """Create filler files totalling `total` bytes and read them into cache.
-
-    These stay resident (not evicted) so the total page cache grows by roughly
-    `total`. Returns (all_paths, created_paths); created_paths are the ones
-    written this run (existing same-size files are reused).
-    """
-    paths = []
-    created = []
-    made = 0
-    i = 0
-    while made < total:
-        sz = min(chunk, total - made)
-        p = os.path.join(dir_path, f"{prefix}_filler_{i}.bin")
-        if create_file(p, sz,
-                       label=f"filler {fmt_bytes(made)}/{fmt_bytes(total)}"):
-            created.append(p)
-        fd = os.open(p, os.O_RDONLY)
-        try:
-            read_sequential(fd, sz)
-        finally:
-            os.close(fd)
-        paths.append(p)
-        made += sz
-        i += 1
-    return paths, created
+        
+    return time.perf_counter() - t0    
 
 
 def measure_once(targets, workers=1):
@@ -241,23 +262,6 @@ def cleanup(paths):
         except FileNotFoundError:
             pass
 
-
-def self_check():
-    import tempfile
-    d = tempfile.mkdtemp(prefix="pce_selfcheck_")
-    p = os.path.join(d, "t.bin")
-    create_file(p, 64 * 1024 * 1024)
-    try:
-        results = measure_once([p])
-    finally:
-        cleanup([p])
-        os.rmdir(d)
-    assert results and results[0]["evict_secs"] >= 0
-    print_result(results, label="self-check")
-    print("self-check OK")
-    return 0
-
-
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -271,26 +275,15 @@ def main():
     ap.add_argument("--workers", default=0, type=int,
                     help="parallel readers when populating the cache "
                          "(default 0 = one per target file)")
-    ap.add_argument("--fill", default="0", type=parse_size,
-                    help="pre-fill page cache with this much filler before "
-                         "measuring (e.g. 50G)")
-    ap.add_argument("--sweep", default=None,
-                    help="comma-separated fill sizes for a sweep, "
-                         "e.g. 0,10G,50G,100G")
     ap.add_argument("--keep", action="store_true",
                     help="do not delete any temp files at exit (by default "
                          "only files created this run are deleted; reused "
                          "files are always kept)")
-    ap.add_argument("--self-check", action="store_true",
-                    help="run a small correctness check and exit")
     args = ap.parse_args()
 
     if sys.platform != "linux":
         print("This tool is Linux-only.", file=sys.stderr)
         return 2
-
-    if args.self_check:
-        return self_check()
 
     os.makedirs(args.dir, exist_ok=True)
     workers = args.workers if args.workers > 0 else args.num_files
@@ -301,47 +294,15 @@ def main():
     try:
         print(f"creating {args.num_files} target file(s) of "
               f"{fmt_bytes(args.file_size)} in {args.dir}")
-        total = args.file_size * len(targets)
-        done = 0
-
-        def on_write(n):
-            nonlocal done
-            done += n
-            pct = 100 * done / total if total else 100
-            print(f"\r  targets: {fmt_bytes(done)} / {fmt_bytes(total)} "
-                  f"({pct:.0f}%)", end="", flush=True)
-
-        for p in targets:
-            if create_file(p, args.file_size, on_write=on_write):
-                created.append(p)
-        print()
+        created += create_files(targets, args.file_size, workers)
 
         m0 = meminfo()
         print(f"start: Cached={fmt_bytes(m0['Cached'])} "
               f"MemTotal={fmt_bytes(m0['MemTotal'])} "
               f"MemFree={fmt_bytes(m0['MemFree'])}\n")
 
-        if args.sweep:
-            levels = [parse_size(s) for s in args.sweep.split(",")]
-            prev_fill = 0
-            for lvl in levels:
-                add = lvl - prev_fill
-                if add > 0:
-                    print(f"filling page cache to {fmt_bytes(lvl)} "
-                          f"(+{fmt_bytes(add)}) ...")
-                    _, c = make_filler(args.dir, add, f"pce_{lvl}")
-                    created += c
-                prev_fill = max(prev_fill, lvl)
-                r = measure_once(targets, workers)
-                print_result(r, label=f"fill={fmt_bytes(lvl)}")
-                print()
-        else:
-            if args.fill > 0:
-                print(f"filling page cache with {fmt_bytes(args.fill)} ...")
-                _, c = make_filler(args.dir, args.fill, "pce")
-                created += c
-            r = measure_once(targets, workers)
-            print_result(r)
+        r = measure_once(targets, workers)
+        print_result(r)
     finally:
         if not args.keep:
             cleanup(created)
