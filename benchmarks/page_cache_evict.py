@@ -17,6 +17,7 @@ import os
 import sys
 import threading
 import time
+from collections import deque
 
 PAGE = os.sysconf("SC_PAGE_SIZE")
 
@@ -91,6 +92,59 @@ def create_file(path, size, chunk=64 * 1024 * 1024, label=None, on_write=None):
     return True
 
 
+class RateWindow:
+    """Rolling byte throughput over a trailing time window (seconds)."""
+
+    def __init__(self, window=10.0):
+        self.window = window
+        self.samples = deque()  # (timestamp, cumulative_bytes)
+
+    def update(self, t, done):
+        self.samples.append((t, done))
+        cutoff = t - self.window
+        while len(self.samples) > 2 and self.samples[0][0] < cutoff:
+            self.samples.popleft()
+
+    def rate(self):
+        if len(self.samples) < 2:
+            return 0.0
+        t0, b0 = self.samples[0]
+        t1, b1 = self.samples[-1]
+        dt = t1 - t0
+        return (b1 - b0) / dt if dt > 0 else 0.0
+
+
+def run_with_progress(ts, get_done, total, label, progress=True):
+    """Start threads `ts`, print a single updating progress line, and join.
+
+    `get_done()` returns the cumulative bytes processed so far. The live line
+    shows percent and throughput averaged over the last 10 seconds; the final
+    line shows the overall average. Returns the elapsed seconds.
+    """
+    t0 = time.perf_counter()
+    for t in ts:
+        t.start()
+    if progress:
+        win = RateWindow(10.0)
+        while any(t.is_alive() for t in ts):
+            now = time.perf_counter()
+            d = get_done()
+            win.update(now, d)
+            pct = 100 * d / total if total else 100
+            print(f"\r  {label}: {fmt_bytes(d)} / {fmt_bytes(total)} "
+                  f"({pct:.0f}%, {fmt_bytes(win.rate())}/s)",
+                  end="", flush=True)
+            time.sleep(0.1)
+    for t in ts:
+        t.join()
+    secs = time.perf_counter() - t0
+    if progress and total:
+        rate = total / secs if secs > 0 else float("inf")
+        print(f"\r  {label}: {fmt_bytes(total)} / {fmt_bytes(total)} "
+              f"(100%) in {secs:.2f}s (avg {fmt_bytes(rate)}/s)")
+    return secs
+
+
 def read_sequential(fd, size, chunk=8 * 1024 * 1024):
     off = 0
     while off < size:
@@ -129,25 +183,12 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024):
             finally:
                 os.close(fd)
 
+    def get_done():
+        with lock:
+            return done
+
     ts = [threading.Thread(target=work, args=(p,)) for p in paths]
-    t0 = time.perf_counter()
-    for t in ts:
-        t.start()
-    if progress:
-        while any(t.is_alive() for t in ts):
-            with lock:
-                d = done
-            pct = 100 * d / total if total else 100
-            print(f"\r  reading: {fmt_bytes(d)} / {fmt_bytes(total)} "
-                  f"({pct:.0f}%)", end="", flush=True)
-            time.sleep(0.1)
-    for t in ts:
-        t.join()
-    if progress and total:
-        secs = time.perf_counter() - t0
-        rate = total / secs if secs > 0 else float("inf")
-        print(f"\r  reading: {fmt_bytes(total)} / {fmt_bytes(total)} "
-              f"(100%) in {secs:.2f}s ({fmt_bytes(rate)}/s)")
+    run_with_progress(ts, get_done, total, "reading", progress)
 
 
 def create_files(paths, size, workers, progress=True):
@@ -175,25 +216,12 @@ def create_files(paths, size, workers, progress=True):
             with lock:
                 created.append(p)
 
+    def get_done():
+        with lock:
+            return done
+
     ts = [threading.Thread(target=work, args=(p,)) for p in paths]
-    t0 = time.perf_counter()
-    for t in ts:
-        t.start()
-    if progress:
-        while any(t.is_alive() for t in ts):
-            with lock:
-                d = done
-            pct = 100 * d / total if total else 100
-            print(f"\r  writing: {fmt_bytes(d)} / {fmt_bytes(total)} "
-                  f"({pct:.0f}%)", end="", flush=True)
-            time.sleep(0.1)
-    for t in ts:
-        t.join()
-    if progress and total:
-        secs = time.perf_counter() - t0
-        rate = total / secs if secs > 0 else float("inf")
-        print(f"\r  writing: {fmt_bytes(total)} / {fmt_bytes(total)} "
-              f"(100%) in {secs:.2f}s ({fmt_bytes(rate)}/s)")
+    run_with_progress(ts, get_done, total, "writing", progress)
     return created
 
 
