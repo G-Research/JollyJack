@@ -36,6 +36,7 @@ class BenchmarkSettings(BaseSettings):
     n_columns: int = 7_000
     n_columns_to_read: int = 3_000
     chunk_size: int = 32_000
+    generate_workers: int = 1 
     measure_iterations: int = 5
     parquet_path: str = (
         "my.parquet" if sys.platform.startswith("win") else "/tmp/my.parquet"
@@ -467,15 +468,21 @@ for dtype_key in cfg.dtypes:
         dtype = pa.from_numpy_dtype(dtype_key)
         compression = None if comp_key == "none" else comp_key
 
-        for f in range(cfg.n_files):
-            path = f"{cfg.parquet_path}{f}"
-            generate_data(
-                path=path,
-                n_row_groups=cfg.row_groups,
-                n_columns=cfg.n_columns,
-                compression=compression,
-                dtype=dtype,
-            )
+        gen_workers = cfg.generate_workers or cfg.n_files
+        with concurrent.futures.ThreadPoolExecutor(max_workers=gen_workers) as gen_pool:
+            gen_futures = [
+                gen_pool.submit(
+                    generate_data,
+                    path=f"{cfg.parquet_path}{f}",
+                    n_row_groups=cfg.row_groups,
+                    n_columns=cfg.n_columns,
+                    compression=compression,
+                    dtype=dtype,
+                )
+                for f in range(cfg.n_files)
+            ]
+            for fut in gen_futures:
+                fut.result()
 
         print(f"....................................")
         print(f"dtype:{dtype}, compression={compression}:")
