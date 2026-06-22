@@ -102,6 +102,10 @@ class BenchmarkSettings(BaseSettings):
 
 cfg = BenchmarkSettings()
 
+# GitHub Actions sets GITHUB_ACTIONS=true. Skip \r live updates there, since
+# CI logs have no carriage-return handling and would fill with spam.
+IS_GITHUB_CI = os.environ.get("GITHUB_ACTIONS") == "true"
+
 column_indices_to_read = random.sample(range(cfg.n_columns), cfg.n_columns_to_read)
 row_groups_to_read = random.sample(range(cfg.row_groups), 1)
 
@@ -477,20 +481,22 @@ def measure_reading(max_workers, worker):
         # last 10 seconds (Gb/s, matching the final reported figure).
         for work_result in concurrent.futures.as_completed(work_results):
             work_result.result()
-            done_bytes += data_size
-            win.update(time.time(), done_bytes)
-            gbps = win.rate() / (1024 * 1024 * 1024) * 8
-            print(
-                f"\r  reading: iter {it + 1}/{cfg.measure_iterations}, {gbps:.2f} Gb/s ",
-                end="",
-                flush=True,
-            )
+            if not IS_GITHUB_CI:
+                done_bytes += data_size
+                win.update(time.time(), done_bytes)
+                gbps = win.rate() / (1024 * 1024 * 1024) * 8
+                print(
+                    f"\r  reading: iter {it + 1}/{cfg.measure_iterations}, {gbps:.2f} Gb/s ",
+                    end="",
+                    flush=True,
+                )
 
         tt.append(time.time() - t)
         data_set_bytes = len(work_results) * data_size
 
     pool.shutdown(wait=True)
-    print("\r\033[K", end="", flush=True)  # clear the live line
+    if not IS_GITHUB_CI:
+        print("\r\033[K", end="", flush=True)  # clear the live line
 
     tts = [f"{t:.2f}" for t in tt]
     tts = f"[{', '.join(tts)}]"
@@ -554,24 +560,26 @@ for dtype_key in cfg.dtypes:
                 # Show generation progress by polling on-disk file sizes.
                 # This is setup, not a measured benchmark, so no rate/timing.
                 while not all(fut.done() for fut in gen_futures):
-                    done = sum(
-                        os.path.getsize(p) for p in to_generate if os.path.exists(p)
-                    )
-                    pct = 100 * done / est_total if est_total else 100
-                    print(
-                        f"\r  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} "
-                        f"({pct:.0f}%)",
-                        end="",
-                        flush=True,
-                    )
+                    if not IS_GITHUB_CI:
+                        done = sum(
+                            os.path.getsize(p) for p in to_generate if os.path.exists(p)
+                        )
+                        pct = 100 * done / est_total if est_total else 100
+                        print(
+                            f"\r  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} "
+                            f"({pct:.0f}%)",
+                            end="",
+                            flush=True,
+                        )
                     time.sleep(0.5)
 
                 for fut in gen_futures:
                     fut.result()
 
             done = sum(os.path.getsize(p) for p in to_generate)
+            prefix = "" if IS_GITHUB_CI else "\r"
             print(
-                f"\r  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} (100%)"
+                f"{prefix}  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} (100%)"
             )
 
         print(f"....................................")
