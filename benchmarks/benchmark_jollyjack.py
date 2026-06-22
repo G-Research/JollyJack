@@ -113,6 +113,28 @@ def purge_file_from_cache(path: str):
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
 
 
+class RateWindow:
+    """Rolling byte throughput over a trailing time window (seconds)."""
+
+    def __init__(self, window=10.0):
+        self.window = window
+        self.samples = []  # (timestamp, cumulative_bytes)
+
+    def update(self, t, done):
+        self.samples.append((t, done))
+        cutoff = t - self.window
+        while len(self.samples) > 2 and self.samples[0][0] < cutoff:
+            self.samples.pop(0)
+
+    def rate(self):
+        if len(self.samples) < 2:
+            return 0.0
+        t0, b0 = self.samples[0]
+        t1, b1 = self.samples[-1]
+        dt = t1 - t0
+        return (b1 - b0) / dt if dt > 0 else 0.0
+
+
 def generate_random_parquet(
     filename: str,
     n_columns: int,
@@ -120,17 +142,20 @@ def generate_random_parquet(
     chunk_size: int,
     dtype=pa.float32(),
     compression=None,
+    quiet=False,
 ):
-    print(".")
-    print(
-        f"Generating a Parquet file: {filename}, cols: {n_columns}, row_groups:{n_row_groups}, chunk_size:{chunk_size}, compression={compression}, dtype={dtype}"
-    )
+    if not quiet:
+        print(".")
+        print(
+            f"Generating a Parquet file: {filename}, cols: {n_columns}, row_groups:{n_row_groups}, chunk_size:{chunk_size}, compression={compression}, dtype={dtype}"
+        )
 
     writer = None
     schema = pa.schema([pa.field(f"col_{i}", dtype) for i in range(n_columns)])
     try:
         for i in range(n_row_groups):
-            print(f"  Generating row group {i+1}/{n_row_groups}...")
+            if not quiet:
+                print(f"  Generating row group {i+1}/{n_row_groups}...")
             data = {
                 f"col_{j}": np.random.uniform(-100, 100, size=chunk_size)
                 for j in range(n_columns)
@@ -149,10 +174,12 @@ def generate_random_parquet(
                     store_schema=False,
                 )
 
-            print("  writing...:")
+            if not quiet:
+                print("  writing...:")
             writer.write_table(table)
 
-        print("Parquet file generated successfully!")
+        if not quiet:
+            print("Parquet file generated successfully!")
     finally:
         if writer:
             writer.close()
@@ -178,7 +205,7 @@ def parquet_matches(path, n_columns, n_row_groups, chunk_size, compression, dtyp
     )
 
 
-def generate_data(n_columns, n_row_groups, path, compression, dtype):
+def generate_data(n_columns, n_row_groups, path, compression, dtype, quiet=False):
 
     if parquet_matches(
         path, n_columns, n_row_groups, cfg.chunk_size, compression, dtype
@@ -193,13 +220,15 @@ def generate_data(n_columns, n_row_groups, path, compression, dtype):
         chunk_size=cfg.chunk_size,
         compression=compression,
         dtype=dtype,
+        quiet=quiet,
     )
     parquet_size = os.stat(path).st_size
 
     dt = time.time() - t
-    print(
-        f"finished writing parquet file in {dt:.2f} seconds, size={humanize.naturalsize(parquet_size)}"
-    )
+    if not quiet:
+        print(
+            f"finished writing parquet file in {dt:.2f} seconds, size={humanize.naturalsize(parquet_size)}"
+        )
 
 
 def worker_arrow_row_group(use_threads, pre_buffer, path):
@@ -422,8 +451,12 @@ def measure_reading(max_workers, worker):
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
     thread_local_data = threading.local()
 
+    data_size = calculate_data_size(dtype=dtype)  # bytes read per worker call
+    win = RateWindow(10.0)
+    done_bytes = 0  # cumulative read bytes, for the rolling-window throughput
+
     # measure multiple times and take the fastest run
-    for _ in range(cfg.measure_iterations):
+    for it in range(cfg.measure_iterations):
 
         if cfg.purge_cache:
             for i in range(cfg.n_files):
@@ -440,13 +473,24 @@ def measure_reading(max_workers, worker):
                 ]
             )
 
-        for work_result in work_results:
+        # Count workers as they finish and show throughput averaged over the
+        # last 10 seconds (Gb/s, matching the final reported figure).
+        for work_result in concurrent.futures.as_completed(work_results):
             work_result.result()
+            done_bytes += data_size
+            win.update(time.time(), done_bytes)
+            gbps = win.rate() / (1024 * 1024 * 1024) * 8
+            print(
+                f"\r  reading: iter {it + 1}/{cfg.measure_iterations}, {gbps:.2f} Gb/s ",
+                end="",
+                flush=True,
+            )
 
         tt.append(time.time() - t)
-        data_set_bytes = len(work_results) * calculate_data_size(dtype=dtype)
+        data_set_bytes = len(work_results) * data_size
 
     pool.shutdown(wait=True)
+    print("\r\033[K", end="", flush=True)  # clear the live line
 
     tts = [f"{t:.2f}" for t in tt]
     tts = f"[{', '.join(tts)}]"
@@ -468,21 +512,67 @@ for dtype_key in cfg.dtypes:
         dtype = pa.from_numpy_dtype(dtype_key)
         compression = None if comp_key == "none" else comp_key
 
-        gen_workers = cfg.generate_workers or cfg.n_files
-        with concurrent.futures.ThreadPoolExecutor(max_workers=gen_workers) as gen_pool:
-            gen_futures = [
-                gen_pool.submit(
-                    generate_data,
-                    path=f"{cfg.parquet_path}{f}",
-                    n_row_groups=cfg.row_groups,
-                    n_columns=cfg.n_columns,
-                    compression=compression,
-                    dtype=dtype,
-                )
-                for f in range(cfg.n_files)
-            ]
-            for fut in gen_futures:
-                fut.result()
+        paths = [f"{cfg.parquet_path}{f}" for f in range(cfg.n_files)]
+        to_generate = [
+            p
+            for p in paths
+            if not parquet_matches(
+                p, cfg.n_columns, cfg.row_groups, cfg.chunk_size, compression, dtype
+            )
+        ]
+
+        if to_generate:
+            # Approximate target size (uncompressed) for the progress bar.
+            est_total = (
+                len(to_generate)
+                * cfg.chunk_size
+                * cfg.n_columns
+                * cfg.row_groups
+                * dtype.byte_width
+            )
+            gen_workers = cfg.generate_workers or len(to_generate)
+            print(
+                f"Generating {len(to_generate)} file(s), ~{humanize.naturalsize(est_total)} (workers={gen_workers})"
+            )
+
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=gen_workers
+            ) as gen_pool:
+                gen_futures = [
+                    gen_pool.submit(
+                        generate_data,
+                        path=p,
+                        n_row_groups=cfg.row_groups,
+                        n_columns=cfg.n_columns,
+                        compression=compression,
+                        dtype=dtype,
+                        quiet=True,
+                    )
+                    for p in to_generate
+                ]
+
+                # Show generation progress by polling on-disk file sizes.
+                # This is setup, not a measured benchmark, so no rate/timing.
+                while not all(fut.done() for fut in gen_futures):
+                    done = sum(
+                        os.path.getsize(p) for p in to_generate if os.path.exists(p)
+                    )
+                    pct = 100 * done / est_total if est_total else 100
+                    print(
+                        f"\r  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} "
+                        f"({pct:.0f}%)",
+                        end="",
+                        flush=True,
+                    )
+                    time.sleep(0.5)
+
+                for fut in gen_futures:
+                    fut.result()
+
+            done = sum(os.path.getsize(p) for p in to_generate)
+            print(
+                f"\r  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} (100%)"
+            )
 
         print(f"....................................")
         print(f"dtype:{dtype}, compression={compression}:")
