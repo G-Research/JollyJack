@@ -104,11 +104,14 @@ public:
   const parquet::ColumnDescriptor *descr() const override { return descr_; }
   parquet::ExposedEncoding GetExposedEncoding() override
   {
-    return fallback_reader_ ? fallback_reader_->GetExposedEncoding() : parquet::ExposedEncoding::NO_ENCODING;
+    throw std::logic_error("Not Implemented");
   }
 
 protected:
-  void SetExposedEncoding(parquet::ExposedEncoding /*encoding*/) override {}
+  void SetExposedEncoding(parquet::ExposedEncoding /*encoding*/) override 
+  {
+    throw std::logic_error("Not Implemented");
+  }
 
 private:
 
