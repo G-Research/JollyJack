@@ -39,8 +39,10 @@ public:
     // The fast path only handles PLAIN-encoded, flat columns read as a whole chunk.
     bool fast_path = true;
     for (const auto encoding : column_chunk_metadata->encodings())
+    {
       if (encoding != parquet::Encoding::PLAIN && encoding != parquet::Encoding::RLE)
         fast_path = false;
+    }
 
     if (fast_path && descr->max_repetition_level() == 0)
       page_reader_ = row_group_reader->GetColumnPageReader(column_index);
@@ -62,12 +64,14 @@ public:
       int64_t n = 0;
       static_cast<parquet::FixedLenByteArrayReader*>(fallback_reader_.get())->ReadBatch(
           std::min<int64_t>(batch_size, kScratch), nullptr, nullptr, flba, &n);
+
       if (n > 0)
       {
         if (flba[0].ptr + (n - 1) * type_length_ != flba[n - 1].ptr)
           throw parquet::ParquetException("Unexpected, FLBA memory is not contiguous");
         memcpy(dst, flba[0].ptr, n * type_length_);
       }
+
       *values_read = n;
       return n;
     }
