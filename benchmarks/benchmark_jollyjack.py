@@ -519,68 +519,63 @@ for dtype_key in cfg.dtypes:
         compression = None if comp_key == "none" else comp_key
 
         paths = [f"{cfg.parquet_path}{f}" for f in range(cfg.n_files)]
-        to_generate = [
-            p
-            for p in paths
-            if not parquet_matches(
-                p, cfg.n_columns, cfg.row_groups, cfg.chunk_size, compression, dtype
-            )
-        ]
 
-        if to_generate:
-            # Approximate target size (uncompressed) for the progress bar.
-            est_total = (
-                len(to_generate)
-                * cfg.chunk_size
-                * cfg.n_columns
-                * cfg.row_groups
-                * dtype.byte_width
-            )
-            gen_workers = cfg.generate_workers or len(to_generate)
-            print(
-                f"Generating {len(to_generate)} file(s), ~{humanize.naturalsize(est_total)} (workers={gen_workers})"
-            )
+        # Approximate target size (uncompressed) for the progress bar. Each
+        # worker decides whether its file needs (re)generating; the match
+        # check runs inside the worker (in parallel) instead of up front, so
+        # a large file count does not stall before generation starts.
+        est_total = (
+            cfg.n_files
+            * cfg.chunk_size
+            * cfg.n_columns
+            * cfg.row_groups
+            * dtype.byte_width
+        )
+        gen_workers = cfg.generate_workers or cfg.n_files
+        print(
+            f"Generating up to {cfg.n_files} file(s), ~{humanize.naturalsize(est_total)} (workers={gen_workers})"
+        )
 
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=gen_workers
-            ) as gen_pool:
-                gen_futures = [
-                    gen_pool.submit(
-                        generate_data,
-                        path=p,
-                        n_row_groups=cfg.row_groups,
-                        n_columns=cfg.n_columns,
-                        compression=compression,
-                        dtype=dtype,
-                        quiet=True,
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=gen_workers
+        ) as gen_pool:
+            gen_futures = [
+                gen_pool.submit(
+                    generate_data,
+                    path=p,
+                    n_row_groups=cfg.row_groups,
+                    n_columns=cfg.n_columns,
+                    compression=compression,
+                    dtype=dtype,
+                    quiet=True,
+                )
+                for p in paths
+            ]
+
+            # Show generation progress by polling on-disk file sizes.
+            # This is setup, not a measured benchmark, so no rate/timing.
+            while not all(fut.done() for fut in gen_futures):
+                if not IS_GITHUB_CI:
+                    done = sum(
+                        os.path.getsize(p) for p in paths if os.path.exists(p)
                     )
-                    for p in to_generate
-                ]
+                    pct = 100 * done / est_total if est_total else 100
+                    print(
+                        f"\r  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} "
+                        f"({pct:.0f}%)",
+                        end="",
+                        flush=True,
+                    )
+                time.sleep(0.5)
 
-                # Show generation progress by polling on-disk file sizes.
-                # This is setup, not a measured benchmark, so no rate/timing.
-                while not all(fut.done() for fut in gen_futures):
-                    if not IS_GITHUB_CI:
-                        done = sum(
-                            os.path.getsize(p) for p in to_generate if os.path.exists(p)
-                        )
-                        pct = 100 * done / est_total if est_total else 100
-                        print(
-                            f"\r  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} "
-                            f"({pct:.0f}%)",
-                            end="",
-                            flush=True,
-                        )
-                    time.sleep(0.5)
+            for fut in gen_futures:
+                fut.result()
 
-                for fut in gen_futures:
-                    fut.result()
-
-            done = sum(os.path.getsize(p) for p in to_generate)
-            prefix = "" if IS_GITHUB_CI else "\r"
-            print(
-                f"{prefix}  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} (100%)"
-            )
+        done = sum(os.path.getsize(p) for p in paths)
+        prefix = "" if IS_GITHUB_CI else "\r"
+        print(
+            f"{prefix}  generating: {humanize.naturalsize(done)} / ~{humanize.naturalsize(est_total)} (100%)"
+        )
 
         print(f"....................................")
         print(f"dtype:{dtype}, compression={compression}:")

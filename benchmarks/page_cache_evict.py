@@ -14,6 +14,7 @@ not representative. Run on the target (L4) nodes.
 
 import argparse
 import os
+import random
 import sys
 import threading
 import time
@@ -68,15 +69,14 @@ def create_file(path, size, chunk=64 * 1024 * 1024, label=None, on_write=None):
             return False
     except FileNotFoundError:
         pass
-    buf = b"\x5a" * min(chunk, size)
     written = 0
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         while written < size:
-            n = os.write(fd, buf[: min(chunk, size - written)])
-            # Flush each chunk so progress reflects durable writes, not just
-            # buffering into the page cache (which is near-instant).
-            os.fdatasync(fd)
+            # Fresh random bytes per chunk so distinct blocks defeat any
+            # filesystem compression or dedup that would otherwise keep the
+            # file from really occupying the page cache.
+            n = os.write(fd, random.randbytes(min(chunk, size - written)))
             written += n
             if on_write:
                 on_write(n)
