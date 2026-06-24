@@ -183,7 +183,7 @@ def run_with_progress(ts, get_done, total, label, progress=True):
 
 
 def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024,
-             on_file_done=None):
+             evict_immediately=False):
     """Read the given files into the page cache, up to `workers` at a time.
 
     Each file is read in `chunk`-sized os.preadv calls into a reused
@@ -192,9 +192,8 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024,
     threads read concurrently. When `progress` is set, print a combined
     bytes-read line that updates as reads proceed.
 
-    If `on_file_done` is given, it is called with the path right after that
-    file finishes reading (still inside the worker), e.g. to evict it
-    immediately.
+    With `evict_immediately`, each file is dropped from the page cache right
+    after it is read, so it does not linger while the others are read.
     """
     sizes = {p: os.path.getsize(p) for p in paths}
     total = sum(sizes.values())
@@ -218,10 +217,10 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024,
                     off += n
                     with lock:
                         done += n
+                if evict_immediately:
+                    os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
             finally:
                 os.close(fd)
-            if on_file_done:
-                on_file_done(p)
 
     def get_done():
         with lock:
@@ -286,8 +285,7 @@ def measure_once(targets, workers=1, evict_immediately=False):
     after it is read (so it does not linger while the others are read); the
     timed eviction loop below still runs as usual.
     """
-    populate(targets, workers,
-             on_file_done=evict if evict_immediately else None)
+    populate(targets, workers, evict_immediately=evict_immediately)
 
     results = []
     for p in targets:
