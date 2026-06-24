@@ -182,7 +182,8 @@ def run_with_progress(ts, get_done, total, label, progress=True):
     return secs
 
 
-def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024):
+def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024,
+             on_file_done=None):
     """Read the given files into the page cache, up to `workers` at a time.
 
     Each file is read in `chunk`-sized os.preadv calls into a reused
@@ -190,6 +191,10 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024):
     buffer small and handles files of any size. os.preadv releases the GIL, so
     threads read concurrently. When `progress` is set, print a combined
     bytes-read line that updates as reads proceed.
+
+    If `on_file_done` is given, it is called with the path right after that
+    file finishes reading (still inside the worker), e.g. to evict it
+    immediately.
     """
     sizes = {p: os.path.getsize(p) for p in paths}
     total = sum(sizes.values())
@@ -215,6 +220,8 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024):
                         done += n
             finally:
                 os.close(fd)
+            if on_file_done:
+                on_file_done(p)
 
     def get_done():
         with lock:
@@ -268,14 +275,19 @@ def evict(path):
     return time.perf_counter() - t0    
 
 
-def measure_once(targets, workers=1):
+def measure_once(targets, workers=1, evict_immediately=False):
     """Read the targets into cache, then evict them one at a time.
 
     Returns a per-file list of dicts. `cached_before` is the global page-cache
     size (/proc/meminfo Cached) captured just before that file is evicted, so
     it falls as earlier files are dropped.
+
+    With `evict_immediately`, each file is also dropped from the cache right
+    after it is read (so it does not linger while the others are read); the
+    timed eviction loop below still runs as usual.
     """
-    populate(targets, workers)
+    populate(targets, workers,
+             on_file_done=evict if evict_immediately else None)
 
     results = []
     for p in targets:
@@ -340,6 +352,9 @@ def main():
                     help="do not delete any temp files at exit (by default "
                          "only files created this run are deleted; reused "
                          "files are always kept)")
+    ap.add_argument("--evict-immediately", action="store_true",
+                    help="evict each file right after it is read, instead of "
+                         "reading all files then evicting them")
     args = ap.parse_args()
 
     if sys.platform != "linux":
@@ -362,7 +377,8 @@ def main():
               f"MemTotal={fmt_bytes(m0['MemTotal'])} "
               f"MemFree={fmt_bytes(m0['MemFree'])}\n")
 
-        r = measure_once(targets, workers)
+        r = measure_once(targets, workers,
+                         evict_immediately=args.evict_immediately)
         print_result(r)
     finally:
         if not args.keep:
