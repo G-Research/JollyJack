@@ -81,7 +81,7 @@ def _read_buffer(size):
     """Return a reused thread-local bytearray view of at least `size` bytes.
 
     Used as the destination for os.preadv so reads do not allocate a new
-    buffer per file.
+    buffer per read.
     """
     buf = getattr(_tls, "readbuf", None)
     if buf is None or len(buf) < size:
@@ -182,16 +182,14 @@ def run_with_progress(ts, get_done, total, label, progress=True):
     return secs
 
 
-def populate(paths, workers, progress=True):
+def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024):
     """Read the given files into the page cache, up to `workers` at a time.
 
-    Each file is read in one os.preadv into a reused thread-local buffer (no
-    per-file allocation). os.preadv releases the GIL, so threads read
-    concurrently. When `progress` is set, print a combined bytes-read line.
-
-    ponytail: a single preadv caps at ~2 GiB per call on Linux, so a file
-    larger than that would short-read and not be fully cached. Targets are
-    well under that here; for bigger files, loop preadv over offsets.
+    Each file is read in `chunk`-sized os.preadv calls into a reused
+    thread-local buffer (no per-read allocation). Reading in a loop keeps the
+    buffer small and handles files of any size. os.preadv releases the GIL, so
+    threads read concurrently. When `progress` is set, print a combined
+    bytes-read line that updates as reads proceed.
     """
     sizes = {p: os.path.getsize(p) for p in paths}
     total = sum(sizes.values())
@@ -202,15 +200,21 @@ def populate(paths, workers, progress=True):
     def work(p):
         nonlocal done
         with sem:
-            size = sizes[p]
-            buf = _read_buffer(size)
+            buf = _read_buffer(chunk)
             fd = os.open(p, os.O_RDONLY)
             try:
-                os.preadv(fd, [buf[:size]], 0)
+                off = 0
+                size = sizes[p]
+                while off < size:
+                    w = min(chunk, size - off)
+                    n = os.preadv(fd, [buf[:w]], off)
+                    if not n:
+                        break
+                    off += n
+                    with lock:
+                        done += n
             finally:
                 os.close(fd)
-            with lock:
-                done += size
 
     def get_done():
         with lock:
