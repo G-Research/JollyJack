@@ -14,7 +14,6 @@ not representative. Run on the target (L4) nodes.
 
 import argparse
 import os
-import random
 import sys
 import threading
 import time
@@ -50,6 +49,46 @@ def meminfo():
     return out
 
 
+_tls = threading.local()
+
+
+def _fill_random(size):
+    """Fill a reused thread-local buffer with `size` fresh random bytes.
+
+    Reads new randomness from /dev/urandom in place each call, so every chunk
+    is distinct (defeats filesystem compression and dedup) while the buffer
+    memory is reused across calls (no per-chunk allocation). The read releases
+    the GIL, so generation scales across the writer threads. Returns a
+    memoryview of exactly `size` bytes.
+    """
+    f = getattr(_tls, "urandom", None)
+    if f is None:
+        f = _tls.urandom = open("/dev/urandom", "rb", buffering=0)
+    buf = getattr(_tls, "buf", None)
+    if buf is None or len(buf) < size:
+        buf = _tls.buf = bytearray(size)
+    mv = memoryview(buf)[:size]
+    off = 0
+    while off < size:
+        n = f.readinto(mv[off:])
+        if not n:
+            raise OSError("short read from /dev/urandom")
+        off += n
+    return mv
+
+
+def _read_buffer(size):
+    """Return a reused thread-local bytearray view of at least `size` bytes.
+
+    Used as the destination for os.preadv so reads do not allocate a new
+    buffer per file.
+    """
+    buf = getattr(_tls, "readbuf", None)
+    if buf is None or len(buf) < size:
+        buf = _tls.readbuf = bytearray(size)
+    return memoryview(buf)
+
+
 def create_file(path, size, chunk=64 * 1024 * 1024, label=None, on_write=None):
     """Create a file of exactly `size` bytes.
 
@@ -73,10 +112,8 @@ def create_file(path, size, chunk=64 * 1024 * 1024, label=None, on_write=None):
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         while written < size:
-            # Fresh random bytes per chunk so distinct blocks defeat any
-            # filesystem compression or dedup that would otherwise keep the
-            # file from really occupying the page cache.
-            n = os.write(fd, random.randbytes(min(chunk, size - written)))
+            w = min(chunk, size - written)
+            n = os.write(fd, _fill_random(w))
             written += n
             if on_write:
                 on_write(n)
@@ -145,20 +182,16 @@ def run_with_progress(ts, get_done, total, label, progress=True):
     return secs
 
 
-def read_sequential(fd, size, chunk=8 * 1024 * 1024):
-    off = 0
-    while off < size:
-        data = os.pread(fd, min(chunk, size - off), off)
-        if not data:
-            break
-        off += len(data)
-
-
-def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024):
+def populate(paths, workers, progress=True):
     """Read the given files into the page cache, up to `workers` at a time.
 
-    os.pread releases the GIL, so threads read concurrently. When `progress`
-    is set, print a combined bytes-read line that updates as reads proceed.
+    Each file is read in one os.preadv into a reused thread-local buffer (no
+    per-file allocation). os.preadv releases the GIL, so threads read
+    concurrently. When `progress` is set, print a combined bytes-read line.
+
+    ponytail: a single preadv caps at ~2 GiB per call on Linux, so a file
+    larger than that would short-read and not be fully cached. Targets are
+    well under that here; for bigger files, loop preadv over offsets.
     """
     sizes = {p: os.path.getsize(p) for p in paths}
     total = sum(sizes.values())
@@ -169,19 +202,15 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024):
     def work(p):
         nonlocal done
         with sem:
+            size = sizes[p]
+            buf = _read_buffer(size)
             fd = os.open(p, os.O_RDONLY)
             try:
-                off = 0
-                size = sizes[p]
-                while off < size:
-                    data = os.pread(fd, min(chunk, size - off), off)
-                    if not data:
-                        break
-                    off += len(data)
-                    with lock:
-                        done += len(data)
+                os.preadv(fd, [buf[:size]], 0)
             finally:
                 os.close(fd)
+            with lock:
+                done += size
 
     def get_done():
         with lock:

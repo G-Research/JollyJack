@@ -477,20 +477,31 @@ def measure_reading(max_workers, worker):
                 ]
             )
 
-        # Count workers as they finish and show throughput averaged over the
-        # last 10 seconds (Gb/s, matching the final reported figure).
-        for work_result in concurrent.futures.as_completed(work_results):
-            work_result.result()
+        # Sample completion count on a wall-clock timer and show throughput
+        # averaged over the last 10 seconds (Gb/s, matching the final figure).
+        # Sampling on a timer (not per-completion) keeps the rate tied to real
+        # elapsed time; counting per future as_completed would divide bytes by
+        # the near-zero gaps between draining already-finished futures and
+        # report a wildly inflated rate.
+        while True:
+            n_done = sum(wr.done() for wr in work_results)
             if not IS_GITHUB_CI:
-                done_bytes += data_size
-                win.update(time.time(), done_bytes)
+                win.update(time.time(), done_bytes + n_done * data_size)
                 gbps = win.rate() / (1024 * 1024 * 1024) * 8
                 print(
                     f"\r  reading: iter {it + 1}/{cfg.measure_iterations}, {gbps:.2f} Gb/s ",
                     end="",
                     flush=True,
                 )
+            if n_done == len(work_results):
+                break
+            time.sleep(0.1)
 
+        # Propagate any worker exception.
+        for work_result in work_results:
+            work_result.result()
+
+        done_bytes += len(work_results) * data_size
         tt.append(time.time() - t)
         data_set_bytes = len(work_results) * data_size
 
