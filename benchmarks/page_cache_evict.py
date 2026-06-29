@@ -7,12 +7,18 @@ Tracks global page-cache size via /proc/meminfo. A --sweep mode grows the
 total page cache in steps and measures eviction time at each level, to test
 whether eviction gets slower as the cache grows.
 
+With --direct, reads use O_DIRECT and bypass the page cache entirely. Nothing
+is cached, so there is no reclaim/eviction overhead; this is the baseline that
+isolates how much of the slowdown comes from page-cache management versus raw
+device throughput (and mirrors the io_uring-direct mitigation).
+
 Linux only. WSL2 note: WSL2 does not faithfully account page cache in
 /proc/meminfo and may not honor POSIX_FADV_DONTNEED, so numbers from WSL2 are
 not representative. Run on the target (L4) nodes.
 """
 
 import argparse
+import mmap
 import os
 import sys
 import threading
@@ -20,6 +26,13 @@ import time
 from collections import deque
 
 PAGE = os.sysconf("SC_PAGE_SIZE")
+
+# Alignment for O_DIRECT reads: the destination buffer address, the file
+# offset, and the read length must all be multiples of the device logical
+# block size. 4096 is a safe superset of the common 512/4096 block sizes, and
+# an anonymous mmap is page-aligned (>= 4096), so it satisfies the buffer
+# requirement that a plain bytearray does not guarantee.
+ODIRECT_ALIGN = 4096
 
 
 def parse_size(s):
@@ -86,6 +99,21 @@ def _read_buffer(size):
     buf = getattr(_tls, "readbuf", None)
     if buf is None or len(buf) < size:
         buf = _tls.readbuf = bytearray(size)
+    return memoryview(buf)
+
+
+def _read_buffer_aligned(size):
+    """Return a reused thread-local page-aligned buffer of >= `size` bytes.
+
+    O_DIRECT requires the destination buffer to be aligned to the device
+    logical block size. An anonymous mmap is page-aligned (>= 4096), which
+    satisfies that requirement; a plain bytearray does not. The mmap is reused
+    across reads (no per-read allocation), like the buffered path.
+    """
+    buf = getattr(_tls, "dbuf", None)
+    if buf is None or len(buf) < size:
+        n = (size + PAGE - 1) // PAGE * PAGE  # whole pages
+        buf = _tls.dbuf = mmap.mmap(-1, n)
     return memoryview(buf)
 
 
@@ -183,7 +211,7 @@ def run_with_progress(ts, get_done, total, label, progress=True):
 
 
 def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024,
-             evict_immediately=False):
+             evict_immediately=False, direct=False):
     """Read the given files into the page cache, up to `workers` at a time.
 
     Each file is read in `chunk`-sized os.preadv calls into a reused
@@ -194,6 +222,13 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024,
 
     With `evict_immediately`, each file is dropped from the page cache right
     after it is read, so it does not linger while the others are read.
+
+    With `direct`, files are opened O_DIRECT so reads bypass the page cache
+    entirely: nothing is cached and there is no eviction overhead. The read
+    length is kept block-aligned (the kernel returns a short count at EOF
+    without error), and the destination buffer is page-aligned as O_DIRECT
+    requires. evict_immediately is a no-op under direct since nothing is
+    cached.
     """
     sizes = {p: os.path.getsize(p) for p in paths}
     total = sum(sizes.values())
@@ -204,20 +239,31 @@ def populate(paths, workers, progress=True, chunk=8 * 1024 * 1024,
     def work(p):
         nonlocal done
         with sem:
-            buf = _read_buffer(chunk)
-            fd = os.open(p, os.O_RDONLY)
+            size = sizes[p]
+            buf = _read_buffer_aligned(chunk) if direct else _read_buffer(chunk)
+            flags = os.O_RDONLY | (os.O_DIRECT if direct else 0)
+            fd = os.open(p, flags)
             try:
                 off = 0
-                size = sizes[p]
                 while off < size:
-                    w = min(chunk, size - off)
+                    if direct:
+                        # Round the final short tail up to a block multiple so
+                        # the requested length stays aligned; the kernel
+                        # returns only the bytes that exist (short read) at
+                        # EOF without raising EINVAL.
+                        remaining = size - off
+                        w = min(chunk,
+                                (remaining + ODIRECT_ALIGN - 1)
+                                // ODIRECT_ALIGN * ODIRECT_ALIGN)
+                    else:
+                        w = min(chunk, size - off)
                     n = os.preadv(fd, [buf[:w]], off)
                     if not n:
                         break
                     off += n
                     with lock:
                         done += n
-                if evict_immediately:
+                if evict_immediately and not direct:
                     os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
             finally:
                 os.close(fd)
@@ -270,11 +316,11 @@ def evict(path):
     with open(path, "r") as f:
         fd = f.fileno()
         os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
-        
-    return time.perf_counter() - t0    
+
+    return time.perf_counter() - t0
 
 
-def measure_once(targets, workers=1, evict_immediately=False):
+def measure_once(targets, workers=1, evict_immediately=False, direct=False):
     """Read the targets into cache, then evict them one at a time.
 
     Returns a per-file list of dicts. `cached_before` is the global page-cache
@@ -284,21 +330,27 @@ def measure_once(targets, workers=1, evict_immediately=False):
     With `evict_immediately`, each file is also dropped from the cache right
     after it is read (so it does not linger while the others are read); the
     timed eviction loop below still runs as usual.
+
+    With `direct`, reads bypass the cache so the timed eviction loop is skipped
+    (there is nothing to evict).
     """
-    populate(targets, workers, evict_immediately=evict_immediately)
+    populate(targets, workers, evict_immediately=evict_immediately,
+             direct=direct)
 
     results = []
-    for p in targets:
-        size = os.path.getsize(p)
-        cached_before = meminfo()["Cached"]
-        secs = evict(p)
-        results.append({
-            "path": p,
-            "size": size,
-            "pages": (size + PAGE - 1) // PAGE,
-            "cached_before": cached_before,
-            "evict_secs": secs,
-        })
+    if not evict_immediately and not direct:
+        for p in targets:
+            size = os.path.getsize(p)
+            cached_before = meminfo()["Cached"]
+            secs = evict(p)
+            results.append({
+                "path": p,
+                "size": size,
+                "pages": (size + PAGE - 1) // PAGE,
+                "cached_before": cached_before,
+                "evict_secs": secs,
+            })
+
     return results
 
 
@@ -333,6 +385,7 @@ def cleanup(paths):
         except FileNotFoundError:
             pass
 
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -353,11 +406,20 @@ def main():
     ap.add_argument("--evict-immediately", action="store_true",
                     help="evict each file right after it is read, instead of "
                          "reading all files then evicting them")
+    ap.add_argument("--direct", action="store_true",
+                    help="read with O_DIRECT to bypass the page cache "
+                         "entirely (no cache population, so no reclaim or "
+                         "eviction overhead); use as a baseline against the "
+                         "buffered-read path")
     args = ap.parse_args()
 
     if sys.platform != "linux":
         print("This tool is Linux-only.", file=sys.stderr)
         return 2
+
+    if args.direct and args.evict_immediately:
+        print("note: --evict-immediately has no effect with --direct "
+              "(nothing is cached to evict)", file=sys.stderr)
 
     os.makedirs(args.dir, exist_ok=True)
     workers = args.workers if args.workers > 0 else args.num_files
@@ -371,12 +433,15 @@ def main():
         created += create_files(targets, args.file_size, workers)
 
         m0 = meminfo()
+        mode = "O_DIRECT" if args.direct else "buffered"
         print(f"start: Cached={fmt_bytes(m0['Cached'])} "
               f"MemTotal={fmt_bytes(m0['MemTotal'])} "
-              f"MemFree={fmt_bytes(m0['MemFree'])}\n")
+              f"MemFree={fmt_bytes(m0['MemFree'])} "
+              f"[read mode: {mode}]\n")
 
         r = measure_once(targets, workers,
-                         evict_immediately=args.evict_immediately)
+                         evict_immediately=args.evict_immediately,
+                         direct=args.direct)
         print_result(r)
     finally:
         if not args.keep:
