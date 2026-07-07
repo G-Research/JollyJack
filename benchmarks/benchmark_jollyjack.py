@@ -31,7 +31,7 @@ class BenchmarkSettings(BaseSettings):
     n_files: int | None = None
     n_repeats: int | None = None
     data_page_size: int | None = None
-    max_rows_per_page: int | None = None
+    max_rows_per_page: int | None = 128_000
     purge_cache: bool | None = None
     worker_counts: list[int] = [1, 2]
     row_groups: int = 1
