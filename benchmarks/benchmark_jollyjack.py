@@ -30,6 +30,8 @@ class BenchmarkSettings(BaseSettings):
     benchmark_mode: str = "CPU"
     n_files: int | None = None
     n_repeats: int | None = None
+    data_page_size: int | None = None
+    max_rows_per_page: int | None = None
     purge_cache: bool | None = None
     worker_counts: list[int] = [1, 2]
     row_groups: int = 1
@@ -146,6 +148,8 @@ def generate_random_parquet(
                     compression=compression,
                     write_statistics=False,
                     store_schema=False,
+                    max_rows_per_page=cfg.max_rows_per_page,
+                    data_page_size=cfg.data_page_size,
                 )
 
             print("  writing...:")
