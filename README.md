@@ -230,7 +230,7 @@ Tuning this value may improve performance.
 
 ## Requirements
 
-- pyarrow ~= 24.0.0
+- pyarrow ~= 25.0.0
 
 JollyJack builds on top of PyArrow. While the source package may work with
 newer versions, the prebuilt binary wheels are built and tested against pyarrow 24.x.
