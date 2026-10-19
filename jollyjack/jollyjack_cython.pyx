@@ -7,11 +7,12 @@ cimport numpy as cnp
 
 from cython.cimports.jollyjack import cjollyjack
 
+from cpython.pycapsule cimport PyCapsule_GetPointer
 from libcpp.string cimport string
 from libcpp.memory cimport shared_ptr
 from libcpp.vector cimport vector
 from libcpp cimport bool
-from libc.stdint cimport uint32_t
+from libc.stdint cimport int64_t, uint32_t
 from pyarrow._parquet cimport *
 from pyarrow.lib cimport (CacheOptions, NativeFile, get_reader)
 from collections.abc import Iterable
@@ -150,6 +151,115 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cprefetch_page_cache
             , cuse_threads
             , cexpected_rows
+            , c_cache_options)
+        return
+
+cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object read_metadata_capi, int n_threads, pre_buffer = True, use_threads = False, backend = None, CacheOptions cache_options = None):
+    """Read a batch of (source, row group) pairs into one array, on a native thread pool, without holding the GIL.
+
+    `sources` are parquet paths and `index_buffers` the matching palletjack indexes, as buffers (an mmap of each
+    index file). `column_sets` are `(column_names, target_column_indices)` pairs and `source_column_set[i]` says
+    which of them to read from source `i`. Each row of `tasks` is `(source index, row group, row_start, rows)`,
+    and fills rows `[row_start, row_start + rows)` of `np_array`. `read_metadata_capi` is palletjack's
+    `_read_metadata_capi` capsule. `backend` is 'default', 'io_uring' or 'io_uring_odirect', or None to take it from
+    the JJ_READER_BACKEND environment variable, as `read_into_numpy` does.
+    """
+
+    # Ensure the input is a 2D array, Fortran order
+    assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
+    assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran (column-major) order"
+    assert tasks.shape[1] == 4, f"Unexpected tasks.shape[1], {tasks.shape[1]} != 4"
+    assert len(index_buffers) == len(sources), f"Got {len(index_buffers)} index buffers for {len(sources)} sources"
+    assert len(source_column_set) == len(sources), f"Got {len(source_column_set)} column set indices for {len(sources)} sources"
+
+    cdef vector[string] cpaths
+    cdef vector[const unsigned char*] cindex_data
+    cdef vector[size_t] cindex_data_lengths
+    cdef vector[int] csource_column_set = source_column_set
+    cdef vector[vector[string]] ccolumn_names
+    cdef vector[vector[int]] ctarget_column_indices
+    cdef vector[string] cnames
+    cdef vector[int] ctargets
+    cdef const unsigned char[::1] index_view
+    cdef list index_views = []
+
+    for column_names, target_column_indices in column_sets:
+        cnames = [c.encode('utf8') for c in column_names]
+        ctargets = target_column_indices
+        assert cnames.size() == ctargets.size(), f"Got {cnames.size()} column names and {ctargets.size()} target indices"
+        ccolumn_names.push_back(cnames)
+        ctarget_column_indices.push_back(ctargets)
+
+    for source in sources:
+        cpaths.push_back(source.encode('utf8'))
+
+    # Holding the views keeps the buffers exported, and their addresses valid, for the whole call
+    for index_buffer in index_buffers:
+        index_view = index_buffer
+        index_views.append(index_view)
+        cindex_data.push_back(&index_view[0])
+        cindex_data_lengths.push_back(index_view.shape[0])
+
+    for column_set in source_column_set:
+        assert 0 <= column_set < len(column_sets), f"Column set {column_set} is out of range, got {len(column_sets)} column sets"
+
+    cdef int64_t ctask_count = tasks.shape[0]
+    cdef int64_t rows = np_array.shape[0]
+    cdef int64_t i
+    for i in range(ctask_count):
+        assert 0 <= tasks[i, 0] < cpaths.size(), f"Source index {tasks[i, 0]} is out of range, got {cpaths.size()} sources"
+        assert 0 <= tasks[i, 2] and 0 <= tasks[i, 3] and tasks[i, 2] + tasks[i, 3] <= rows, f"Rows [{tasks[i, 2]}, {tasks[i, 2] + tasks[i, 3]}) of task {i} are not within the {rows} rows of np_array"
+
+    if ctask_count == 0:
+        return
+
+    cdef cjollyjack.PalletJackReadMetadataFunc cread_metadata = <cjollyjack.PalletJackReadMetadataFunc>PyCapsule_GetPointer(read_metadata_capi, cjollyjack.JOLLYJACK_READ_METADATA_CAPSULE_NAME)
+
+    cdef cjollyjack.JollyJackReaderBackend cbackend
+    # Please note that the `JJ_READER_BACKEND` variable is experimental and may be changed or removed in future versions
+    jj_reader_backend = backend if backend is not None else os.environ.get("JJ_READER_BACKEND")
+    if jj_reader_backend is None or jj_reader_backend == 'default':
+        cbackend = cjollyjack.kJollyJackDefaultReader
+    elif jj_reader_backend == 'io_uring':
+        cbackend = cjollyjack.kJollyJackIOUringReader
+    elif jj_reader_backend == 'io_uring_odirect':
+        cbackend = cjollyjack.kJollyJackIOUringODirectReader
+    else:
+        raise ValueError(f"Unsupported JJ_READER_BACKEND={jj_reader_backend}")
+
+    cdef CCacheOptions c_cache_options
+    if cache_options is not None:
+        c_cache_options = cache_options.unwrap()
+    else:
+        c_cache_options = CCacheOptions.LazyDefaults()
+
+    cdef void* cdata = np_array.data
+    cdef size_t cstride0_size = np_array.strides[0]
+    cdef size_t cstride1_size = np_array.strides[1]
+    cdef int64_t ccolumns = np_array.shape[1]
+    cdef const int64_t* ctasks = &tasks[0, 0]
+    cdef int cn_threads = n_threads
+    cdef bool cpre_buffer = pre_buffer
+    cdef bool cuse_threads = use_threads
+
+    with nogil:
+        cjollyjack.ReadIntoMemoryBatch (cpaths
+            , cindex_data
+            , cindex_data_lengths
+            , csource_column_set
+            , ccolumn_names
+            , ctarget_column_indices
+            , ctasks
+            , ctask_count
+            , cread_metadata
+            , cdata
+            , cstride0_size
+            , cstride1_size
+            , ccolumns
+            , cn_threads
+            , cpre_buffer
+            , cuse_threads
+            , cbackend
             , c_cache_options)
         return
 
