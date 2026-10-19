@@ -337,11 +337,7 @@ void SubmitIORequests(
     io_uring_sqe_set_data(sqe, reinterpret_cast<void*>(request_index));
   }
 
-  int submitted_count;
-  do {
-    submitted_count = io_uring_submit(&ring);
-  } while (submitted_count == -EINTR);
-
+  int submitted_count = io_uring_submit(&ring);
   if (submitted_count < 0) {
     throw std::logic_error("Failed to submit io_uring operations: " + std::string(strerror(-submitted_count)));
   }
