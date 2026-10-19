@@ -99,21 +99,13 @@ arrow::Result<std::shared_ptr<arrow::Buffer>> IoUringReader1::ReadAt(int64_t pos
   io_uring_prep_read(sqe, fd_, buffer->mutable_data(), nbytes, position);
   sqe->flags |= IOSQE_ASYNC;  // encourage async
 
-  int submit_result;
-  do {
-    submit_result = io_uring_submit(&ring);
-  } while (submit_result == -EINTR);
-
+  int submit_result = io_uring_submit(&ring);
   if (submit_result < 0) {
     return arrow::Status::IOError("submit failed");
   }
 
   struct io_uring_cqe* cqe = nullptr;
-  int wait_result;
-  do {
-    wait_result = io_uring_wait_cqe(&ring, &cqe);
-  } while (wait_result == -EINTR);
-
+  int wait_result = io_uring_wait_cqe(&ring, &cqe);
   if (wait_result < 0) {
     return arrow::Status::IOError("wait_cqe failed");
   }
