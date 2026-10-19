@@ -37,7 +37,6 @@ if sys.platform == "linux":
     files.extend(
         [
             "jollyjack/read_into_memory_io_uring.cc",
-            "jollyjack/direct_reader.cc",
         ]
     )
     libraries.extend(["uring"])
