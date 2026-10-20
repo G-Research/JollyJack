@@ -886,32 +886,6 @@ void PrefetchPageCache(
 }
 
 #ifdef WITH_IO_URING
-#include "io_uring_reader_1.h"
-std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename)
-{
-   return std::make_shared<IoUringReader1>(filename);
-}
-#else
-std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename)
-{
-  throw std::runtime_error("io_uring is not available on this platform!"); 
-}
-#endif
-
-#ifdef WITH_IO_URING
-#include "direct_reader.h"
-std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename)
-{
-   return std::make_shared<DirectReader>(filename, 4096);
-}
-#else
-std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename)
-{  
-    throw std::runtime_error("DirectReader is not available on this platform!"); 
-}
-#endif
-
-#ifdef WITH_IO_URING
 #else
 void ReadIntoMemoryIOUring (const std::string& path
     , std::shared_ptr<parquet::FileMetaData> file_metadata
