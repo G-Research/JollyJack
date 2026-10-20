@@ -401,7 +401,11 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
 
     if (completed_requests->size() < min_completed_requests)
     {
-      int wait_result = io_uring_wait_cqe(&ring, &completion_entry);
+      int wait_result;
+      do {
+        wait_result = io_uring_wait_cqe(&ring, &completion_entry);
+      } while (wait_result == -EINTR);
+
       if (wait_result < 0) {
         throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
       }
