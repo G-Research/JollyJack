@@ -440,7 +440,7 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
       const auto *descr = row_group_reader->metadata()->schema()->Column(column_operation.parquet_column_index);
       column_operation.column_chunk_metadata = row_group_reader->metadata()->ColumnChunk(column_operation.parquet_column_index);
       if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
-        column_operation.column_reader = MakeFLBAReader(row_group_reader, column_operation.parquet_column_index, descr, column_operation.column_chunk_metadata.get());
+        column_operation.column_reader = MakeFLBAReader(row_group_reader, column_operation.parquet_column_index, descr, column_operation.column_chunk_metadata.get(), fantom_reader);
       else
         column_operation.column_reader = row_group_reader->Column(column_operation.parquet_column_index);
     }
