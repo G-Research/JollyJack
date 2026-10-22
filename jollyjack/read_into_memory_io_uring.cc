@@ -247,7 +247,7 @@ std::vector<ColumnFileRange> GetSortedColumnRanges(
   for (size_t column_array_index = 0; column_array_index < column_indices.size(); column_array_index++) {
     single_column[0] = column_indices[column_array_index];
 
-    auto ranges = parquet_reader->GetReadRanges(single_row_group, single_column, 0, 1).ValueOrDie();
+    PARQUET_ASSIGN_OR_THROW(auto ranges, parquet_reader->GetReadRanges(single_row_group, single_column, 0, 1));
     column_ranges.emplace_back();
     ColumnFileRange& range_info = column_ranges.back();
     range_info.file_offset = ranges[0].offset;
@@ -579,10 +579,10 @@ void ReadIntoMemoryIOUring(
       {
         // In arrow, read ranges are coalesced only if the pre_buffer is True
         std::vector<int> single_row_group = {row_group_index};
-        maybe_coalesced_ranges = parquet_reader->GetReadRanges(
+        PARQUET_ASSIGN_OR_THROW(maybe_coalesced_ranges, parquet_reader->GetReadRanges(
             single_row_group, column_indices, 
             cache_options.hole_size_limit, cache_options.range_size_limit
-          ).ValueOrDie();
+          ));
 
         if (!use_o_direct)
         {
