@@ -30,6 +30,12 @@ namespace {
 class ZstdPageDecoder
 {
 public:
+  ZstdPageDecoder()
+  {
+    PARQUET_ASSIGN_OR_THROW(codec_, arrow::util::Codec::Create(arrow::Compression::ZSTD));
+    PARQUET_ASSIGN_OR_THROW(decompressor_, codec_->MakeDecompressor());
+  }
+
   const uint8_t *Decompress(const uint8_t *src, int64_t src_size, int64_t uncompressed_size, int64_t uncompressed_prefix)
   {
     if (buffer_.size() < (size_t)uncompressed_size)
@@ -60,8 +66,8 @@ public:
   }
 
 private:
-  std::unique_ptr<arrow::util::Codec> codec_ = arrow::util::Codec::Create(arrow::Compression::ZSTD).ValueOrDie();
-  std::shared_ptr<arrow::util::Decompressor> decompressor_ = codec_->MakeDecompressor().ValueOrDie();
+  std::unique_ptr<arrow::util::Codec> codec_;
+  std::shared_ptr<arrow::util::Decompressor> decompressor_;
   std::vector<uint8_t> buffer_;
 };
 
@@ -178,7 +184,7 @@ private:
         && chunk_start > column_chunk_metadata->dictionary_page_offset())
       chunk_start = column_chunk_metadata->dictionary_page_offset();
 
-    auto chunk = source->ReadAt(chunk_start, column_chunk_metadata->total_compressed_size()).ValueOrDie();
+    PARQUET_ASSIGN_OR_THROW(auto chunk, source->ReadAt(chunk_start, column_chunk_metadata->total_compressed_size()));
     own_zstd_ = true;
     return parquet::PageReader::Open(std::make_shared<arrow::io::BufferReader>(std::move(chunk)),
         column_chunk_metadata->num_values(), arrow::Compression::UNCOMPRESSED,
@@ -600,11 +606,11 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
   if (prefetch_page_cache)
   {
-    auto read_ranges = parquet_reader->GetReadRanges(row_groups,
+    PARQUET_ASSIGN_OR_THROW(auto read_ranges, parquet_reader->GetReadRanges(row_groups,
                               column_indices,
                               cache_options.hole_size_limit,
                               cache_options.range_size_limit
-                            ).ValueOrDie();
+                            ));
     auto status = source->WillNeed(read_ranges);
     if (!status.ok()) {
       throw std::runtime_error(status.message());
@@ -966,11 +972,11 @@ void PrefetchPageCache(
     }
   }
 
-  auto read_ranges = reader->GetReadRanges(row_groups, 
+  PARQUET_ASSIGN_OR_THROW(auto read_ranges, reader->GetReadRanges(row_groups, 
                             column_indices,
                             cache_options.hole_size_limit,
                             cache_options.range_size_limit
-                          ).ValueOrDie();
+                          ));
 
   auto status = source->WillNeed(read_ranges);
   if (!status.ok()) {
