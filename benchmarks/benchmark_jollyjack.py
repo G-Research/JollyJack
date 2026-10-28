@@ -1,5 +1,7 @@
 import itertools
 import jollyjack as jj
+import mmap
+import palletjack as pj
 import pyarrow.parquet as pq
 import pyarrow as pa
 import pandas as pd
@@ -205,6 +207,13 @@ def generate_data(n_columns, n_row_groups, path, compression, dtype):
     )
 
 
+def generate_index(path):
+    index_path = f"{path}.index"
+    if not os.path.exists(index_path) or os.path.getmtime(index_path) < os.path.getmtime(path):
+        pj.generate_metadata_index(path, index_path)
+    return index_path
+
+
 def worker_arrow_row_group(use_threads, pre_buffer, path):
 
     pr = pq.ParquetReader()
@@ -218,11 +227,12 @@ def worker_arrow_row_group(use_threads, pre_buffer, path):
     np_array = table.to_pandas()
 
 
-def get_thread_local_np_array(dtype):
+def get_thread_local_np_array(dtype, n_rows=None):
+    n_rows = cfg.chunk_size if n_rows is None else n_rows
     np_array = getattr(thread_local_data, "np_array", None)
-    if np_array is None:
+    if np_array is None or np_array.shape[0] != n_rows:
         np_array = np.empty(
-            (cfg.chunk_size, cfg.n_columns_to_read), dtype=dtype, order="F"
+            (n_rows, cfg.n_columns_to_read), dtype=dtype, order="F"
         )
         # By writing all zeros we make sure that the memory is properly allocated and mapped to physical RAM (avoid Memory Allocation Contention)
         np_array[:] = 0
@@ -414,11 +424,84 @@ def worker_jollyjack_torch(
     )
 
 
+def get_pre_buffer_cache_options(pre_buffer):
+    # The same options as worker_jollyjack_numpy uses with pre_buffer
+    if not pre_buffer:
+        return None
+    return pa.CacheOptions(
+        hole_size_limit=8192,  # default
+        range_size_limit=16 * 1024 * 1024,  # 16 MB, fits in mimalloc arena
+        lazy=False,
+    )
+
+
+def get_column_pairs(sort_column_indices):
+    pairs = [(src, dst) for dst, src in enumerate(column_indices_to_read)]
+    if sort_column_indices:
+        pairs = sorted(pairs)
+    return [(f"col_{src}", dst) for src, dst in pairs]
+
+
+def worker_palletjack_jollyjack_numpy(
+    use_threads, pre_buffer, column_pairs, dtype, path, index_data
+):
+
+    np_array = get_thread_local_np_array(dtype)
+    # The metadata holds only row_groups_to_read, so they are row groups 0..n-1 in it
+    metadata = pj.read_metadata(
+        index_data=index_data[path],
+        row_groups=row_groups_to_read,
+        column_names=[name for name, _ in column_pairs],
+    )
+    jj.read_into_numpy(
+        source=path,
+        metadata=metadata,
+        np_array=np_array,
+        row_group_indices=range(len(row_groups_to_read)),
+        column_names=column_pairs,
+        pre_buffer=pre_buffer,
+        use_threads=use_threads,
+        cache_options=get_pre_buffer_cache_options(pre_buffer),
+    )
+
+
+def worker_jollyjack_batch(
+    n_threads, use_threads, pre_buffer, column_pairs, backend, dtype, paths, index_data
+):
+
+    # One task per work item and row group, each with its own rows of the array
+    np_array = get_thread_local_np_array(
+        dtype, n_rows=len(paths) * len(row_groups_to_read) * cfg.chunk_size
+    )
+    tasks = np.array(
+        [
+            (k, rg, (k * len(row_groups_to_read) + j) * cfg.chunk_size, cfg.chunk_size)
+            for k in range(len(paths))
+            for j, rg in enumerate(row_groups_to_read)
+        ],
+        dtype=np.int64,
+    )
+    jj.read_into_numpy_batch(
+        np_array=np_array,
+        sources=paths,
+        index_buffers=[index_data[path] for path in paths],
+        column_sets=[([name for name, _ in column_pairs], [dst for _, dst in column_pairs])],
+        source_column_set=[0] * len(paths),
+        tasks=tasks,
+        palletjack_capi=pj.palletjack_capi,
+        n_threads=n_threads,
+        pre_buffer=pre_buffer,
+        use_threads=use_threads,
+        backend=backend,
+        cache_options=get_pre_buffer_cache_options(pre_buffer),
+    )
+
+
 def calculate_data_size(dtype):
     return cfg.chunk_size * cfg.n_columns_to_read * dtype.byte_width
 
 
-def measure_reading(max_workers, worker):
+def measure_reading(max_workers, worker, batch=False):
     global thread_local_data
     tt = []
     data_set_bytes = 0
@@ -434,20 +517,21 @@ def measure_reading(max_workers, worker):
 
         # Submit the work
         t = time.time()
-        work_results = []
-        for _ in range(cfg.n_repeats):
-            work_results.extend(
-                [
-                    pool.submit(worker, path=f"{cfg.parquet_path}{i}")
-                    for i in range(0, cfg.n_files)
-                ]
-            )
-
-        for work_result in work_results:
-            work_result.result()
+        paths = [
+            f"{cfg.parquet_path}{i}"
+            for _ in range(cfg.n_repeats)
+            for i in range(0, cfg.n_files)
+        ]
+        if batch:
+            # A batch worker reads all work items in one call, on its own threads
+            worker(paths=paths)
+        else:
+            work_results = [pool.submit(worker, path=path) for path in paths]
+            for work_result in work_results:
+                work_result.result()
 
         tt.append(time.time() - t)
-        data_set_bytes = len(work_results) * calculate_data_size(dtype=dtype)
+        data_set_bytes = len(paths) * calculate_data_size(dtype=dtype)
 
     pool.shutdown(wait=True)
 
@@ -573,6 +657,46 @@ for dtype_key in cfg.dtypes:
                     print(
                         f"`jj.read_into_torch` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, prefetch_page_cache:{prefetch_page_cache}, sort_column_indices:{sort_col}, cache_metadata:{cache_meta}, duration:{measure_reading(n_workers, lambda path:worker_jollyjack_torch(use_threads=use_threads, pre_buffer=pre_buffer, prefetch_page_cache=prefetch_page_cache, sort_column_indices=sort_col, dtype=dtype.to_pandas_dtype(), path=path, metadata=metadata_cache.get(path)))}"
                     )
+
+        if {"all", "jj_palletjack", "jj_batch"} & cfg.benchmarks_to_run:
+            paths = [f"{cfg.parquet_path}{i}" for i in range(cfg.n_files)]
+            index_files = [open(generate_index(p), "rb") for p in paths]
+            index_data = {
+                p: mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+                for p, f in zip(paths, index_files)
+            }
+
+            for jj_reader in cfg.reader_backends:
+
+                if jj_reader == "default":
+                    os.environ.pop("JJ_READER_BACKEND", None)
+                else:
+                    os.environ["JJ_READER_BACKEND"] = jj_reader
+
+                print(f".")
+                for n_workers, pre_buffer, use_threads, sort_col in itertools.product(
+                    cfg.worker_counts,
+                    cfg.pre_buffer,
+                    cfg.use_threads,
+                    cfg.sort_column_indices,
+                ):
+                    column_pairs = get_column_pairs(sort_col)
+
+                    if {"all", "jj_palletjack"} & cfg.benchmarks_to_run:
+                        print(
+                            f"`pj.read_metadata + jj.read_into_numpy` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, sort_column_indices:{sort_col}, duration:{measure_reading(n_workers, lambda path:worker_palletjack_jollyjack_numpy(use_threads=use_threads, pre_buffer=pre_buffer, column_pairs=column_pairs, dtype=dtype.to_pandas_dtype(), path=path, index_data=index_data))}"
+                        )
+
+                    if {"all", "jj_batch"} & cfg.benchmarks_to_run:
+                        print(
+                            f"`jj.read_into_numpy_batch` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, sort_column_indices:{sort_col}, duration:{measure_reading(n_workers, lambda paths:worker_jollyjack_batch(n_threads=n_workers, use_threads=use_threads, pre_buffer=pre_buffer, column_pairs=column_pairs, backend=jj_reader, dtype=dtype.to_pandas_dtype(), paths=paths, index_data=index_data), batch=True)}"
+                        )
+
+            os.environ.pop("JJ_READER_BACKEND", None)
+            for index_buffer in index_data.values():
+                index_buffer.close()
+            for index_file in index_files:
+                index_file.close()
 
         if {"all", "copy_to_row_major"} & cfg.benchmarks_to_run:
             print(f".")
