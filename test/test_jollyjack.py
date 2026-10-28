@@ -11,6 +11,9 @@ import numpy as np
 import platform
 import os
 import itertools
+import signal
+import threading
+import time
 import torch
 from pyarrow import fs
 from parameterized import parameterized
@@ -391,7 +394,7 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             supported_dtype_encodings,
-            [None, "snappy"],
+            [None, "snappy", "zstd"],
             ["1.0", "2.0"],
         )
     )
@@ -2216,6 +2219,74 @@ class TestJollyJack(unittest.TestCase):
                 )
             self.assertIn("was not found", str(context.exception))
             pr.close()
+
+    def test_read_io_uring_interrupted_by_signals(self):
+
+        backend = os.environ.get("JJ_READER_BACKEND")
+        if backend not in ("io_uring", "io_uring_odirect"):
+            self.skipTest("This test requires an io_uring reader backend")
+
+        rows = 20_000
+        row_group_size = 5_000
+        iterations = 200
+        signal_interval = 0.0002
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(rows, n_columns)
+            pq.write_table(
+                table,
+                path,
+                row_group_size=row_group_size,
+                use_dictionary=False,
+                write_statistics=False,
+                store_schema=False,
+            )
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected_data = pr.read_all()
+
+            # Signals are sent to the reading thread with pthread_kill, because a
+            # process-directed signal (setitimer) can be delivered to any thread.
+            # Python installs its handlers without SA_RESTART, so io_uring_wait_cqe
+            # returns -EINTR and the reader has to retry it.
+            reading_thread = threading.get_ident()
+            stop_sending = threading.Event()
+            handled_signals = 0
+
+            def on_alarm(signum, frame):
+                nonlocal handled_signals
+                handled_signals += 1
+
+            def send_signals():
+                while not stop_sending.is_set():
+                    signal.pthread_kill(reading_thread, signal.SIGALRM)
+                    time.sleep(signal_interval)
+
+            previous_handler = signal.signal(signal.SIGALRM, on_alarm)
+            sender = threading.Thread(target=send_signals)
+            sender.start()
+            try:
+                for _ in range(iterations):
+                    np_array = np.zeros((rows, n_columns), dtype="f", order="F")
+                    jj.read_into_numpy(
+                        source=path,
+                        metadata=None,
+                        np_array=np_array,
+                        row_group_indices=range(pr.metadata.num_row_groups),
+                        column_indices=range(pr.metadata.num_columns),
+                    )
+                    self.assertTrue(np.array_equal(np_array, expected_data))
+            finally:
+                stop_sending.set()
+                sender.join()
+                signal.signal(signal.SIGALRM, previous_handler)
+
+            pr.close()
+
+            # Without delivered signals the test would pass for the wrong reason
+            self.assertGreater(handled_signals, 0)
 
 
 if __name__ == "__main__":

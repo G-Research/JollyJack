@@ -247,7 +247,7 @@ std::vector<ColumnFileRange> GetSortedColumnRanges(
   for (size_t column_array_index = 0; column_array_index < column_indices.size(); column_array_index++) {
     single_column[0] = column_indices[column_array_index];
 
-    auto ranges = parquet_reader->GetReadRanges(single_row_group, single_column, 0, 1).ValueOrDie();
+    PARQUET_ASSIGN_OR_THROW(auto ranges, parquet_reader->GetReadRanges(single_row_group, single_column, 0, 1));
     column_ranges.emplace_back();
     ColumnFileRange& range_info = column_ranges.back();
     range_info.file_offset = ranges[0].offset;
@@ -401,7 +401,11 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
 
     if (completed_requests->size() < min_completed_requests)
     {
-      int wait_result = io_uring_wait_cqe(&ring, &completion_entry);
+      int wait_result;
+      do {
+        wait_result = io_uring_wait_cqe(&ring, &completion_entry);
+      } while (wait_result == -EINTR);
+
       if (wait_result < 0) {
         throw std::logic_error("Failed to wait for io_uring completion: " + std::string(strerror(-wait_result)));
       }
@@ -440,7 +444,7 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
       const auto *descr = row_group_reader->metadata()->schema()->Column(column_operation.parquet_column_index);
       column_operation.column_chunk_metadata = row_group_reader->metadata()->ColumnChunk(column_operation.parquet_column_index);
       if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
-        column_operation.column_reader = MakeFLBAReader(row_group_reader, column_operation.parquet_column_index, descr, column_operation.column_chunk_metadata.get());
+        column_operation.column_reader = MakeFLBAReader(row_group_reader, column_operation.parquet_column_index, descr, column_operation.column_chunk_metadata.get(), fantom_reader);
       else
         column_operation.column_reader = row_group_reader->Column(column_operation.parquet_column_index);
     }
@@ -575,10 +579,10 @@ void ReadIntoMemoryIOUring(
       {
         // In arrow, read ranges are coalesced only if the pre_buffer is True
         std::vector<int> single_row_group = {row_group_index};
-        maybe_coalesced_ranges = parquet_reader->GetReadRanges(
+        PARQUET_ASSIGN_OR_THROW(maybe_coalesced_ranges, parquet_reader->GetReadRanges(
             single_row_group, column_indices, 
             cache_options.hole_size_limit, cache_options.range_size_limit
-          ).ValueOrDie();
+          ));
 
         if (!use_o_direct)
         {

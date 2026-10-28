@@ -1,4 +1,5 @@
 #include "arrow/io/file.h"
+#include "arrow/io/memory.h"
 #include "arrow/status.h"
 #include "arrow/util/parallel.h"
 #include "parquet/column_reader.h"
@@ -10,6 +11,8 @@
 #include "read_into_memory_io_uring.h"
 
 #include <atomic>
+#include "arrow/util/compression.h"
+
 #include <iostream>
 #include <mutex>
 #include <stdlib.h>
@@ -27,6 +30,56 @@ struct ColumnIndex
   int index;
 };
 
+namespace {
+
+class ZstdPageDecoder
+{
+public:
+  ZstdPageDecoder()
+  {
+    PARQUET_ASSIGN_OR_THROW(codec_, arrow::util::Codec::Create(arrow::Compression::ZSTD));
+    PARQUET_ASSIGN_OR_THROW(decompressor_, codec_->MakeDecompressor());
+  }
+
+  const uint8_t *Decompress(const uint8_t *src, int64_t src_size, int64_t uncompressed_size, int64_t uncompressed_prefix)
+  {
+    if (buffer_.size() < (size_t)uncompressed_size)
+      buffer_.resize(uncompressed_size);
+
+    memcpy(buffer_.data(), src, uncompressed_prefix);
+    src += uncompressed_prefix;
+    src_size -= uncompressed_prefix;
+
+    PARQUET_THROW_NOT_OK(decompressor_->Reset());
+    int64_t read = 0, written = uncompressed_prefix;
+    while (read < src_size || !decompressor_->IsFinished())
+    {
+      auto result = decompressor_->Decompress(src_size - read, src + read, uncompressed_size - written,
+          buffer_.data() + written);
+      PARQUET_THROW_NOT_OK(result.status());
+      read += result->bytes_read;
+      written += result->bytes_written;
+      if (result->need_more_output || (result->bytes_read == 0 && result->bytes_written == 0))
+        break;
+    }
+
+    if (written != uncompressed_size || !decompressor_->IsFinished())
+      throw parquet::ParquetException(std::string("ZSTD decompression produced ") + std::to_string(written)
+          + " bytes, but the page header says " + std::to_string(uncompressed_size));
+
+    return buffer_.data();
+  }
+
+private:
+  std::unique_ptr<arrow::util::Codec> codec_;
+  std::shared_ptr<arrow::util::Decompressor> decompressor_;
+  std::vector<uint8_t> buffer_;
+};
+
+thread_local ZstdPageDecoder zstd_page_decoder;
+
+}  // namespace
+
 // Reader for FLBA columns. On the fast path (PLAIN-encoded, flat, null-free),
 // copies values directly from decompressed page buffers into the caller's
 // output. Otherwise delegates to a regular Arrow ColumnReader.
@@ -36,7 +89,8 @@ public:
   ContiguousFLBAReader(parquet::RowGroupReader *row_group_reader,
                        int column_index,
                        const parquet::ColumnDescriptor *descr,
-                       const parquet::ColumnChunkMetaData *column_chunk_metadata)
+                       const parquet::ColumnChunkMetaData *column_chunk_metadata,
+                       const std::shared_ptr<arrow::io::RandomAccessFile> &source)
       : descr_(descr)
       , type_length_(descr->type_length())
       , max_def_level_(descr->max_definition_level())
@@ -50,7 +104,12 @@ public:
     }
 
     if (fast_path && descr->max_repetition_level() == 0)
-      page_reader_ = row_group_reader->GetColumnPageReader(column_index);
+    {
+      if (source != nullptr && column_chunk_metadata->compression() == arrow::Compression::ZSTD)
+        page_reader_ = OpenCompressedPageReader(source, descr, column_chunk_metadata);
+      else
+        page_reader_ = row_group_reader->GetColumnPageReader(column_index);
+    }
     else
       fallback_reader_ = row_group_reader->Column(column_index);  // delegate to Arrow
   }
@@ -120,6 +179,23 @@ protected:
 
 private:
 
+  std::unique_ptr<parquet::PageReader> OpenCompressedPageReader(
+      const std::shared_ptr<arrow::io::RandomAccessFile> &source,
+      const parquet::ColumnDescriptor *descr,
+      const parquet::ColumnChunkMetaData *column_chunk_metadata)
+  {
+    int64_t chunk_start = column_chunk_metadata->data_page_offset();
+    if (column_chunk_metadata->has_dictionary_page() && column_chunk_metadata->dictionary_page_offset() > 0
+        && chunk_start > column_chunk_metadata->dictionary_page_offset())
+      chunk_start = column_chunk_metadata->dictionary_page_offset();
+
+    PARQUET_ASSIGN_OR_THROW(auto chunk, source->ReadAt(chunk_start, column_chunk_metadata->total_compressed_size()));
+    own_zstd_ = true;
+    return parquet::PageReader::Open(std::make_shared<arrow::io::BufferReader>(std::move(chunk)),
+        column_chunk_metadata->num_values(), arrow::Compression::UNCOMPRESSED,
+        parquet::default_reader_properties(), *descr);
+  }
+
   // Advance to the next data page and locate its contiguous value region.
   // Returns false at end of column. Throws on unexpected encodings/nulls.
   bool NextDataPage()
@@ -142,7 +218,27 @@ private:
             + " on the FIXED_LEN_BYTE_ARRAY fast path");
 
       const uint8_t *page_data = data_page->data();
-      const uint8_t *page_end = page_data + data_page->size();
+      int64_t page_size = data_page->size();
+
+      if (own_zstd_)
+      {
+        int64_t levels_size = 0;
+        bool compressed = true;
+        if (page_type == parquet::PageType::DATA_PAGE_V2)
+        {
+          auto data_page_v2 = std::static_pointer_cast<parquet::DataPageV2>(current_page_);
+          levels_size = data_page_v2->repetition_levels_byte_length() + data_page_v2->definition_levels_byte_length();
+          compressed = data_page_v2->is_compressed();
+        }
+
+        if (compressed)
+        {
+          page_size = data_page->uncompressed_size();
+          page_data = zstd_page_decoder.Decompress(page_data, data_page->size(), page_size, levels_size);
+        }
+      }
+
+      const uint8_t *page_end = page_data + page_size;
       const uint8_t *values_ptr = page_data;
       const int64_t page_values = data_page->num_values();
 
@@ -202,6 +298,7 @@ private:
   std::shared_ptr<parquet::ColumnReader> fallback_reader_;
 
   bool eof_ = false;
+  bool own_zstd_ = false;
   std::shared_ptr<parquet::Page> current_page_;  // keeps the current page buffer alive
   const uint8_t *page_values_ptr_ = nullptr;
   int64_t page_values_ = 0;
@@ -210,9 +307,10 @@ private:
 
 std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *row_group_reader,
     int column_index, const parquet::ColumnDescriptor *descr,
-    const parquet::ColumnChunkMetaData *column_chunk_metadata)
+    const parquet::ColumnChunkMetaData *column_chunk_metadata,
+    const std::shared_ptr<arrow::io::RandomAccessFile> &source)
 {
-  return std::make_shared<ContiguousFLBAReader>(row_group_reader, column_index, descr, column_chunk_metadata);
+  return std::make_shared<ContiguousFLBAReader>(row_group_reader, column_index, descr, column_chunk_metadata, source);
 }
 
 arrow::Status ReadColumn (int column_index
@@ -513,11 +611,11 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
   if (prefetch_page_cache)
   {
-    auto read_ranges = parquet_reader->GetReadRanges(row_groups,
+    PARQUET_ASSIGN_OR_THROW(auto read_ranges, parquet_reader->GetReadRanges(row_groups,
                               column_indices,
                               cache_options.hole_size_limit,
                               cache_options.range_size_limit
-                            ).ValueOrDie();
+                            ));
     auto status = source->WillNeed(read_ranges);
     if (!status.ok()) {
       throw std::runtime_error(status.message());
@@ -573,7 +671,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                 const auto *descr = row_group_metadata->schema()->Column(parquet_column);
                 std::shared_ptr<parquet::ColumnReader> column_reader;
                 if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
-                  column_reader = MakeFLBAReader(row_group_reader.get(), parquet_column, descr, column_chunk_metadata.get());
+                  column_reader = MakeFLBAReader(row_group_reader.get(), parquet_column, descr, column_chunk_metadata.get(),
+                      pre_buffer ? nullptr : source);
                 else
                   column_reader = row_group_reader->Column(parquet_column);
 
@@ -878,43 +977,17 @@ void PrefetchPageCache(
     }
   }
 
-  auto read_ranges = reader->GetReadRanges(row_groups, 
+  PARQUET_ASSIGN_OR_THROW(auto read_ranges, reader->GetReadRanges(row_groups, 
                             column_indices,
                             cache_options.hole_size_limit,
                             cache_options.range_size_limit
-                          ).ValueOrDie();
+                          ));
 
   auto status = source->WillNeed(read_ranges);
   if (!status.ok()) {
     throw std::runtime_error(status.message());
   }
 }
-
-#ifdef WITH_IO_URING
-#include "io_uring_reader_1.h"
-std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename)
-{
-   return std::make_shared<IoUringReader1>(filename);
-}
-#else
-std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename)
-{
-  throw std::runtime_error("io_uring is not available on this platform!"); 
-}
-#endif
-
-#ifdef WITH_IO_URING
-#include "direct_reader.h"
-std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename)
-{
-   return std::make_shared<DirectReader>(filename, 4096);
-}
-#else
-std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename)
-{  
-    throw std::runtime_error("DirectReader is not available on this platform!"); 
-}
-#endif
 
 #ifdef WITH_IO_URING
 #else

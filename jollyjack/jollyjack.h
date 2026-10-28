@@ -75,12 +75,12 @@ void PrefetchPageCache(
     const std::vector<std::string>& column_names,
     arrow::io::CacheOptions cache_options);
 
-std::shared_ptr<arrow::io::RandomAccessFile> GetIOUringReader1(const std::string& filename);
-std::shared_ptr<arrow::io::RandomAccessFile> GetDirectReader(const std::string& filename);
 
+// A source, if given, is read in full when the reader is created, so it should be cheap to read.
 std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *row_group_reader,
     int column_index, const parquet::ColumnDescriptor *descr,
-    const parquet::ColumnChunkMetaData *column_chunk_metadata);
+    const parquet::ColumnChunkMetaData *column_chunk_metadata,
+    const std::shared_ptr<arrow::io::RandomAccessFile> &source = nullptr);
 
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
