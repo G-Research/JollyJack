@@ -1,3 +1,4 @@
+import ctypes
 import mmap
 import os
 import tempfile
@@ -111,7 +112,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             column_sets=column_sets,
             source_column_set=source_column_set,
             tasks=tasks,
-            read_metadata_capi=pj._read_metadata_capi,
+            palletjack_capi=pj.palletjack_capi,
             n_threads=n_threads,
             pre_buffer=True,
             use_threads=False,
@@ -199,7 +200,32 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                 column_sets=column_sets,
                 source_column_set=source_column_set,
                 tasks=tasks,
-                read_metadata_capi=object(),
+                palletjack_capi=object(),
+                n_threads=4,
+            )
+
+    def test_old_capi_version(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        _, _, sources, source_column_set, tasks = self.run_batch(
+            column_sets, n_columns=4
+        )
+        np_array = np.zeros((n_rows, 4), dtype="f", order="F")
+        capsule_new = ctypes.pythonapi.PyCapsule_New
+        capsule_new.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+        capsule_new.restype = ctypes.py_object
+        # The capsule keeps pointers to the name and the table, both must outlive it
+        name = ctypes.c_char_p(b"palletjack.palletjack_capi")
+        table = (ctypes.c_void_p * 4)()  # version 0, no members
+        capsule = capsule_new(ctypes.addressof(table), name, None)
+        with self.assertRaises(ValueError):
+            jj.read_into_numpy_batch(
+                np_array=np_array,
+                sources=sources,
+                index_buffers=self.index_buffers,
+                column_sets=column_sets,
+                source_column_set=source_column_set,
+                tasks=tasks,
+                palletjack_capi=capsule,
                 n_threads=4,
             )
 

@@ -11,14 +11,18 @@ cdef extern from "jollyjack.h":
         kJollyJackIOUringReader
         kJollyJackIOUringODirectReader
 
-    ctypedef shared_ptr[CFileMetaData] (*PalletJackReadMetadataFunc)(const unsigned char *index_data
+    ctypedef shared_ptr[CFileMetaData] (*PalletJackReadMetadataFromBufferV1Func)(const unsigned char *index_data
         , size_t index_data_length
         , const vector[uint32_t] &row_groups
         , const vector[uint32_t] &column_indices
         , const vector[string] &column_names
         , bint schema_only)
 
-    cdef const char* JOLLYJACK_READ_METADATA_CAPSULE_NAME
+    cdef struct PalletJackCAPI:
+        int version
+        PalletJackReadMetadataFromBufferV1Func ReadMetadataFromBufferV1
+
+    cdef const char* PALLETJACK_CAPI_CAPSULE_NAME
 
     cdef void ReadIntoMemoryBatch (const vector[string] &paths
         , const vector[const unsigned char*] &index_data
@@ -28,7 +32,7 @@ cdef extern from "jollyjack.h":
         , const vector[vector[int]] &target_column_indices
         , const int64_t *tasks
         , int64_t task_count
-        , PalletJackReadMetadataFunc read_metadata
+        , PalletJackReadMetadataFromBufferV1Func read_metadata
         , void* buffer
         , size_t stride0_size
         , size_t stride1_size

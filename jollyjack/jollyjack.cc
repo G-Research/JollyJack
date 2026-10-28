@@ -1020,7 +1020,7 @@ static void ReadTaskIntoMemory (const int64_t *task
     , const std::vector<int> &source_column_set
     , const std::vector<std::vector<std::string>> &column_names
     , const std::vector<std::vector<int>> &target_column_indices
-    , PalletJackReadMetadataFunc read_metadata
+    , PalletJackReadMetadataFromBufferV1Func read_metadata
     , void* buffer
     , size_t stride0_size
     , size_t stride1_size
@@ -1073,7 +1073,7 @@ void ReadIntoMemoryBatch (const std::vector<std::string> &paths
     , const std::vector<std::vector<int>> &target_column_indices
     , const int64_t *tasks
     , int64_t task_count
-    , PalletJackReadMetadataFunc read_metadata
+    , PalletJackReadMetadataFromBufferV1Func read_metadata
     , void* buffer
     , size_t stride0_size
     , size_t stride1_size

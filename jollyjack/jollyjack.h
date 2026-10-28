@@ -7,16 +7,26 @@ enum JollyJackReaderBackend
   kJollyJackIOUringODirectReader = 2,
 };
 
-// Pointer to the index-data overload of palletjack's ReadMetadata, handed over as the PyCapsule
-// palletjack.palletjack_cython._read_metadata_capi. The type is declared by palletjack.h in G-Research/PalletJack.
-#define JOLLYJACK_READ_METADATA_CAPSULE_NAME "palletjack.ReadMetadata"
+// Prefix of the PalletJackCAPI table from palletjack_capi.h in G-Research/PalletJack, handed over as the PyCapsule
+// palletjack.palletjack_capi. PalletJack only appends members to the table, so declaring the members up to the last
+// one used here is enough. Members jollyjack does not call are void* placeholders that keep the layout.
+#define PALLETJACK_CAPI_CAPSULE_NAME "palletjack.palletjack_capi"
 
-using PalletJackReadMetadataFunc = std::shared_ptr<parquet::FileMetaData> (*)(const unsigned char *index_data,
+using PalletJackReadMetadataFromBufferV1Func = std::shared_ptr<parquet::FileMetaData> (*)(const unsigned char *index_data,
     size_t index_data_length,
     const std::vector<uint32_t> &row_groups,
     const std::vector<uint32_t> &column_indices,
     const std::vector<std::string> &column_names,
     bool schema_only);
+
+struct PalletJackCAPI
+{
+  int version;
+  // Added in version 1
+  void *GenerateMetadataIndexToBufferV1;
+  void *GenerateMetadataIndexToFileV1;
+  PalletJackReadMetadataFromBufferV1Func ReadMetadataFromBufferV1;
+};
 
 void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , std::shared_ptr<parquet::FileMetaData> file_metadata
@@ -45,7 +55,7 @@ void ReadIntoMemoryBatch (const std::vector<std::string> &paths
     , const std::vector<std::vector<int>> &target_column_indices
     , const int64_t *tasks
     , int64_t task_count
-    , PalletJackReadMetadataFunc read_metadata
+    , PalletJackReadMetadataFromBufferV1Func read_metadata
     , void* buffer
     , size_t stride0_size
     , size_t stride1_size

@@ -154,7 +154,7 @@ def read_into_numpy_batch(
     column_sets,
     source_column_set,
     tasks,
-    read_metadata_capi,
+    palletjack_capi,
     n_threads,
     pre_buffer=True,
     use_threads=False,
@@ -185,8 +185,9 @@ def read_into_numpy_batch(
         Int64 array of shape (n, 4). Each row is (source index, row group,
         row_start, rows), and fills rows [row_start, row_start + rows) of
         np_array.
-    read_metadata_capi : capsule
-        palletjack._read_metadata_capi, a pointer to palletjack's ReadMetadata.
+    palletjack_capi : capsule
+        palletjack.palletjack_capi, palletjack's C API table. Its version must be
+        at least 1.
     n_threads : int
         Threads to spread the tasks over.
     pre_buffer : bool, optional

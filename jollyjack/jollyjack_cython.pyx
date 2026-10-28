@@ -154,14 +154,14 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , c_cache_options)
         return
 
-cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object read_metadata_capi, int n_threads, pre_buffer = True, use_threads = False, backend = None, CacheOptions cache_options = None):
+cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object palletjack_capi, int n_threads, pre_buffer = True, use_threads = False, backend = None, CacheOptions cache_options = None):
     """Read a batch of (source, row group) pairs into one array, on a native thread pool, without holding the GIL.
 
     `sources` are parquet paths and `index_buffers` the matching palletjack indexes, as buffers (an mmap of each
     index file). `column_sets` are `(column_names, target_column_indices)` pairs and `source_column_set[i]` says
     which of them to read from source `i`. Each row of `tasks` is `(source index, row group, row_start, rows)`,
-    and fills rows `[row_start, row_start + rows)` of `np_array`. `read_metadata_capi` is palletjack's
-    `_read_metadata_capi` capsule. `backend` is 'default', 'io_uring' or 'io_uring_odirect', or None to take it from
+    and fills rows `[row_start, row_start + rows)` of `np_array`. `palletjack_capi` is the
+    `palletjack.palletjack_capi` capsule. `backend` is 'default', 'io_uring' or 'io_uring_odirect', or None to take it from
     the JJ_READER_BACKEND environment variable, as `read_into_numpy` does.
     """
 
@@ -210,10 +210,12 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
         assert 0 <= tasks[i, 0] < cpaths.size(), f"Source index {tasks[i, 0]} is out of range, got {cpaths.size()} sources"
         assert 0 <= tasks[i, 2] and 0 <= tasks[i, 3] and tasks[i, 2] + tasks[i, 3] <= rows, f"Rows [{tasks[i, 2]}, {tasks[i, 2] + tasks[i, 3]}) of task {i} are not within the {rows} rows of np_array"
 
+    cdef const cjollyjack.PalletJackCAPI* capi = <const cjollyjack.PalletJackCAPI*>PyCapsule_GetPointer(palletjack_capi, cjollyjack.PALLETJACK_CAPI_CAPSULE_NAME)
+    if capi.version < 1:
+        raise ValueError(f"palletjack C API version {capi.version} is older than version 1, which jollyjack needs")
+
     if ctask_count == 0:
         return
-
-    cdef cjollyjack.PalletJackReadMetadataFunc cread_metadata = <cjollyjack.PalletJackReadMetadataFunc>PyCapsule_GetPointer(read_metadata_capi, cjollyjack.JOLLYJACK_READ_METADATA_CAPSULE_NAME)
 
     cdef cjollyjack.JollyJackReaderBackend cbackend
     # Please note that the `JJ_READER_BACKEND` variable is experimental and may be changed or removed in future versions
@@ -251,7 +253,7 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
             , ctarget_column_indices
             , ctasks
             , ctask_count
-            , cread_metadata
+            , capi.ReadMetadataFromBufferV1
             , cdata
             , cstride0_size
             , cstride1_size
