@@ -180,6 +180,8 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
         raise ValueError(f"Got {len(index_buffers)} index buffers for {len(sources)} sources")
     if len(source_column_set) != len(sources):
         raise ValueError(f"Got {len(source_column_set)} column set indices for {len(sources)} sources")
+    if n_threads < 1:
+        raise ValueError(f"Unexpected n_threads, {n_threads} < 1")
 
     cdef vector[string] cpaths
     cdef vector[const unsigned char*] cindex_data

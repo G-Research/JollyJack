@@ -479,6 +479,8 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             (dict(index_buffers=self.index_buffers * 2), "Got 2 index buffers for 1 sources"),
             (dict(index_buffers=[b""]), "Index buffer 0 is empty"),
             (dict(source_column_set=[0, 0]), "Got 2 column set indices for 1 sources"),
+            (dict(n_threads=0), "Unexpected n_threads, 0 < 1"),
+            (dict(n_threads=-1), "Unexpected n_threads, -1 < 1"),
             (dict(column_sets=[(column_names, [0, 1, 2])]), "Got 4 column names and 3 target indices"),
             (dict(source_column_set=[1]), "Column set 1 is out of range, got 1 column sets"),
             (dict(source_column_set=[-1]), "Column set -1 is out of range, got 1 column sets"),
