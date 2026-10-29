@@ -477,6 +477,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             (dict(np_array=np.zeros((n_rows, 4), dtype="f", order="C")), "Expected array in a Fortran (column-major) order"),
             (dict(tasks=np.ascontiguousarray(tasks[:, :3])), "Unexpected tasks.shape[1], 3 != 4"),
             (dict(index_buffers=self.index_buffers * 2), "Got 2 index buffers for 1 sources"),
+            (dict(index_buffers=[b""]), "Index buffer 0 is empty"),
             (dict(source_column_set=[0, 0]), "Got 2 column set indices for 1 sources"),
             (dict(column_sets=[(column_names, [0, 1, 2])]), "Got 4 column names and 3 target indices"),
             (dict(source_column_set=[1]), "Column set 1 is out of range, got 1 column sets"),

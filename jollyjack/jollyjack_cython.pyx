@@ -204,8 +204,10 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
         cpaths.push_back(source.encode('utf8'))
 
     # Holding the views keeps the buffers exported, and their addresses valid, for the whole call
-    for index_buffer in index_buffers:
+    for buffer_index, index_buffer in enumerate(index_buffers):
         index_view = index_buffer
+        if index_view.shape[0] == 0:
+            raise ValueError(f"Index buffer {buffer_index} is empty")
         index_views.append(index_view)
         cindex_data.push_back(&index_view[0])
         cindex_data_lengths.push_back(index_view.shape[0])
