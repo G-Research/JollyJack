@@ -209,7 +209,7 @@ def copy_to_torch_row_major(src_tensor, dst_tensor, row_indices):
         row_indices (numpy.ndarray): Array of indices specifying the row permutation.
 
     Raises:
-        AssertionError: If tensor shapes do not match or row_indices is invalid.
+        ValueError: If tensor shapes do not match or row_indices is invalid.
         RuntimeError: If row_indices has an invalid index.
 
     Example:
@@ -230,7 +230,7 @@ def copy_to_numpy_row_major(src_array, dst_array, row_indices):
         row_indices (numpy.ndarray): Array of indices specifying the row permutation.
 
     Raises:
-        AssertionError: If array shapes do not match or row_indices is invalid.
+        ValueError: If array shapes do not match or row_indices is invalid.
         RuntimeError: If row_indices has an invalid index.
 
     Example:
