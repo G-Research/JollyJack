@@ -65,7 +65,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
         ccolumn_indices = [item[0] for item in column_indices]
         ctarget_column_indices = [item[1] for item in column_indices]
     elif column_indices:
-        assert len(column_indices) == np_array.shape[1], f"Requested to read {len(column_indices)} columns, but the number of columns in numpy array is {np_array.shape[1]}"
+        if len(column_indices) != np_array.shape[1]:
+            raise ValueError(f"Requested to read {len(column_indices)} columns, but the number of columns in numpy array is {np_array.shape[1]}")
         ccolumn_indices = column_indices
 
     if column_names and isinstance(column_names, dict):
@@ -75,7 +76,8 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
         ccolumn_names = [item[0].encode('utf8') for item in column_names]
         ctarget_column_indices = [item[1] for item in column_names]
     elif column_names:
-        assert len(column_names) == np_array.shape[1], f"Requested to read {len(column_names)} columns, but the number of columns in numpy array is {np_array.shape[1]}"
+        if len(column_names) != np_array.shape[1]:
+            raise ValueError(f"Requested to read {len(column_names)} columns, but the number of columns in numpy array is {np_array.shape[1]}")
         ccolumn_names = [c.encode('utf8') for c in column_names]
 
     if row_ranges:
@@ -89,11 +91,14 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
         ctarget_row_ranges = [x for sl in row_ranges for x in (sl.start, sl.stop)]
 
     # Ensure that only one input is set
-    assert (column_indices or column_names) and (not column_indices or not column_names), f"Either column_indices or column_names needs to be set"
+    if not (column_indices or column_names) or (column_indices and column_names):
+        raise ValueError(f"Either column_indices or column_names needs to be set")
 
     # Ensure the input is a 2D array, Fortran order
-    assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
-    assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran (column-major) order"
+    if np_array.ndim != 2:
+        raise ValueError(f"Unexpected np_array.ndim, {np_array.ndim} != 2")
+    if np_array.strides[0] > np_array.strides[1]:
+        raise ValueError(f"Expected array in a Fortran (column-major) order")
 
     cdef int64_t cexpected_rows = np_array.shape[0]
 
@@ -280,7 +285,8 @@ cpdef void prefetch_page_cache (object source, FileMetaData metadata, row_group_
     if column_names:
         ccolumn_names = [c.encode('utf8') for c in column_names]
 
-    assert (column_indices or column_names) and (not column_indices or not column_names), f"Either column_indices or column_names needs to be set"
+    if not (column_indices or column_names) or (column_indices and column_names):
+        raise ValueError(f"Either column_indices or column_names needs to be set")
 
     cdef CCacheOptions c_cache_options
     if cache_options is not None:
@@ -311,16 +317,26 @@ cpdef void copy_to_numpy_row_major (cnp.ndarray src_array, cnp.ndarray dst_array
     if src_array.shape[0] == 0:
         return # nothing to do
 
-    assert src_array.ndim == 2, f"Unexpected src_array.ndim, {src_array.ndim} != 2"
-    assert dst_array.ndim == 2, f"Unexpected dst_array.ndim, {dst_array.ndim} != 2"
-    assert src_array.shape[0] <= dst_array.shape[0], f"src_array.shape[0] > dst_array.shape[0], {src_array.shape[0]} > {dst_array.shape[0]}"
-    assert src_array.shape[1] == dst_array.shape[1], f"src_array.shape[1] != dst_array.shape[1], {src_array.shape[1]} != {dst_array.shape[1]}"
-    assert (src_array.strides[0] <= src_array.strides[1]), f"Expected source array in a Fortran (column-major) order"
-    assert (dst_array.strides[1] <= dst_array.strides[0]), f"Expected destination array in a C (row-major) order"
-    assert src_array.dtype == dst_array.dtype, f"Source and destination arrays have different datatypes, {src_array.dtype} != {dst_array.dtype}"
-    assert len(row_indices) == src_array.shape[0], f"Unexpected len of row indices, {len(row_indices)} != {src_array.shape[0]}"
-    assert min(row_indices) >= 0, f"Row index = {min(row_indices)} is not in the expected range [0, {dst_array.shape[0]})" 
-    assert max(row_indices) < dst_array.shape[0], f"Row index = {max(row_indices)} is not in the expected range [0, {dst_array.shape[0]})" 
+    if src_array.ndim != 2:
+        raise ValueError(f"Unexpected src_array.ndim, {src_array.ndim} != 2")
+    if dst_array.ndim != 2:
+        raise ValueError(f"Unexpected dst_array.ndim, {dst_array.ndim} != 2")
+    if src_array.shape[0] > dst_array.shape[0]:
+        raise ValueError(f"src_array.shape[0] > dst_array.shape[0], {src_array.shape[0]} > {dst_array.shape[0]}")
+    if src_array.shape[1] != dst_array.shape[1]:
+        raise ValueError(f"src_array.shape[1] != dst_array.shape[1], {src_array.shape[1]} != {dst_array.shape[1]}")
+    if src_array.strides[0] > src_array.strides[1]:
+        raise ValueError(f"Expected source array in a Fortran (column-major) order")
+    if dst_array.strides[1] > dst_array.strides[0]:
+        raise ValueError(f"Expected destination array in a C (row-major) order")
+    if src_array.dtype != dst_array.dtype:
+        raise ValueError(f"Source and destination arrays have different datatypes, {src_array.dtype} != {dst_array.dtype}")
+    if len(row_indices) != src_array.shape[0]:
+        raise ValueError(f"Unexpected len of row indices, {len(row_indices)} != {src_array.shape[0]}")
+    if min(row_indices) < 0:
+        raise ValueError(f"Row index = {min(row_indices)} is not in the expected range [0, {dst_array.shape[0]})")
+    if max(row_indices) >= dst_array.shape[0]:
+        raise ValueError(f"Row index = {max(row_indices)} is not in the expected range [0, {dst_array.shape[0]})")
 
     cdef vector[int] crow_indices = row_indices
     cdef uint64_t csrc_stride0 = src_array.strides[0]
