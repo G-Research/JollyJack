@@ -107,7 +107,6 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef c_string pathstr
     cdef bool cuse_o_direct
     cdef bool cprefetch_page_cache = prefetch_page_cache
-    # Please note that the `JJ_READER_BACKEND` variable is experimental and may be changed or removed in future versions
     jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
     if jj_reader_backend is None:
         get_reader(source, use_memory_map, &rd_handle)
@@ -218,7 +217,6 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
         return
 
     cdef cjollyjack.JollyJackReaderBackend cbackend
-    # Please note that the `JJ_READER_BACKEND` variable is experimental and may be changed or removed in future versions
     jj_reader_backend = backend if backend is not None else os.environ.get("JJ_READER_BACKEND")
     if jj_reader_backend is None or jj_reader_backend == 'default':
         cbackend = cjollyjack.kJollyJackDefaultReader

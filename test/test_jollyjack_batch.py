@@ -1,4 +1,5 @@
 import ctypes
+import itertools
 import mmap
 import os
 import tempfile
@@ -32,7 +33,14 @@ def write_parquet(path, column_names):
 
 
 def read_task_by_task(
-    np_array, sources, index_paths, column_sets, source_column_set, tasks
+    np_array,
+    sources,
+    index_paths,
+    column_sets,
+    source_column_set,
+    tasks,
+    pre_buffer,
+    use_threads,
 ):
     """The per-task Python loop that read_into_numpy_batch replaces"""
     for source, row_group, row_start, rows in tasks:
@@ -46,8 +54,8 @@ def read_task_by_task(
             np_array=np_array[row_start : row_start + rows, :],
             row_group_indices=[0],
             column_names=list(zip(column_names, target_column_indices)),
-            pre_buffer=True,
-            use_threads=False,
+            pre_buffer=pre_buffer,
+            use_threads=use_threads,
         )
 
 
@@ -60,12 +68,11 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         self.addCleanup(
             lambda: [index_buffer.close() for index_buffer in self.index_buffers]
         )
-        # io_uring is not available everywhere, so read with the default reader whatever the environment asks for
-        self.backend = "default"
-        os.environ.pop("JJ_READER_BACKEND", None)
+        # None takes the backend from JJ_READER_BACKEND, so the CI backend matrix covers the batch reader too
+        self.backend = None
 
-    def run_batch(self, column_sets, n_columns, n_threads=4):
-        """Write one parquet file per column set, then read every row group of every file, both ways"""
+    def write_sources(self, column_sets):
+        """Write one parquet file per column set, and a task for every row group of every file"""
         sources, index_paths, source_column_set = [], [], []
         for i, (column_names, _) in enumerate(column_sets):
             path = os.path.join(self.tmpdirname, f"my_{i}.parquet")
@@ -85,10 +92,26 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             ],
             dtype=np.int64,
         )
+        return sources, index_paths, source_column_set, tasks
+
+    def run_batch(
+        self, column_sets, n_columns, n_threads=4, pre_buffer=True, use_threads=False
+    ):
+        """Write the sources, then read every row group of every file, both ways"""
+        sources, index_paths, source_column_set, tasks = self.write_sources(
+            column_sets
+        )
 
         expected = np.zeros((n_rows, n_columns), dtype="f", order="F")
         read_task_by_task(
-            expected, sources, index_paths, column_sets, source_column_set, tasks
+            expected,
+            sources,
+            index_paths,
+            column_sets,
+            source_column_set,
+            tasks,
+            pre_buffer,
+            use_threads,
         )
 
         np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
@@ -99,11 +122,21 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             source_column_set,
             tasks,
             n_threads=n_threads,
+            pre_buffer=pre_buffer,
+            use_threads=use_threads,
         )
         return np_array, expected, sources, source_column_set, tasks
 
     def read_batch(
-        self, np_array, sources, column_sets, source_column_set, tasks, n_threads=4
+        self,
+        np_array,
+        sources,
+        column_sets,
+        source_column_set,
+        tasks,
+        n_threads=4,
+        pre_buffer=True,
+        use_threads=False,
     ):
         jj.read_into_numpy_batch(
             np_array=np_array,
@@ -114,8 +147,8 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             tasks=tasks,
             palletjack_capi=pj.palletjack_capi,
             n_threads=n_threads,
-            pre_buffer=True,
-            use_threads=False,
+            pre_buffer=pre_buffer,
+            use_threads=use_threads,
             backend=self.backend,
         )
 
@@ -150,11 +183,48 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         np_array, expected, *_ = self.run_batch(column_sets, n_columns=4, n_threads=1)
         self.assertTrue(np.array_equal(np_array, expected))
 
-    def test_missing_source(self):
+    def test_read_options(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
-        _, _, sources, source_column_set, tasks = self.run_batch(
+        np_array, expected, sources, source_column_set, tasks = self.run_batch(
             column_sets, n_columns=4
         )
+        self.assertTrue(np.array_equal(np_array, expected))
+        for pre_buffer, use_threads in itertools.product([False, True], [False, True]):
+            with self.subTest(pre_buffer=pre_buffer, use_threads=use_threads):
+                np_array = np.zeros((n_rows, 4), dtype="f", order="F")
+                self.read_batch(
+                    np_array,
+                    sources,
+                    column_sets,
+                    source_column_set,
+                    tasks,
+                    pre_buffer=pre_buffer,
+                    use_threads=use_threads,
+                )
+                self.assertTrue(np.array_equal(np_array, expected))
+
+    def test_target_column_out_of_range(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
+        for target in [4, -1]:
+            with self.subTest(target=target):
+                np_array = np.zeros((n_rows, 4), dtype="f", order="F")
+                with self.assertRaises(RuntimeError) as context:
+                    self.read_batch(
+                        np_array,
+                        sources,
+                        [(column_sets[0][0], [0, 1, 2, target])],
+                        source_column_set,
+                        tasks,
+                    )
+
+                self.assertTrue(
+                    "Buffer overrun error" in str(context.exception), context.exception
+                )
+
+    def test_missing_source(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
         os.remove(sources[0])
         np_array = np.zeros((n_rows, 4), dtype="f", order="F")
         with self.assertRaises(RuntimeError) as context:
@@ -169,18 +239,14 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
 
     def test_tasks_out_of_bounds(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
-        _, _, sources, source_column_set, tasks = self.run_batch(
-            column_sets, n_columns=4
-        )
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
         np_array = np.zeros((n_rows - 1, 4), dtype="f", order="F")
         with self.assertRaises(AssertionError):
             self.read_batch(np_array, sources, column_sets, source_column_set, tasks)
 
     def test_unknown_backend(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
-        _, _, sources, source_column_set, tasks = self.run_batch(
-            column_sets, n_columns=4
-        )
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
         np_array = np.zeros((n_rows, 4), dtype="f", order="F")
         self.backend = "not_a_backend"
         with self.assertRaises(ValueError):
@@ -188,9 +254,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
 
     def test_wrong_capsule(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
-        _, _, sources, source_column_set, tasks = self.run_batch(
-            column_sets, n_columns=4
-        )
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
         np_array = np.zeros((n_rows, 4), dtype="f", order="F")
         with self.assertRaises(ValueError):
             jj.read_into_numpy_batch(
@@ -206,13 +270,12 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
 
     def test_old_capi_version(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
-        _, _, sources, source_column_set, tasks = self.run_batch(
-            column_sets, n_columns=4
-        )
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
         np_array = np.zeros((n_rows, 4), dtype="f", order="F")
-        capsule_new = ctypes.pythonapi.PyCapsule_New
-        capsule_new.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-        capsule_new.restype = ctypes.py_object
+        # A local prototype, setting argtypes on ctypes.pythonapi.PyCapsule_New would change it for the whole process
+        capsule_new = ctypes.PYFUNCTYPE(
+            ctypes.py_object, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p
+        )(("PyCapsule_New", ctypes.pythonapi))
         # The capsule keeps pointers to the name and the table, both must outlive it
         name = ctypes.c_char_p(b"palletjack.palletjack_capi")
         table = (ctypes.c_void_p * 4)()  # version 0, no members
