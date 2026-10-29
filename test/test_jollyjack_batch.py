@@ -16,10 +16,10 @@ n_row_groups = 2
 n_rows = n_row_groups * chunk_size
 
 
-def write_parquet(path, column_names):
-    data = np.random.uniform(-100, 100, size=(n_rows, len(column_names))).astype(
-        np.float32
-    )
+def write_parquet(path, column_names, n_row_groups=n_row_groups):
+    data = np.random.uniform(
+        -100, 100, size=(n_row_groups * chunk_size, len(column_names))
+    ).astype(np.float32)
     table = pa.Table.from_arrays(
         [pa.array(data[:, i]) for i in range(len(column_names))],
         schema=pa.schema([(name, pa.float32()) for name in column_names]),
@@ -69,14 +69,18 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             lambda: [index_buffer.close() for index_buffer in self.index_buffers]
         )
 
-    def write_sources(self, column_sets):
-        """Write one parquet file per column set, and a task for every row group of every file"""
-        sources, index_paths, source_column_set = [], [], []
-        for i, (column_names, _) in enumerate(column_sets):
+    def write_sources(self, column_sets, source_column_set=None, n_row_groups=n_row_groups):
+        """Write one parquet file per source, with the columns of its column set (by default one source per column
+        set), and a task for every row group of every file, placed at the rows of the row group"""
+        if source_column_set is None:
+            source_column_set = list(range(len(column_sets)))
+        sources, index_paths = [], []
+        for i, column_set in enumerate(source_column_set):
             path = os.path.join(self.tmpdirname, f"my_{i}.parquet")
-            index_paths.append(write_parquet(path, column_names))
+            index_paths.append(
+                write_parquet(path, column_sets[column_set][0], n_row_groups)
+            )
             sources.append(path)
-            source_column_set.append(i)
             with open(index_paths[-1], "rb") as f:
                 self.index_buffers.append(
                     mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
@@ -92,15 +96,21 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         )
         return sources, index_paths, source_column_set, tasks
 
-    def run_batch(
-        self, column_sets, n_columns, n_threads=4, pre_buffer=True, use_threads=False
+    def read_both(
+        self,
+        sources,
+        index_paths,
+        column_sets,
+        source_column_set,
+        tasks,
+        n_columns,
+        n_threads=4,
+        pre_buffer=True,
+        use_threads=False,
     ):
-        """Write the sources, then read every row group of every file, both ways"""
-        sources, index_paths, source_column_set, tasks = self.write_sources(
-            column_sets
-        )
-
-        expected = np.zeros((n_rows, n_columns), dtype="f", order="F")
+        """Read the tasks task by task and as a batch, into arrays just tall enough for them"""
+        rows = int((tasks[:, 2] + tasks[:, 3]).max())
+        expected = np.zeros((rows, n_columns), dtype="f", order="F")
         read_task_by_task(
             expected,
             sources,
@@ -112,13 +122,33 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             use_threads,
         )
 
-        np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
+        np_array = np.zeros((rows, n_columns), dtype="f", order="F")
         self.read_batch(
             np_array,
             sources,
             column_sets,
             source_column_set,
             tasks,
+            n_threads=n_threads,
+            pre_buffer=pre_buffer,
+            use_threads=use_threads,
+        )
+        return np_array, expected
+
+    def run_batch(
+        self, column_sets, n_columns, n_threads=4, pre_buffer=True, use_threads=False
+    ):
+        """Write the sources, then read every row group of every file, both ways"""
+        sources, index_paths, source_column_set, tasks = self.write_sources(
+            column_sets
+        )
+        np_array, expected = self.read_both(
+            sources,
+            index_paths,
+            column_sets,
+            source_column_set,
+            tasks,
+            n_columns,
             n_threads=n_threads,
             pre_buffer=pre_buffer,
             use_threads=use_threads,
@@ -199,6 +229,165 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                     use_threads=use_threads,
                 )
                 self.assertTrue(np.array_equal(np_array, expected))
+
+    def test_rows_placed_by_task(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, index_paths, source_column_set, _ = self.write_sources(column_sets)
+        # Row group 1 goes to the first rows and row group 0 after it, so the rows follow row_start, not the row group
+        tasks = np.array(
+            [(0, 1, 0, chunk_size), (0, 0, chunk_size, chunk_size)], dtype=np.int64
+        )
+        np_array, expected = self.read_both(
+            sources, index_paths, column_sets, source_column_set, tasks, n_columns=4
+        )
+        self.assertTrue(np.array_equal(np_array, expected))
+        table = pq.read_table(sources[0])
+        self.assertTrue(
+            np.array_equal(np_array[:chunk_size, 0], table["column_0"][chunk_size:])
+        )
+
+    def test_shared_column_set(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, index_paths, source_column_set, _ = self.write_sources(
+            column_sets, source_column_set=[0, 0, 0]
+        )
+        tasks = np.array(
+            [
+                (source, rg, (source * n_row_groups + rg) * chunk_size, chunk_size)
+                for source in range(len(sources))
+                for rg in range(n_row_groups)
+            ],
+            dtype=np.int64,
+        )
+        np_array, expected = self.read_both(
+            sources, index_paths, column_sets, source_column_set, tasks, n_columns=4
+        )
+        self.assertTrue(np.array_equal(np_array, expected))
+        self.assertTrue(np_array.all())
+
+    def test_many_tasks(self):
+        column_sets = [
+            ([f"column_{i}" for i in range(4)], [0, 1, 2, 3]),
+            ([f"other_{i}" for i in range(2)], [4, 5]),
+        ]
+        many_row_groups = 25
+        sources, index_paths, source_column_set, _ = self.write_sources(
+            column_sets, source_column_set=[0, 1, 0, 1], n_row_groups=many_row_groups
+        )
+        # Every task gets its own rows, in a shuffled order, so the threads pick them up out of order
+        tasks = [
+            (source, rg, (source * many_row_groups + rg) * chunk_size, chunk_size)
+            for source in range(len(sources))
+            for rg in range(many_row_groups)
+        ]
+        np.random.default_rng(0).shuffle(tasks)
+        tasks = np.array(tasks, dtype=np.int64)
+        for n_threads in [3, 8, 200]:
+            with self.subTest(n_threads=n_threads):
+                np_array, expected = self.read_both(
+                    sources,
+                    index_paths,
+                    column_sets,
+                    source_column_set,
+                    tasks,
+                    n_columns=6,
+                    n_threads=n_threads,
+                )
+                self.assertTrue(np.array_equal(np_array, expected))
+
+    def test_failure_among_many_tasks(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        many_row_groups = 25
+        sources, _, source_column_set, _ = self.write_sources(
+            column_sets, source_column_set=[0, 0], n_row_groups=many_row_groups
+        )
+        tasks = np.array(
+            [
+                (source, rg, (rg * 2 + source) * chunk_size, chunk_size)
+                for rg in range(many_row_groups)
+                for source in range(len(sources))
+            ],
+            dtype=np.int64,
+        )
+        os.remove(sources[1])
+        np_array = np.zeros((len(tasks) * chunk_size, 4), dtype="f", order="F")
+        with self.assertRaises(RuntimeError) as context:
+            self.read_batch(
+                np_array, sources, column_sets, source_column_set, tasks, n_threads=8
+            )
+
+        self.assertTrue("Failed to read row group" in str(context.exception), context.exception)
+        self.assertTrue(f"of '{sources[1]}'" in str(context.exception), context.exception)
+
+    def test_task_rows_differ_from_row_group(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, _ = self.write_sources(column_sets)
+        for rows, error in [
+            (chunk_size - 1, "Buffer overrun error"),
+            (chunk_size + 1, f"Expected to read {chunk_size + 1} rows"),
+        ]:
+            with self.subTest(rows=rows):
+                tasks = np.array([(0, 0, 0, rows)], dtype=np.int64)
+                np_array = np.zeros((n_rows, 4), dtype="f", order="F")
+                with self.assertRaises(RuntimeError) as context:
+                    self.read_batch(
+                        np_array, sources, column_sets, source_column_set, tasks
+                    )
+
+                self.assertTrue(error in str(context.exception), context.exception)
+
+    def test_row_group_out_of_range(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, _ = self.write_sources(column_sets)
+        tasks = np.array([(0, n_row_groups, 0, chunk_size)], dtype=np.int64)
+        np_array = np.zeros((n_rows, 4), dtype="f", order="F")
+        with self.assertRaises(RuntimeError) as context:
+            self.read_batch(np_array, sources, column_sets, source_column_set, tasks)
+
+        self.assertTrue(
+            f"Failed to read row group {n_row_groups} of '{sources[0]}'"
+            in str(context.exception),
+            context.exception,
+        )
+
+    def test_unknown_column(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
+        np_array = np.zeros((n_rows, 4), dtype="f", order="F")
+        with self.assertRaises(RuntimeError) as context:
+            self.read_batch(
+                np_array,
+                sources,
+                [(["column_0", "not_a_column"], [0, 1])],
+                source_column_set,
+                tasks,
+            )
+
+        self.assertTrue(
+            "Failed to read row group" in str(context.exception), context.exception
+        )
+        self.assertTrue("not_a_column" in str(context.exception), context.exception)
+
+    def test_no_tasks(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, _ = self.write_sources(column_sets)
+        tasks = np.empty((0, 4), dtype=np.int64)
+        np_array = np.zeros((n_rows, 4), dtype="f", order="F")
+        self.read_batch(np_array, sources, column_sets, source_column_set, tasks)
+        self.assertFalse(np_array.any())
+
+        # The capsule is checked even when there is nothing to read
+        with self.assertRaises(ValueError):
+            jj.read_into_numpy_batch(
+                np_array=np_array,
+                sources=sources,
+                index_buffers=self.index_buffers,
+                column_sets=column_sets,
+                source_column_set=source_column_set,
+                tasks=tasks,
+                palletjack_capi=object(),
+                n_threads=4,
+            )
 
     def test_target_column_out_of_range(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
