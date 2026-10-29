@@ -12,7 +12,7 @@ from libcpp.string cimport string
 from libcpp.memory cimport shared_ptr
 from libcpp.vector cimport vector
 from libcpp cimport bool
-from libc.stdint cimport int64_t, uint32_t
+from libc.stdint cimport int64_t, uint32_t, UINT32_MAX
 from pyarrow._parquet cimport *
 from pyarrow.lib cimport (CacheOptions, NativeFile, get_reader)
 from collections.abc import Iterable
@@ -170,11 +170,16 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
     """
 
     # Ensure the input is a 2D array, Fortran order
-    assert np_array.ndim == 2, f"Unexpected np_array.ndim, {np_array.ndim} != 2"
-    assert np_array.strides[0] <= np_array.strides[1], f"Expected array in a Fortran (column-major) order"
-    assert tasks.shape[1] == 4, f"Unexpected tasks.shape[1], {tasks.shape[1]} != 4"
-    assert len(index_buffers) == len(sources), f"Got {len(index_buffers)} index buffers for {len(sources)} sources"
-    assert len(source_column_set) == len(sources), f"Got {len(source_column_set)} column set indices for {len(sources)} sources"
+    if np_array.ndim != 2:
+        raise ValueError(f"Unexpected np_array.ndim, {np_array.ndim} != 2")
+    if np_array.strides[0] > np_array.strides[1]:
+        raise ValueError(f"Expected array in a Fortran (column-major) order")
+    if tasks.shape[1] != 4:
+        raise ValueError(f"Unexpected tasks.shape[1], {tasks.shape[1]} != 4")
+    if len(index_buffers) != len(sources):
+        raise ValueError(f"Got {len(index_buffers)} index buffers for {len(sources)} sources")
+    if len(source_column_set) != len(sources):
+        raise ValueError(f"Got {len(source_column_set)} column set indices for {len(sources)} sources")
 
     cdef vector[string] cpaths
     cdef vector[const unsigned char*] cindex_data
@@ -190,7 +195,8 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
     for column_names, target_column_indices in column_sets:
         cnames = [c.encode('utf8') for c in column_names]
         ctargets = target_column_indices
-        assert cnames.size() == ctargets.size(), f"Got {cnames.size()} column names and {ctargets.size()} target indices"
+        if cnames.size() != ctargets.size():
+            raise ValueError(f"Got {cnames.size()} column names and {ctargets.size()} target indices")
         ccolumn_names.push_back(cnames)
         ctarget_column_indices.push_back(ctargets)
 
@@ -205,14 +211,21 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
         cindex_data_lengths.push_back(index_view.shape[0])
 
     for column_set in source_column_set:
-        assert 0 <= column_set < len(column_sets), f"Column set {column_set} is out of range, got {len(column_sets)} column sets"
+        if not 0 <= column_set < len(column_sets):
+            raise ValueError(f"Column set {column_set} is out of range, got {len(column_sets)} column sets")
 
     cdef int64_t ctask_count = tasks.shape[0]
     cdef int64_t rows = np_array.shape[0]
     cdef int64_t i
     for i in range(ctask_count):
-        assert 0 <= tasks[i, 0] < cpaths.size(), f"Source index {tasks[i, 0]} is out of range, got {cpaths.size()} sources"
-        assert 0 <= tasks[i, 2] and 0 <= tasks[i, 3] and tasks[i, 2] + tasks[i, 3] <= rows, f"Rows [{tasks[i, 2]}, {tasks[i, 2] + tasks[i, 3]}) of task {i} are not within the {rows} rows of np_array"
+        if not 0 <= tasks[i, 0] < <int64_t>cpaths.size():
+            raise ValueError(f"Source index {tasks[i, 0]} is out of range, got {cpaths.size()} sources")
+        # Row groups are passed to palletjack as uint32
+        if not 0 <= tasks[i, 1] <= UINT32_MAX:
+            raise ValueError(f"Row group {tasks[i, 1]} of task {i} is out of range")
+        # Compared without adding row_start and rows, which could overflow
+        if tasks[i, 2] < 0 or tasks[i, 3] < 0 or tasks[i, 3] > rows - tasks[i, 2]:
+            raise ValueError(f"Rows [{tasks[i, 2]}, {tasks[i, 2]} + {tasks[i, 3]}) of task {i} are not within the {rows} rows of np_array")
 
     cdef const cjollyjack.PalletJackCAPI* capi = <const cjollyjack.PalletJackCAPI*>PyCapsule_GetPointer(palletjack_capi, cjollyjack.PALLETJACK_CAPI_CAPSULE_NAME)
     if capi.version < 1:

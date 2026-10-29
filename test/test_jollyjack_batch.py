@@ -423,12 +423,52 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             context.exception,
         )
 
-    def test_tasks_out_of_bounds(self):
-        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+    def test_invalid_arguments(self):
+        column_names = [f"column_{i}" for i in range(4)]
+        column_sets = [(column_names, [0, 1, 2, 3])]
         sources, _, source_column_set, tasks = self.write_sources(column_sets)
-        np_array = np.zeros((n_rows - 1, 4), dtype="f", order="F")
-        with self.assertRaises(AssertionError):
-            self.read_batch(np_array, sources, column_sets, source_column_set, tasks)
+
+        def task(source=0, row_group=0, row_start=0, rows=chunk_size):
+            return np.array([(source, row_group, row_start, rows)], dtype=np.int64)
+
+        cases = [
+            (dict(np_array=np.zeros(n_rows * 4, dtype="f")), "Unexpected np_array.ndim, 1 != 2"),
+            (dict(np_array=np.zeros((n_rows, 4), dtype="f", order="C")), "Expected array in a Fortran (column-major) order"),
+            (dict(tasks=np.ascontiguousarray(tasks[:, :3])), "Unexpected tasks.shape[1], 3 != 4"),
+            (dict(index_buffers=self.index_buffers * 2), "Got 2 index buffers for 1 sources"),
+            (dict(source_column_set=[0, 0]), "Got 2 column set indices for 1 sources"),
+            (dict(column_sets=[(column_names, [0, 1, 2])]), "Got 4 column names and 3 target indices"),
+            (dict(source_column_set=[1]), "Column set 1 is out of range, got 1 column sets"),
+            (dict(source_column_set=[-1]), "Column set -1 is out of range, got 1 column sets"),
+            (dict(tasks=task(source=1)), "Source index 1 is out of range, got 1 sources"),
+            (dict(tasks=task(source=-1)), "Source index -1 is out of range, got 1 sources"),
+            (dict(tasks=task(row_group=2**32)), f"Row group {2**32} of task 0 is out of range"),
+            (dict(tasks=task(row_group=-1)), "Row group -1 of task 0 is out of range"),
+            (dict(tasks=task(row_start=n_rows - 1)), f"Rows [{n_rows - 1}, {n_rows - 1} + {chunk_size}) of task 0 are not within the {n_rows} rows of np_array"),
+            (dict(tasks=task(row_start=-1)), "of task 0 are not within"),
+            (dict(tasks=task(rows=-1)), "of task 0 are not within"),
+            (dict(tasks=task(row_start=1, rows=2**63 - 1)), "of task 0 are not within"),
+        ]
+        for overrides, error in cases:
+            with self.subTest(error=error, overrides=list(overrides)):
+                kwargs = dict(
+                    np_array=np.zeros((n_rows, 4), dtype="f", order="F"),
+                    sources=sources,
+                    index_buffers=self.index_buffers,
+                    column_sets=column_sets,
+                    source_column_set=source_column_set,
+                    tasks=tasks,
+                    palletjack_capi=pj.palletjack_capi,
+                    n_threads=4,
+                )
+                kwargs.update(overrides)
+                with self.assertRaises(ValueError) as context:
+                    jj.read_into_numpy_batch(**kwargs)
+
+                self.assertTrue(error in str(context.exception), context.exception)
+                if overrides.get("np_array") is None:
+                    # Nothing is read when the arguments are rejected
+                    self.assertFalse(kwargs["np_array"].any())
 
     def test_unknown_backend(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
