@@ -4,6 +4,7 @@ import mmap
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 import jollyjack as jj
 import numpy as np
@@ -57,6 +58,16 @@ def read_task_by_task(
             pre_buffer=pre_buffer,
             use_threads=use_threads,
         )
+
+
+def read_with_pyarrow(np_array, sources, column_sets, source_column_set, tasks):
+    """Reads the tasks with pyarrow, independently of the jollyjack reader"""
+    for source, row_group, row_start, rows in tasks:
+        column_names, target_column_indices = column_sets[source_column_set[source]]
+        with pq.ParquetFile(sources[source]) as parquet_file:
+            table = parquet_file.read_row_group(row_group, columns=column_names)
+        for column_name, target in zip(column_names, target_column_indices):
+            np_array[row_start : row_start + rows, target] = table[column_name].to_numpy()
 
 
 class TestReadIntoNumpyBatch(unittest.TestCase):
@@ -121,6 +132,11 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             pre_buffer,
             use_threads,
         )
+        pyarrow_expected = np.zeros((rows, n_columns), dtype="f", order="F")
+        read_with_pyarrow(
+            pyarrow_expected, sources, column_sets, source_column_set, tasks
+        )
+        self.assertTrue(np.array_equal(expected, pyarrow_expected))
 
         np_array = np.zeros((rows, n_columns), dtype="f", order="F")
         self.read_batch(
@@ -165,6 +181,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         n_threads=4,
         pre_buffer=True,
         use_threads=False,
+        cache_options=None,
     ):
         jj.read_into_numpy_batch(
             np_array=np_array,
@@ -177,6 +194,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             n_threads=n_threads,
             pre_buffer=pre_buffer,
             use_threads=use_threads,
+            cache_options=cache_options,
         )
 
     def test_single_column_set(self):
@@ -216,8 +234,16 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             column_sets, n_columns=4
         )
         self.assertTrue(np.array_equal(np_array, expected))
-        for pre_buffer, use_threads in itertools.product([False, True], [False, True]):
-            with self.subTest(pre_buffer=pre_buffer, use_threads=use_threads):
+        # No coalescing of ranges and eager pre-buffering, unlike the lazy defaults
+        cache_options = pa.CacheOptions(hole_size_limit=0, range_size_limit=1, lazy=False)
+        for pre_buffer, use_threads, cache_options in itertools.product(
+            [False, True], [False, True], [None, cache_options]
+        ):
+            with self.subTest(
+                pre_buffer=pre_buffer,
+                use_threads=use_threads,
+                cache_options=cache_options,
+            ):
                 np_array = np.zeros((n_rows, 4), dtype="f", order="F")
                 self.read_batch(
                     np_array,
@@ -227,8 +253,36 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                     tasks,
                     pre_buffer=pre_buffer,
                     use_threads=use_threads,
+                    cache_options=cache_options,
                 )
                 self.assertTrue(np.array_equal(np_array, expected))
+
+    def test_strided_view(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
+        expected = np.zeros((n_rows, 4), dtype="f", order="F")
+        read_with_pyarrow(expected, sources, column_sets, source_column_set, tasks)
+
+        # A view whose first row is not at the start of the buffer and whose columns are further apart than its rows
+        outer = np.zeros((n_rows + 4, 7), dtype="f", order="F")
+        np_array = outer[2 : 2 + n_rows, 1:5]
+        self.read_batch(np_array, sources, column_sets, source_column_set, tasks)
+        self.assertTrue(np.array_equal(np_array, expected))
+        outer[2 : 2 + n_rows, 1:5] = 0
+        self.assertFalse(outer.any())
+
+    def test_dtype_mismatch(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
+        np_array = np.zeros((n_rows, 4), dtype="d", order="F")
+        with self.assertRaises(RuntimeError) as context:
+            self.read_batch(np_array, sources, column_sets, source_column_set, tasks)
+
+        self.assertTrue(
+            "has FLOAT data type, but the target value size is 8"
+            in str(context.exception),
+            context.exception,
+        )
 
     def test_rows_placed_by_task(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
@@ -376,19 +430,6 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         self.read_batch(np_array, sources, column_sets, source_column_set, tasks)
         self.assertFalse(np_array.any())
 
-        # The capsule is checked even when there is nothing to read
-        with self.assertRaises(ValueError):
-            jj.read_into_numpy_batch(
-                np_array=np_array,
-                sources=sources,
-                index_buffers=self.index_buffers,
-                column_sets=column_sets,
-                source_column_set=source_column_set,
-                tasks=tasks,
-                palletjack_capi=object(),
-                n_threads=4,
-            )
-
     def test_target_column_out_of_range(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
         sources, _, source_column_set, tasks = self.write_sources(column_sets)
@@ -474,18 +515,11 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
         sources, _, source_column_set, tasks = self.write_sources(column_sets)
         np_array = np.zeros((n_rows, 4), dtype="f", order="F")
-        jj_backend = os.environ.get("JJ_READER_BACKEND")
-        os.environ["JJ_READER_BACKEND"] = "not_a_backend"
-        try:
+        with mock.patch.dict(os.environ, {"JJ_READER_BACKEND": "not_a_backend"}):
             with self.assertRaises(ValueError) as context:
                 self.read_batch(
                     np_array, sources, column_sets, source_column_set, tasks
                 )
-        finally:
-            if jj_backend is None:
-                os.environ.pop("JJ_READER_BACKEND")
-            else:
-                os.environ["JJ_READER_BACKEND"] = jj_backend
 
         self.assertTrue(
             "Unsupported JJ_READER_BACKEND=not_a_backend" in str(context.exception),
@@ -496,17 +530,26 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
         sources, _, source_column_set, tasks = self.write_sources(column_sets)
         np_array = np.zeros((n_rows, 4), dtype="f", order="F")
-        with self.assertRaises(ValueError):
-            jj.read_into_numpy_batch(
-                np_array=np_array,
-                sources=sources,
-                index_buffers=self.index_buffers,
-                column_sets=column_sets,
-                source_column_set=source_column_set,
-                tasks=tasks,
-                palletjack_capi=object(),
-                n_threads=4,
-            )
+        # The capsule is checked even when there is nothing to read
+        for task_count in [len(tasks), 0]:
+            with self.subTest(task_count=task_count):
+                with self.assertRaises(ValueError) as context:
+                    jj.read_into_numpy_batch(
+                        np_array=np_array,
+                        sources=sources,
+                        index_buffers=self.index_buffers,
+                        column_sets=column_sets,
+                        source_column_set=source_column_set,
+                        tasks=tasks[:task_count],
+                        palletjack_capi=object(),
+                        n_threads=4,
+                    )
+
+                self.assertTrue(
+                    "PyCapsule_GetPointer called with invalid PyCapsule object"
+                    in str(context.exception),
+                    context.exception,
+                )
 
     def test_old_capi_version(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
@@ -520,7 +563,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         name = ctypes.c_char_p(b"palletjack.palletjack_capi")
         table = (ctypes.c_void_p * 4)()  # version 0, no members
         capsule = capsule_new(ctypes.addressof(table), name, None)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as context:
             jj.read_into_numpy_batch(
                 np_array=np_array,
                 sources=sources,
@@ -531,6 +574,12 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                 palletjack_capi=capsule,
                 n_threads=4,
             )
+
+        self.assertTrue(
+            "palletjack C API version 0 is older than version 1"
+            in str(context.exception),
+            context.exception,
+        )
 
 
 if __name__ == "__main__":
