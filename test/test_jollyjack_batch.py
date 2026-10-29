@@ -68,8 +68,6 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         self.addCleanup(
             lambda: [index_buffer.close() for index_buffer in self.index_buffers]
         )
-        # None takes the backend from JJ_READER_BACKEND, so the CI backend matrix covers the batch reader too
-        self.backend = None
 
     def write_sources(self, column_sets):
         """Write one parquet file per column set, and a task for every row group of every file"""
@@ -149,7 +147,6 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             n_threads=n_threads,
             pre_buffer=pre_buffer,
             use_threads=use_threads,
-            backend=self.backend,
         )
 
     def test_single_column_set(self):
@@ -248,9 +245,23 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
         sources, _, source_column_set, tasks = self.write_sources(column_sets)
         np_array = np.zeros((n_rows, 4), dtype="f", order="F")
-        self.backend = "not_a_backend"
-        with self.assertRaises(ValueError):
-            self.read_batch(np_array, sources, column_sets, source_column_set, tasks)
+        jj_backend = os.environ.get("JJ_READER_BACKEND")
+        os.environ["JJ_READER_BACKEND"] = "not_a_backend"
+        try:
+            with self.assertRaises(ValueError) as context:
+                self.read_batch(
+                    np_array, sources, column_sets, source_column_set, tasks
+                )
+        finally:
+            if jj_backend is None:
+                os.environ.pop("JJ_READER_BACKEND")
+            else:
+                os.environ["JJ_READER_BACKEND"] = jj_backend
+
+        self.assertTrue(
+            "Unsupported JJ_READER_BACKEND=not_a_backend" in str(context.exception),
+            context.exception,
+        )
 
     def test_wrong_capsule(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]

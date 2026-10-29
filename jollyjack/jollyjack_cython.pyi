@@ -158,12 +158,12 @@ def read_into_numpy_batch(
     n_threads,
     pre_buffer=True,
     use_threads=False,
-    backend=None,
     cache_options=None,
 ) -> None:
     """
     Read a batch of (source, row group) pairs into one array, on a native thread
-    pool, without holding the GIL.
+    pool, without holding the GIL. The reader backend is taken from the
+    JJ_READER_BACKEND environment variable, as in read_into_numpy.
 
     Replaces a Python loop of palletjack.read_metadata + read_into_numpy calls,
     one per row group, with a single call that keeps the whole batch in C++.
@@ -194,9 +194,6 @@ def read_into_numpy_batch(
         Coalesce and buffer the reads of a row group, as in read_into_numpy.
     use_threads : bool, optional
         Read the columns of a row group in parallel, as in read_into_numpy.
-    backend : str, optional
-        'default', 'io_uring' or 'io_uring_odirect'. None takes it from the
-        JJ_READER_BACKEND environment variable, as read_into_numpy does.
     cache_options : pyarrow.CacheOptions, optional
         Read coalescing options. Defaults to CacheOptions.LazyDefaults().
 

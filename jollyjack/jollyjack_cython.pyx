@@ -153,15 +153,15 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , c_cache_options)
         return
 
-cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object palletjack_capi, int n_threads, pre_buffer = True, use_threads = False, backend = None, CacheOptions cache_options = None):
+cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object palletjack_capi, int n_threads, pre_buffer = True, use_threads = False, CacheOptions cache_options = None):
     """Read a batch of (source, row group) pairs into one array, on a native thread pool, without holding the GIL.
 
     `sources` are parquet paths and `index_buffers` the matching palletjack indexes, as buffers (an mmap of each
     index file). `column_sets` are `(column_names, target_column_indices)` pairs and `source_column_set[i]` says
     which of them to read from source `i`. Each row of `tasks` is `(source index, row group, row_start, rows)`,
     and fills rows `[row_start, row_start + rows)` of `np_array`. `palletjack_capi` is the
-    `palletjack.palletjack_capi` capsule. `backend` is 'default', 'io_uring' or 'io_uring_odirect', or None to take it from
-    the JJ_READER_BACKEND environment variable, as `read_into_numpy` does.
+    `palletjack.palletjack_capi` capsule. The reader backend is taken from the JJ_READER_BACKEND environment variable,
+    as in `read_into_numpy`.
     """
 
     # Ensure the input is a 2D array, Fortran order
@@ -217,8 +217,8 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
         return
 
     cdef cjollyjack.JollyJackReaderBackend cbackend
-    jj_reader_backend = backend if backend is not None else os.environ.get("JJ_READER_BACKEND")
-    if jj_reader_backend is None or jj_reader_backend == 'default':
+    jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
+    if jj_reader_backend is None:
         cbackend = cjollyjack.kJollyJackDefaultReader
     elif jj_reader_backend == 'io_uring':
         cbackend = cjollyjack.kJollyJackIOUringReader
