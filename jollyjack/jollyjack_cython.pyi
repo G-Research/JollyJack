@@ -147,6 +147,64 @@ def read_into_numpy(
     )
     return
 
+def read_into_numpy_batch(
+    np_array,
+    sources,
+    index_buffers,
+    column_sets,
+    source_column_set,
+    tasks,
+    palletjack_capi,
+    n_threads,
+    pre_buffer=True,
+    use_threads=False,
+    cache_options=None,
+) -> None:
+    """
+    Read a batch of (source, row group) pairs into one array, on a native thread
+    pool, without holding the GIL. The reader backend is taken from the
+    JJ_READER_BACKEND environment variable, as in read_into_numpy.
+
+    Replaces a Python loop of palletjack.read_metadata + read_into_numpy calls,
+    one per row group, with a single call that keeps the whole batch in C++.
+
+    Parameters
+    ----------
+    np_array : numpy.ndarray
+        Two-dimensional array in Fortran (column-major) order, written in place.
+    sources : list[str]
+        Paths of the parquet files to read from.
+    index_buffers : list[buffer]
+        Palletjack index of each source, as a buffer (e.g. an mmap of the index
+        file). Kept exported for the duration of the call.
+    column_sets : list[tuple[list[str], list[int]]]
+        Column names to read, and the columns of np_array to write them to.
+    source_column_set : list[int]
+        The column set to read from each source.
+    tasks : numpy.ndarray
+        Int64 array of shape (n, 4). Each row is (source index, row group,
+        row_start, rows), and fills rows [row_start, row_start + rows) of
+        np_array.
+    palletjack_capi : capsule
+        palletjack.palletjack_capi, palletjack's C API table. Its version must be
+        at least 1.
+    n_threads : int
+        Threads to spread the tasks over.
+    pre_buffer : bool, optional
+        Coalesce and buffer the reads of a row group, as in read_into_numpy.
+    use_threads : bool, optional
+        Read the columns of a row group in parallel, as in read_into_numpy.
+    cache_options : pyarrow.CacheOptions, optional
+        Read coalescing options. Defaults to CacheOptions.LazyDefaults().
+
+    Raises
+    ------
+    RuntimeError
+        If a task fails. The first error is raised once every thread has
+        finished, naming the source and row group that failed.
+    """
+    ...
+
 def prefetch_page_cache(
     source,
     metadata,

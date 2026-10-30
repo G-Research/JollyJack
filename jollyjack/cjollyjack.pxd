@@ -2,9 +2,48 @@ from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.memory cimport shared_ptr
 from libcpp cimport bool
+from libc.stdint cimport int64_t, uint32_t
 from pyarrow._parquet cimport *
 
 cdef extern from "jollyjack.h":
+    cdef enum JollyJackReaderBackend:
+        kJollyJackDefaultReader
+        kJollyJackIOUringReader
+        kJollyJackIOUringODirectReader
+
+    ctypedef shared_ptr[CFileMetaData] (*PalletJackReadMetadataFromBufferV1Func)(const unsigned char *index_data
+        , size_t index_data_length
+        , const vector[uint32_t] &row_groups
+        , const vector[uint32_t] &column_indices
+        , const vector[string] &column_names
+        , bint schema_only)
+
+    cdef struct PalletJackCAPI:
+        int version
+        PalletJackReadMetadataFromBufferV1Func ReadMetadataFromBufferV1
+
+    cdef const char* PALLETJACK_CAPI_CAPSULE_NAME
+
+    cdef void ReadIntoMemoryBatch (const vector[string] &paths
+        , const vector[const unsigned char*] &index_data
+        , const vector[size_t] &index_data_lengths
+        , const vector[int] &source_column_set
+        , const vector[vector[string]] &column_names
+        , const vector[vector[int]] &target_column_indices
+        , const int64_t *tasks
+        , int64_t task_count
+        , PalletJackReadMetadataFromBufferV1Func read_metadata
+        , void* buffer
+        , size_t stride0_size
+        , size_t stride1_size
+        , int64_t columns
+        , int n_threads
+        , bool pre_buffer
+        , bool use_threads
+        , JollyJackReaderBackend backend
+        , CCacheOptions cache_options
+        ) except + nogil
+
     cdef void ReadIntoMemory (shared_ptr[CRandomAccessFile] source
         , shared_ptr[CFileMetaData] file_metadata
         , void* buffer

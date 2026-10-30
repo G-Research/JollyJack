@@ -7,11 +7,12 @@ cimport numpy as cnp
 
 from cython.cimports.jollyjack import cjollyjack
 
+from cpython.pycapsule cimport PyCapsule_GetPointer
 from libcpp.string cimport string
 from libcpp.memory cimport shared_ptr
 from libcpp.vector cimport vector
 from libcpp cimport bool
-from libc.stdint cimport uint32_t
+from libc.stdint cimport int64_t, uint32_t, UINT32_MAX
 from pyarrow._parquet cimport *
 from pyarrow.lib cimport (CacheOptions, NativeFile, get_reader)
 from collections.abc import Iterable
@@ -111,7 +112,6 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef c_string pathstr
     cdef bool cuse_o_direct
     cdef bool cprefetch_page_cache = prefetch_page_cache
-    # Please note that the `JJ_READER_BACKEND` variable is experimental and may be changed or removed in future versions
     jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
     if jj_reader_backend is None:
         get_reader(source, use_memory_map, &rd_handle)
@@ -155,6 +155,129 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cprefetch_page_cache
             , cuse_threads
             , cexpected_rows
+            , c_cache_options)
+        return
+
+cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object palletjack_capi, int n_threads, pre_buffer = True, use_threads = False, CacheOptions cache_options = None):
+    """Read a batch of (source, row group) pairs into one array, on a native thread pool, without holding the GIL.
+
+    `sources` are parquet paths and `index_buffers` the matching palletjack indexes, as buffers (an mmap of each
+    index file). `column_sets` are `(column_names, target_column_indices)` pairs and `source_column_set[i]` says
+    which of them to read from source `i`. Each row of `tasks` is `(source index, row group, row_start, rows)`,
+    and fills rows `[row_start, row_start + rows)` of `np_array`. `palletjack_capi` is the
+    `palletjack.palletjack_capi` capsule. The reader backend is taken from the JJ_READER_BACKEND environment variable,
+    as in `read_into_numpy`.
+    """
+
+    # Ensure the input is a 2D array, Fortran order
+    if np_array.ndim != 2:
+        raise ValueError(f"Unexpected np_array.ndim, {np_array.ndim} != 2")
+    if np_array.strides[0] > np_array.strides[1]:
+        raise ValueError(f"Expected array in a Fortran (column-major) order")
+    if tasks.shape[1] != 4:
+        raise ValueError(f"Unexpected tasks.shape[1], {tasks.shape[1]} != 4")
+    if len(index_buffers) != len(sources):
+        raise ValueError(f"Got {len(index_buffers)} index buffers for {len(sources)} sources")
+    if len(source_column_set) != len(sources):
+        raise ValueError(f"Got {len(source_column_set)} column set indices for {len(sources)} sources")
+
+    cdef vector[string] cpaths
+    cdef vector[const unsigned char*] cindex_data
+    cdef vector[size_t] cindex_data_lengths
+    cdef vector[int] csource_column_set = source_column_set
+    cdef vector[vector[string]] ccolumn_names
+    cdef vector[vector[int]] ctarget_column_indices
+    cdef vector[string] cnames
+    cdef vector[int] ctargets
+    cdef const unsigned char[::1] index_view
+    cdef list index_views = []
+
+    for column_names, target_column_indices in column_sets:
+        cnames = [c.encode('utf8') for c in column_names]
+        ctargets = target_column_indices
+        if cnames.size() != ctargets.size():
+            raise ValueError(f"Got {cnames.size()} column names and {ctargets.size()} target indices")
+        ccolumn_names.push_back(cnames)
+        ctarget_column_indices.push_back(ctargets)
+
+    for source in sources:
+        cpaths.push_back(source.encode('utf8'))
+
+    # Holding the views keeps the buffers exported, and their addresses valid, for the whole call
+    for index_buffer in index_buffers:
+        index_view = index_buffer
+        index_views.append(index_view)
+        cindex_data.push_back(&index_view[0])
+        cindex_data_lengths.push_back(index_view.shape[0])
+
+    for column_set in source_column_set:
+        if not 0 <= column_set < len(column_sets):
+            raise ValueError(f"Column set {column_set} is out of range, got {len(column_sets)} column sets")
+
+    cdef int64_t ctask_count = tasks.shape[0]
+    cdef int64_t rows = np_array.shape[0]
+    cdef int64_t i
+    for i in range(ctask_count):
+        if not 0 <= tasks[i, 0] < <int64_t>cpaths.size():
+            raise ValueError(f"Source index {tasks[i, 0]} is out of range, got {cpaths.size()} sources")
+        # Row groups are passed to palletjack as uint32
+        if not 0 <= tasks[i, 1] <= UINT32_MAX:
+            raise ValueError(f"Row group {tasks[i, 1]} of task {i} is out of range")
+        # Compared without adding row_start and rows, which could overflow
+        if tasks[i, 2] < 0 or tasks[i, 3] < 0 or tasks[i, 3] > rows - tasks[i, 2]:
+            raise ValueError(f"Rows [{tasks[i, 2]}, {tasks[i, 2]} + {tasks[i, 3]}) of task {i} are not within the {rows} rows of np_array")
+
+    cdef const cjollyjack.PalletJackCAPI* capi = <const cjollyjack.PalletJackCAPI*>PyCapsule_GetPointer(palletjack_capi, cjollyjack.PALLETJACK_CAPI_CAPSULE_NAME)
+    if capi.version < 1:
+        raise ValueError(f"palletjack C API version {capi.version} is older than version 1, which jollyjack needs")
+
+    if ctask_count == 0:
+        return
+
+    cdef cjollyjack.JollyJackReaderBackend cbackend
+    jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
+    if jj_reader_backend is None:
+        cbackend = cjollyjack.kJollyJackDefaultReader
+    elif jj_reader_backend == 'io_uring':
+        cbackend = cjollyjack.kJollyJackIOUringReader
+    elif jj_reader_backend == 'io_uring_odirect':
+        cbackend = cjollyjack.kJollyJackIOUringODirectReader
+    else:
+        raise ValueError(f"Unsupported JJ_READER_BACKEND={jj_reader_backend}")
+
+    cdef CCacheOptions c_cache_options
+    if cache_options is not None:
+        c_cache_options = cache_options.unwrap()
+    else:
+        c_cache_options = CCacheOptions.LazyDefaults()
+
+    cdef void* cdata = np_array.data
+    cdef size_t cstride0_size = np_array.strides[0]
+    cdef size_t cstride1_size = np_array.strides[1]
+    cdef int64_t ccolumns = np_array.shape[1]
+    cdef const int64_t* ctasks = &tasks[0, 0]
+    cdef int cn_threads = n_threads
+    cdef bool cpre_buffer = pre_buffer
+    cdef bool cuse_threads = use_threads
+
+    with nogil:
+        cjollyjack.ReadIntoMemoryBatch (cpaths
+            , cindex_data
+            , cindex_data_lengths
+            , csource_column_set
+            , ccolumn_names
+            , ctarget_column_indices
+            , ctasks
+            , ctask_count
+            , capi.ReadMetadataFromBufferV1
+            , cdata
+            , cstride0_size
+            , cstride1_size
+            , ccolumns
+            , cn_threads
+            , cpre_buffer
+            , cuse_threads
+            , cbackend
             , c_cache_options)
         return
 
