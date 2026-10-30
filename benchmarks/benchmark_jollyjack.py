@@ -209,7 +209,9 @@ def generate_data(n_columns, n_row_groups, path, compression, dtype):
 
 def generate_index(path):
     index_path = f"{path}.index"
-    if not os.path.exists(index_path) or os.path.getmtime(index_path) < os.path.getmtime(path):
+    if not os.path.exists(index_path) or os.path.getmtime(
+        index_path
+    ) < os.path.getmtime(path):
         pj.generate_metadata_index(path, index_path)
     return index_path
 
@@ -231,9 +233,7 @@ def get_thread_local_np_array(dtype, n_rows=None):
     n_rows = cfg.chunk_size if n_rows is None else n_rows
     np_array = getattr(thread_local_data, "np_array", None)
     if np_array is None or np_array.shape[0] != n_rows:
-        np_array = np.empty(
-            (n_rows, cfg.n_columns_to_read), dtype=dtype, order="F"
-        )
+        np_array = np.empty((n_rows, cfg.n_columns_to_read), dtype=dtype, order="F")
         # By writing all zeros we make sure that the memory is properly allocated and mapped to physical RAM (avoid Memory Allocation Contention)
         np_array[:] = 0
         thread_local_data.np_array = np_array
@@ -485,7 +485,9 @@ def worker_jollyjack_batch(
         np_array=np_array,
         sources=paths,
         index_buffers=[index_data[path] for path in paths],
-        column_sets=[([name for name, _ in column_pairs], [dst for _, dst in column_pairs])],
+        column_sets=[
+            ([name for name, _ in column_pairs], [dst for _, dst in column_pairs])
+        ],
         source_column_set=[0] * len(paths),
         tasks=tasks,
         palletjack_capi=pj.palletjack_capi,

@@ -159,7 +159,9 @@ def read_into_numpy_batch(
         np_array=np_array,
         sources=[source],
         index_buffers=[index_buffer],
-        column_sets=[([name for name, _ in columns], [target for _, target in columns])],
+        column_sets=[
+            ([name for name, _ in columns], [target for _, target in columns])
+        ],
         source_column_set=[0],
         tasks=np.array(tasks, dtype=np.int64).reshape(-1, 4),
         palletjack_capi=pj.palletjack_capi,

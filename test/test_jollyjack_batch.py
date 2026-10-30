@@ -67,7 +67,9 @@ def read_with_pyarrow(np_array, sources, column_sets, source_column_set, tasks):
         with pq.ParquetFile(sources[source]) as parquet_file:
             table = parquet_file.read_row_group(row_group, columns=column_names)
         for column_name, target in zip(column_names, target_column_indices):
-            np_array[row_start : row_start + rows, target] = table[column_name].to_numpy()
+            np_array[row_start : row_start + rows, target] = table[
+                column_name
+            ].to_numpy()
 
 
 class TestReadIntoNumpyBatch(unittest.TestCase):
@@ -80,9 +82,12 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             lambda: [index_buffer.close() for index_buffer in self.index_buffers]
         )
 
-    def write_sources(self, column_sets, source_column_set=None, n_row_groups=n_row_groups):
+    def write_sources(
+        self, column_sets, source_column_set=None, n_row_groups=n_row_groups
+    ):
         """Write one parquet file per source, with the columns of its column set (by default one source per column
-        set), and a task for every row group of every file, placed at the rows of the row group"""
+        set), and a task for every row group of every file, placed at the rows of the row group
+        """
         if source_column_set is None:
             source_column_set = list(range(len(column_sets)))
         sources, index_paths = [], []
@@ -155,9 +160,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         self, column_sets, n_columns, n_threads=4, pre_buffer=True, use_threads=False
     ):
         """Write the sources, then read every row group of every file, both ways"""
-        sources, index_paths, source_column_set, tasks = self.write_sources(
-            column_sets
-        )
+        sources, index_paths, source_column_set, tasks = self.write_sources(column_sets)
         np_array, expected = self.read_both(
             sources,
             index_paths,
@@ -235,7 +238,9 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         )
         self.assertTrue(np.array_equal(np_array, expected))
         # No coalescing of ranges and eager pre-buffering, unlike the lazy defaults
-        cache_options = pa.CacheOptions(hole_size_limit=0, range_size_limit=1, lazy=False)
+        cache_options = pa.CacheOptions(
+            hole_size_limit=0, range_size_limit=1, lazy=False
+        )
         for pre_buffer, use_threads, cache_options in itertools.product(
             [False, True], [False, True], [None, cache_options]
         ):
@@ -370,8 +375,12 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                 np_array, sources, column_sets, source_column_set, tasks, n_threads=8
             )
 
-        self.assertTrue("Failed to read row group" in str(context.exception), context.exception)
-        self.assertTrue(f"of '{sources[1]}'" in str(context.exception), context.exception)
+        self.assertTrue(
+            "Failed to read row group" in str(context.exception), context.exception
+        )
+        self.assertTrue(
+            f"of '{sources[1]}'" in str(context.exception), context.exception
+        )
 
     def test_task_rows_differ_from_row_group(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
@@ -473,22 +482,55 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             return np.array([(source, row_group, row_start, rows)], dtype=np.int64)
 
         cases = [
-            (dict(np_array=np.zeros(n_rows * 4, dtype="f")), "Unexpected np_array.ndim, 1 != 2"),
-            (dict(np_array=np.zeros((n_rows, 4), dtype="f", order="C")), "Expected array in a Fortran (column-major) order"),
-            (dict(tasks=np.ascontiguousarray(tasks[:, :3])), "Unexpected tasks.shape[1], 3 != 4"),
-            (dict(index_buffers=self.index_buffers * 2), "Got 2 index buffers for 1 sources"),
+            (
+                dict(np_array=np.zeros(n_rows * 4, dtype="f")),
+                "Unexpected np_array.ndim, 1 != 2",
+            ),
+            (
+                dict(np_array=np.zeros((n_rows, 4), dtype="f", order="C")),
+                "Expected array in a Fortran (column-major) order",
+            ),
+            (
+                dict(tasks=np.ascontiguousarray(tasks[:, :3])),
+                "Unexpected tasks.shape[1], 3 != 4",
+            ),
+            (
+                dict(index_buffers=self.index_buffers * 2),
+                "Got 2 index buffers for 1 sources",
+            ),
             (dict(index_buffers=[b""]), "Index buffer 0 is empty"),
             (dict(source_column_set=[0, 0]), "Got 2 column set indices for 1 sources"),
             (dict(n_threads=0), "Unexpected n_threads, 0 < 1"),
             (dict(n_threads=-1), "Unexpected n_threads, -1 < 1"),
-            (dict(column_sets=[(column_names, [0, 1, 2])]), "Got 4 column names and 3 target indices"),
-            (dict(source_column_set=[1]), "Column set 1 is out of range, got 1 column sets"),
-            (dict(source_column_set=[-1]), "Column set -1 is out of range, got 1 column sets"),
-            (dict(tasks=task(source=1)), "Source index 1 is out of range, got 1 sources"),
-            (dict(tasks=task(source=-1)), "Source index -1 is out of range, got 1 sources"),
-            (dict(tasks=task(row_group=2**32)), f"Row group {2**32} of task 0 is out of range"),
+            (
+                dict(column_sets=[(column_names, [0, 1, 2])]),
+                "Got 4 column names and 3 target indices",
+            ),
+            (
+                dict(source_column_set=[1]),
+                "Column set 1 is out of range, got 1 column sets",
+            ),
+            (
+                dict(source_column_set=[-1]),
+                "Column set -1 is out of range, got 1 column sets",
+            ),
+            (
+                dict(tasks=task(source=1)),
+                "Source index 1 is out of range, got 1 sources",
+            ),
+            (
+                dict(tasks=task(source=-1)),
+                "Source index -1 is out of range, got 1 sources",
+            ),
+            (
+                dict(tasks=task(row_group=2**32)),
+                f"Row group {2**32} of task 0 is out of range",
+            ),
             (dict(tasks=task(row_group=-1)), "Row group -1 of task 0 is out of range"),
-            (dict(tasks=task(row_start=n_rows - 1)), f"Rows [{n_rows - 1}, {n_rows - 1} + {chunk_size}) of task 0 are not within the {n_rows} rows of np_array"),
+            (
+                dict(tasks=task(row_start=n_rows - 1)),
+                f"Rows [{n_rows - 1}, {n_rows - 1} + {chunk_size}) of task 0 are not within the {n_rows} rows of np_array",
+            ),
             (dict(tasks=task(row_start=-1)), "of task 0 are not within"),
             (dict(tasks=task(rows=-1)), "of task 0 are not within"),
             (dict(tasks=task(row_start=1, rows=2**63 - 1)), "of task 0 are not within"),
