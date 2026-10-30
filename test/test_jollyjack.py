@@ -1980,7 +1980,7 @@ class TestJollyJack(unittest.TestCase):
 
         src_array = get_table(n_rows, n_columns, data_type=dtype).to_pandas().to_numpy()
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             dst_array = np.zeros(
                 (n_rows, n_columns + 1), dtype=dtype.to_pandas_dtype(), order="C"
             )
@@ -1993,7 +1993,7 @@ class TestJollyJack(unittest.TestCase):
             context.exception,
         )
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             dst_array = np.zeros(
                 (n_rows - 1, n_columns), dtype=dtype.to_pandas_dtype(), order="C"
             )
@@ -2006,7 +2006,7 @@ class TestJollyJack(unittest.TestCase):
             context.exception,
         )
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             dst_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
@@ -2019,7 +2019,7 @@ class TestJollyJack(unittest.TestCase):
             context.exception,
         )
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             dst_array = np.zeros((n_rows, n_columns), dtype=np.uint8, order="C")
             jj.copy_to_numpy_row_major(
                 src_array=src_array, dst_array=dst_array, row_indices=range(n_rows)
@@ -2030,7 +2030,7 @@ class TestJollyJack(unittest.TestCase):
             context.exception,
         )
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             dst_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="C"
             )
@@ -2043,7 +2043,7 @@ class TestJollyJack(unittest.TestCase):
             context.exception,
         )
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             dst_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="C"
             )
@@ -2058,7 +2058,7 @@ class TestJollyJack(unittest.TestCase):
             context.exception,
         )
 
-        with self.assertRaises(AssertionError) as context:
+        with self.assertRaises(ValueError) as context:
             dst_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="C"
             )
