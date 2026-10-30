@@ -100,7 +100,79 @@ def get_table(n_rows, n_columns, data_type=pa.float32()):
     return pa.Table.from_arrays(pa_arrays, schema=schema)
 
 
+def read_into_numpy_batch(
+    source,
+    metadata,
+    np_array,
+    row_group_indices,
+    row_ranges=[],
+    column_indices=[],
+    column_names=[],
+    pre_buffer=False,
+    use_threads=True,
+    use_memory_map=False,
+    cache_options=None,
+    prefetch_page_cache=False,
+):
+    """read_into_numpy, done with read_into_numpy_batch"""
+    # ponytail: use_memory_map and prefetch_page_cache have no batch equivalent, so they are ignored
+    if row_ranges or not isinstance(source, str):
+        raise unittest.SkipTest("Not supported by read_into_numpy_batch")
+    if not (column_indices or column_names) or (column_indices and column_names):
+        raise ValueError("Either column_indices or column_names needs to be set")
+
+    if metadata is None:
+        metadata = pq.read_metadata(source)
+
+    columns = column_indices or column_names
+    columns = list(columns.items()) if isinstance(columns, dict) else list(columns)
+    if isinstance(columns[0], (str, int, np.integer)):
+        if len(columns) != np_array.shape[1]:
+            raise ValueError(
+                f"Requested to read {len(columns)} columns, but the number of columns in numpy array is {np_array.shape[1]}"
+            )
+        columns = [(column, target) for target, column in enumerate(columns)]
+    if column_indices:
+        columns = [(metadata.schema.column(i).name, target) for i, target in columns]
+
+    tasks = []
+    row_start = 0
+    for row_group in row_group_indices:
+        # An out of range row group is passed on with no rows, so the batch read reports it
+        rows = (
+            metadata.row_group(row_group).num_rows
+            if 0 <= row_group < metadata.num_row_groups
+            else 0
+        )
+        tasks.append((0, row_group, row_start, rows))
+        row_start += rows
+
+    # The index is built from the given metadata, so row group indices refer to it, as in read_into_numpy
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        metadata_path = os.path.join(tmpdirname, "metadata.parquet")
+        metadata.write_metadata_file(metadata_path)
+        pj.generate_metadata_index(metadata_path, metadata_path + ".index")
+        with open(metadata_path + ".index", "rb") as f:
+            index_buffer = f.read()
+
+    jj.read_into_numpy_batch(
+        np_array=np_array,
+        sources=[source],
+        index_buffers=[index_buffer],
+        column_sets=[([name for name, _ in columns], [target for _, target in columns])],
+        source_column_set=[0],
+        tasks=np.array(tasks, dtype=np.int64).reshape(-1, 4),
+        palletjack_capi=pj.palletjack_capi,
+        n_threads=2,
+        pre_buffer=pre_buffer,
+        use_threads=use_threads,
+        cache_options=cache_options,
+    )
+
+
 class TestJollyJack(unittest.TestCase):
+
+    read_into_numpy = staticmethod(jj.read_into_numpy)
 
     @parameterized.expand(
         itertools.product(
@@ -137,7 +209,7 @@ class TestJollyJack(unittest.TestCase):
                 row_begin = row_end
                 row_end = row_begin + pr.metadata.row_group(rg).num_rows
                 subset_view = np_array1[row_begin:row_end, :]
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=subset_view,
@@ -153,7 +225,7 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(np_array1, expected_data))
 
             np_array2 = np.zeros((n_rows, n_columns), dtype="f", order="F")
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array2,
@@ -208,7 +280,7 @@ class TestJollyJack(unittest.TestCase):
                 row_begin = row_end
                 row_end = row_begin + metadata.num_rows
                 subset_view = np_array[row_begin:row_end, :]
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=metadata,
                     np_array=subset_view,
@@ -253,7 +325,7 @@ class TestJollyJack(unittest.TestCase):
             offset = n_columns - cols
             np_array = np.zeros((chunk_size, cols), dtype="f", order="F")
 
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -299,7 +371,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros((chunk_size, n_columns), dtype="f", order="F")
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -338,7 +410,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -373,7 +445,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -470,7 +542,7 @@ class TestJollyJack(unittest.TestCase):
                         (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
                     )
 
-                    jj.read_into_numpy(
+                    self.read_into_numpy(
                         source=path,
                         metadata=None,
                         np_array=np_array,
@@ -610,7 +682,7 @@ class TestJollyJack(unittest.TestCase):
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
 
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -723,7 +795,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -741,7 +813,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -805,7 +877,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with fs.LocalFileSystem().open_input_file(path) as f:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=f,
                     metadata=None,
                     np_array=np_array,
@@ -864,7 +936,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -947,7 +1019,7 @@ class TestJollyJack(unittest.TestCase):
                 pr.close()
                 self.assertTrue(all_data.columns[0].type, dtype)
 
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1004,7 +1076,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1060,7 +1132,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1087,7 +1159,7 @@ class TestJollyJack(unittest.TestCase):
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
             for c in range(n_columns):
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1142,7 +1214,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1167,7 +1239,7 @@ class TestJollyJack(unittest.TestCase):
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
             for c in range(n_columns):
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1226,7 +1298,7 @@ class TestJollyJack(unittest.TestCase):
 
             # Create an empty array
             np_array = np.zeros((n_rows, 3), dtype=dtype.to_pandas_dtype(), order="F")
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1238,7 +1310,7 @@ class TestJollyJack(unittest.TestCase):
                 prefetch_page_cache=prefetch_page_cache,
             )
 
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1297,7 +1369,7 @@ class TestJollyJack(unittest.TestCase):
 
             # Create an empty array
             np_array = np.zeros((n_rows, 3), dtype=dtype.to_pandas_dtype(), order="F")
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1309,7 +1381,7 @@ class TestJollyJack(unittest.TestCase):
                 prefetch_page_cache=prefetch_page_cache,
             )
 
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1374,7 +1446,7 @@ class TestJollyJack(unittest.TestCase):
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
 
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=pr.metadata,
                 np_array=np_array,
@@ -1425,7 +1497,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1444,7 +1516,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1512,7 +1584,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1532,7 +1604,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1596,7 +1668,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros(
                 (n_rows, n_columns), dtype=dtype.to_pandas_dtype(), order="F"
             )
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -1713,7 +1785,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1734,7 +1806,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1756,7 +1828,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(ValueError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1775,7 +1847,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(ValueError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1794,7 +1866,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(ValueError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1813,7 +1885,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(ValueError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -1832,7 +1904,7 @@ class TestJollyJack(unittest.TestCase):
             )
 
             with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -2100,7 +2172,7 @@ class TestJollyJack(unittest.TestCase):
             np_array = np.zeros((n_rows, n_columns), dtype="f", order="F")
 
             jj_backend = os.environ.pop("JJ_READER_BACKEND", None)
-            jj.read_into_numpy(
+            self.read_into_numpy(
                 source=path,
                 metadata=None,
                 np_array=np_array,
@@ -2117,7 +2189,7 @@ class TestJollyJack(unittest.TestCase):
 
             os.environ["JJ_READER_BACKEND"] = "foo_bar"
             with self.assertRaises(ValueError) as context:
-                jj.read_into_numpy(
+                self.read_into_numpy(
                     source=path,
                     metadata=None,
                     np_array=np_array,
@@ -2270,7 +2342,7 @@ class TestJollyJack(unittest.TestCase):
             try:
                 for _ in range(iterations):
                     np_array = np.zeros((rows, n_columns), dtype="f", order="F")
-                    jj.read_into_numpy(
+                    self.read_into_numpy(
                         source=path,
                         metadata=None,
                         np_array=np_array,
@@ -2289,6 +2361,22 @@ class TestJollyJack(unittest.TestCase):
             self.assertGreater(handled_signals, 0)
 
 
+class TestJollyJackBatch(TestJollyJack):
+
+    read_into_numpy = staticmethod(read_into_numpy_batch)
+
+    skipped_tests = {
+        "test_read_invalid_column_": "palletjack reports an unknown column before jollyjack does, with a different message",
+        "test_read_not_enough_rows_": "read_into_numpy_batch checks the rows of each task, not that the tasks fill np_array",
+        "test_read_not_enough_buffer_": "read_into_numpy_batch raises ValueError for tasks beyond np_array, before reading",
+    }
+
+    def setUp(self):
+        for prefix, reason in self.skipped_tests.items():
+            if self._testMethodName.startswith(prefix):
+                self.skipTest(reason)
+
+
 if __name__ == "__main__":
-    unittest.main()
-    # unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
+    # unittest.main()
+    unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJackBatch.test_read_invalid_row_group'])
