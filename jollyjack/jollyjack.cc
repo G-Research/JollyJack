@@ -69,6 +69,34 @@ private:
 
 thread_local ZstdPageDecoder zstd_page_decoder;
 
+class SnappyPageDecoder
+{
+public:
+  SnappyPageDecoder()
+  {
+    PARQUET_ASSIGN_OR_THROW(codec_, arrow::util::Codec::Create(arrow::Compression::SNAPPY));
+  }
+
+  const uint8_t *Decompress(const uint8_t *src, int64_t src_size, int64_t uncompressed_size)
+  {
+    if (buffer_.size() < (size_t)uncompressed_size)
+      buffer_.resize(uncompressed_size);
+
+    PARQUET_ASSIGN_OR_THROW(auto written, codec_->Decompress(src_size, src, uncompressed_size, buffer_.data()));
+    if (written != uncompressed_size)
+      throw parquet::ParquetException(std::string("Snappy decompression produced ") + std::to_string(written)
+          + " bytes, but the page header says " + std::to_string(uncompressed_size));
+
+    return buffer_.data();
+  }
+
+private:
+  std::unique_ptr<arrow::util::Codec> codec_;
+  std::vector<uint8_t> buffer_;
+};
+
+thread_local SnappyPageDecoder snappy_page_decoder;
+
 void CopyValues(uint8_t *dst, const uint8_t *src, size_t n)
 {
 #if defined(__x86_64__)
@@ -265,6 +293,7 @@ public:
     if (fast_path && descr->max_repetition_level() == 0)
     {
       if (source != nullptr && (column_chunk_metadata->compression() == arrow::Compression::ZSTD
+          || column_chunk_metadata->compression() == arrow::Compression::SNAPPY
           || column_chunk_metadata->compression() == arrow::Compression::UNCOMPRESSED))
         OpenChunk(source, column_chunk_metadata);
       else
@@ -351,8 +380,16 @@ private:
     chunk_pos_ = chunk_->data();
     chunk_end_ = chunk_pos_ + chunk_->size();
     remaining_values_ = column_chunk_metadata->num_values();
-    compressed_ = column_chunk_metadata->compression() == arrow::Compression::ZSTD;
+    codec_ = column_chunk_metadata->compression();
+    compressed_ = codec_ != arrow::Compression::UNCOMPRESSED;
     fast_pages_ = true;
+  }
+
+  const uint8_t *Decompress(const uint8_t *src, int64_t src_size, int64_t uncompressed_size)
+  {
+    if (codec_ == arrow::Compression::SNAPPY)
+      return snappy_page_decoder.Decompress(src, src_size, uncompressed_size);
+    return zstd_page_decoder.Decompress(src, src_size, uncompressed_size);
   }
 
   bool NextFastDataPage()
@@ -382,7 +419,7 @@ private:
         const int64_t values_size = h.uncompressed_size - levels;
         const uint8_t *values_ptr = payload + levels;
         if (compressed_ && h.is_compressed)
-          values_ptr = zstd_page_decoder.Decompress(values_ptr, h.compressed_size - levels, values_size);
+          values_ptr = Decompress(values_ptr, h.compressed_size - levels, values_size);
         else if (h.compressed_size != h.uncompressed_size)
           throw parquet::ParquetException("Corrupt page header");
         if (int64_t(h.num_values) * type_length_ > values_size)
@@ -397,7 +434,7 @@ private:
 
       if (!compressed_ && h.compressed_size != h.uncompressed_size)
         throw parquet::ParquetException("Corrupt page header");
-      const uint8_t *page_data = compressed_ ? zstd_page_decoder.Decompress(payload, h.compressed_size, h.uncompressed_size) : payload;
+      const uint8_t *page_data = compressed_ ? Decompress(payload, h.compressed_size, h.uncompressed_size) : payload;
       const uint8_t *page_end = page_data + h.uncompressed_size;
       const uint8_t *values_ptr = page_data;
       if (max_def_level_ > 0)
@@ -516,6 +553,7 @@ private:
   bool eof_ = false;
   bool fast_pages_ = false;
   bool compressed_ = false;
+  arrow::Compression::type codec_ = arrow::Compression::UNCOMPRESSED;
   std::shared_ptr<arrow::Buffer> chunk_;
   const uint8_t *chunk_pos_ = nullptr;
   const uint8_t *chunk_end_ = nullptr;
