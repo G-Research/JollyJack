@@ -2362,23 +2362,6 @@ class TestJollyJack(unittest.TestCase):
             # Without delivered signals the test would pass for the wrong reason
             self.assertGreater(handled_signals, 0)
 
-
-class TestJollyJackBatch(TestJollyJack):
-
-    read_into_numpy = staticmethod(read_into_numpy_batch_palletjack)
-
-    skipped_tests = {
-        "test_read_invalid_column_": "palletjack reports an unknown column before jollyjack does, with a different message",
-        "test_read_not_enough_rows_": "read_into_numpy_batch_palletjack checks the rows of each task, not that the tasks fill np_array",
-        "test_read_not_enough_buffer_": "read_into_numpy_batch_palletjack raises ValueError for tasks beyond np_array, before reading",
-    }
-
-    def setUp(self):
-        for prefix, reason in self.skipped_tests.items():
-            if self._testMethodName.startswith(prefix):
-                self.skipTest(reason)
-
-
 if __name__ == "__main__":
     unittest.main()
     # unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
