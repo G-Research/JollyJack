@@ -1277,7 +1277,18 @@ void ReadIntoMemoryIOUring (const std::string& path
 
 #endif
 
-static void ReadTaskIntoMemory (const int64_t *task
+// One row of the tasks array passed to ReadIntoMemoryBatchPalletJack
+struct BatchTask
+{
+  int64_t source;
+  int64_t row_group;
+  int64_t row_start;
+  int64_t rows;
+};
+
+static_assert(sizeof(BatchTask) == 4 * sizeof(int64_t), "BatchTask must match a row of four int64 values");
+
+static void ReadTaskIntoMemory (const BatchTask &task
     , const std::vector<std::string> &paths
     , const std::vector<const unsigned char*> &index_data
     , const std::vector<size_t> &index_data_lengths
@@ -1294,14 +1305,14 @@ static void ReadTaskIntoMemory (const int64_t *task
     , JollyJackReaderBackend backend
     , arrow::io::CacheOptions cache_options)
 {
-  const size_t source = task[0];
-  const uint32_t row_group = task[1];
-  const int64_t row_start = task[2];
-  const int64_t rows = task[3];
+  const size_t source = task.source;
+  const uint32_t row_group = task.row_group;
+  const int64_t row_start = task.row_start;
+  const int64_t rows = task.rows;
 
   if (source >= paths.size())
   {
-    auto msg = std::string("Source index ") + std::to_string(task[0]) + " is out of range, " + std::to_string(paths.size()) + " sources were given";
+    auto msg = std::string("Source index ") + std::to_string(task.source) + " is out of range, " + std::to_string(paths.size()) + " sources were given";
     throw std::logic_error(msg);
   }
 
@@ -1348,6 +1359,7 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
     , JollyJackReaderBackend backend
     , arrow::io::CacheOptions cache_options)
 {
+  const BatchTask *batch_tasks = reinterpret_cast<const BatchTask *>(tasks);
   std::atomic<int64_t> next_task(0);
   std::atomic<bool> failed(false);
   std::mutex error_mutex;
@@ -1361,7 +1373,7 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
       if (i >= task_count)
         return;
 
-      const int64_t *task = &tasks[4 * i];
+      const BatchTask &task = batch_tasks[i];
       try
       {
         ReadTaskIntoMemory (task, paths, index_data, index_data_lengths, source_column_set, column_names,
@@ -1370,8 +1382,8 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
       }
       catch (const std::exception& e)
       {
-        auto source = static_cast<size_t>(task[0]);
-        auto msg = std::string("Failed to read row group ") + std::to_string(task[1]) + " of '"
+        auto source = static_cast<size_t>(task.source);
+        auto msg = std::string("Failed to read row group ") + std::to_string(task.row_group) + " of '"
             + (source < paths.size() ? paths[source] : std::string("?")) + "': " + e.what();
         std::lock_guard<std::mutex> guard(error_mutex);
         if (error.empty())
