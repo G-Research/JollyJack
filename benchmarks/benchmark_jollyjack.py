@@ -693,7 +693,6 @@ for dtype_key in cfg.dtypes:
                             f"`jj.read_into_numpy_batch_palletjack` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, sort_column_indices:{sort_col}, duration:{measure_reading(n_workers, lambda paths:worker_jollyjack_batch(n_threads=n_workers, use_threads=use_threads, pre_buffer=pre_buffer, column_pairs=column_pairs, dtype=dtype.to_pandas_dtype(), paths=paths, index_data=index_data), batch=True)}"
                         )
 
-            os.environ.pop("JJ_READER_BACKEND", None)
             for index_buffer in index_data.values():
                 index_buffer.close()
             for index_file in index_files:
