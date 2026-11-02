@@ -100,7 +100,7 @@ def get_table(n_rows, n_columns, data_type=pa.float32()):
     return pa.Table.from_arrays(pa_arrays, schema=schema)
 
 
-def read_into_numpy_batch(
+def read_into_numpy_batch_palletjack(
     source,
     metadata,
     np_array,
@@ -114,10 +114,10 @@ def read_into_numpy_batch(
     cache_options=None,
     prefetch_page_cache=False,
 ):
-    """read_into_numpy, done with read_into_numpy_batch"""
+    """read_into_numpy, done with read_into_numpy_batch_palletjack"""
     # ponytail: use_memory_map and prefetch_page_cache have no batch equivalent, so they are ignored
     if row_ranges or not isinstance(source, str):
-        raise unittest.SkipTest("Not supported by read_into_numpy_batch")
+        raise unittest.SkipTest("Not supported by read_into_numpy_batch_palletjack")
     if not (column_indices or column_names) or (column_indices and column_names):
         raise ValueError("Either column_indices or column_names needs to be set")
 
@@ -155,10 +155,10 @@ def read_into_numpy_batch(
         with open(metadata_path + ".index", "rb") as f:
             index_buffer = f.read()
 
-    jj.read_into_numpy_batch(
+    jj.read_into_numpy_batch_palletjack(
         np_array=np_array,
         sources=[source],
-        index_buffers=[index_buffer],
+        palletjack_index_buffers=[index_buffer],
         column_sets=[
             ([name for name, _ in columns], [target for _, target in columns])
         ],
@@ -2365,12 +2365,12 @@ class TestJollyJack(unittest.TestCase):
 
 class TestJollyJackBatch(TestJollyJack):
 
-    read_into_numpy = staticmethod(read_into_numpy_batch)
+    read_into_numpy = staticmethod(read_into_numpy_batch_palletjack)
 
     skipped_tests = {
         "test_read_invalid_column_": "palletjack reports an unknown column before jollyjack does, with a different message",
-        "test_read_not_enough_rows_": "read_into_numpy_batch checks the rows of each task, not that the tasks fill np_array",
-        "test_read_not_enough_buffer_": "read_into_numpy_batch raises ValueError for tasks beyond np_array, before reading",
+        "test_read_not_enough_rows_": "read_into_numpy_batch_palletjack checks the rows of each task, not that the tasks fill np_array",
+        "test_read_not_enough_buffer_": "read_into_numpy_batch_palletjack raises ValueError for tasks beyond np_array, before reading",
     }
 
     def setUp(self):

@@ -158,10 +158,10 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , c_cache_options)
         return
 
-cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object palletjack_capi, int n_threads, pre_buffer = True, use_threads = False, CacheOptions cache_options = None):
+cpdef void read_into_numpy_batch_palletjack (cnp.ndarray np_array, sources, palletjack_index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object palletjack_capi, int n_threads, pre_buffer = True, use_threads = False, CacheOptions cache_options = None):
     """Read a batch of (source, row group) pairs into one array, on a native thread pool, without holding the GIL.
 
-    `sources` are parquet paths and `index_buffers` the matching palletjack indexes, as buffers (an mmap of each
+    `sources` are parquet paths and `palletjack_index_buffers` the matching palletjack indexes, as buffers (an mmap of each
     index file). `column_sets` are `(column_names, target_column_indices)` pairs and `source_column_set[i]` says
     which of them to read from source `i`. Each row of `tasks` is `(source index, row group, row_start, rows)`,
     and fills rows `[row_start, row_start + rows)` of `np_array`. `palletjack_capi` is the
@@ -176,8 +176,8 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
         raise ValueError(f"Expected array in a Fortran (column-major) order")
     if tasks.shape[1] != 4:
         raise ValueError(f"Unexpected tasks.shape[1], {tasks.shape[1]} != 4")
-    if len(index_buffers) != len(sources):
-        raise ValueError(f"Got {len(index_buffers)} index buffers for {len(sources)} sources")
+    if len(palletjack_index_buffers) != len(sources):
+        raise ValueError(f"Got {len(palletjack_index_buffers)} index buffers for {len(sources)} sources")
     if len(source_column_set) != len(sources):
         raise ValueError(f"Got {len(source_column_set)} column set indices for {len(sources)} sources")
     if n_threads < 1:
@@ -206,7 +206,7 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
         cpaths.push_back(source.encode('utf8'))
 
     # Holding the views keeps the buffers exported, and their addresses valid, for the whole call
-    for buffer_index, index_buffer in enumerate(index_buffers):
+    for buffer_index, index_buffer in enumerate(palletjack_index_buffers):
         index_view = index_buffer
         if index_view.shape[0] == 0:
             raise ValueError(f"Index buffer {buffer_index} is empty")
@@ -265,7 +265,7 @@ cpdef void read_into_numpy_batch (cnp.ndarray np_array, sources, index_buffers, 
     cdef bool cuse_threads = use_threads
 
     with nogil:
-        cjollyjack.ReadIntoMemoryBatch (cpaths
+        cjollyjack.ReadIntoMemoryBatchPalletJack (cpaths
             , cindex_data
             , cindex_data_lengths
             , csource_column_set

@@ -24,7 +24,7 @@ cdef extern from "jollyjack.h":
 
     cdef const char* PALLETJACK_CAPI_CAPSULE_NAME
 
-    cdef void ReadIntoMemoryBatch (const vector[string] &paths
+    cdef void ReadIntoMemoryBatchPalletJack (const vector[string] &paths
         , const vector[const unsigned char*] &index_data
         , const vector[size_t] &index_data_lengths
         , const vector[int] &source_column_set

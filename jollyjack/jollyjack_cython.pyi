@@ -147,10 +147,10 @@ def read_into_numpy(
     )
     return
 
-def read_into_numpy_batch(
+def read_into_numpy_batch_palletjack(
     np_array,
     sources,
-    index_buffers,
+    palletjack_index_buffers,
     column_sets,
     source_column_set,
     tasks,
@@ -174,7 +174,7 @@ def read_into_numpy_batch(
         Two-dimensional array in Fortran (column-major) order, written in place.
     sources : list[str]
         Paths of the parquet files to read from.
-    index_buffers : list[buffer]
+    palletjack_index_buffers : list[buffer]
         Palletjack index of each source, as a buffer (e.g. an mmap of the index
         file). Kept exported for the duration of the call.
     column_sets : list[tuple[list[str], list[int]]]

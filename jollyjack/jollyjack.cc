@@ -1065,7 +1065,7 @@ static void ReadTaskIntoMemory (const int64_t *task
       names, targets, pre_buffer, use_threads, backend == kJollyJackIOUringODirectReader, rows, cache_options);
 }
 
-void ReadIntoMemoryBatch (const std::vector<std::string> &paths
+void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
     , const std::vector<const unsigned char*> &index_data
     , const std::vector<size_t> &index_data_lengths
     , const std::vector<int> &source_column_set

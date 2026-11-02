@@ -481,10 +481,10 @@ def worker_jollyjack_batch(
         ],
         dtype=np.int64,
     )
-    jj.read_into_numpy_batch(
+    jj.read_into_numpy_batch_palletjack(
         np_array=np_array,
         sources=paths,
-        index_buffers=[index_data[path] for path in paths],
+        palletjack_index_buffers=[index_data[path] for path in paths],
         column_sets=[
             ([name for name, _ in column_pairs], [dst for _, dst in column_pairs])
         ],
@@ -690,7 +690,7 @@ for dtype_key in cfg.dtypes:
 
                     if {"all", "jj_batch"} & cfg.benchmarks_to_run:
                         print(
-                            f"`jj.read_into_numpy_batch` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, sort_column_indices:{sort_col}, duration:{measure_reading(n_workers, lambda paths:worker_jollyjack_batch(n_threads=n_workers, use_threads=use_threads, pre_buffer=pre_buffer, column_pairs=column_pairs, dtype=dtype.to_pandas_dtype(), paths=paths, index_data=index_data), batch=True)}"
+                            f"`jj.read_into_numpy_batch_palletjack` jj_reader:{jj_reader}, n_workers:{n_workers}, use_threads:{use_threads}, pre_buffer:{pre_buffer}, sort_column_indices:{sort_col}, duration:{measure_reading(n_workers, lambda paths:worker_jollyjack_batch(n_threads=n_workers, use_threads=use_threads, pre_buffer=pre_buffer, column_pairs=column_pairs, dtype=dtype.to_pandas_dtype(), paths=paths, index_data=index_data), batch=True)}"
                         )
 
             os.environ.pop("JJ_READER_BACKEND", None)

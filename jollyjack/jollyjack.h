@@ -47,7 +47,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
 
 // Reads a whole batch of (source, row group) pairs into one array, on a native thread pool, without the GIL.
 // Task i is the four int64 values at tasks[4 * i]: (source index, row group, first row in the array, rows).
-void ReadIntoMemoryBatch (const std::vector<std::string> &paths
+void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
     , const std::vector<const unsigned char*> &index_data
     , const std::vector<size_t> &index_data_lengths
     , const std::vector<int> &source_column_set

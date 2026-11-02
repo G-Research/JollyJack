@@ -43,7 +43,7 @@ def read_task_by_task(
     pre_buffer,
     use_threads,
 ):
-    """The per-task Python loop that read_into_numpy_batch replaces"""
+    """The per-task Python loop that read_into_numpy_batch_palletjack replaces"""
     for source, row_group, row_start, rows in tasks:
         column_names, target_column_indices = column_sets[source_column_set[source]]
         metadata = pj.read_metadata(
@@ -76,10 +76,12 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
 
     def setUp(self):
         self.tmpdirname = self.enterContext(tempfile.TemporaryDirectory())
-        self.index_buffers = []
+        self.palletjack_index_buffers = []
         # A mapped index cannot be deleted on every file system, so unmap before the directory is removed
         self.addCleanup(
-            lambda: [index_buffer.close() for index_buffer in self.index_buffers]
+            lambda: [
+                index_buffer.close() for index_buffer in self.palletjack_index_buffers
+            ]
         )
 
     def write_sources(
@@ -98,7 +100,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             )
             sources.append(path)
             with open(index_paths[-1], "rb") as f:
-                self.index_buffers.append(
+                self.palletjack_index_buffers.append(
                     mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
                 )
 
@@ -186,10 +188,10 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         use_threads=False,
         cache_options=None,
     ):
-        jj.read_into_numpy_batch(
+        jj.read_into_numpy_batch_palletjack(
             np_array=np_array,
             sources=sources,
-            index_buffers=self.index_buffers,
+            palletjack_index_buffers=self.palletjack_index_buffers,
             column_sets=column_sets,
             source_column_set=source_column_set,
             tasks=tasks,
@@ -495,10 +497,10 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                 "Unexpected tasks.shape[1], 3 != 4",
             ),
             (
-                dict(index_buffers=self.index_buffers * 2),
+                dict(palletjack_index_buffers=self.palletjack_index_buffers * 2),
                 "Got 2 index buffers for 1 sources",
             ),
-            (dict(index_buffers=[b""]), "Index buffer 0 is empty"),
+            (dict(palletjack_index_buffers=[b""]), "Index buffer 0 is empty"),
             (dict(source_column_set=[0, 0]), "Got 2 column set indices for 1 sources"),
             (dict(n_threads=0), "Unexpected n_threads, 0 < 1"),
             (dict(n_threads=-1), "Unexpected n_threads, -1 < 1"),
@@ -540,7 +542,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                 kwargs = dict(
                     np_array=np.zeros((n_rows, 4), dtype="f", order="F"),
                     sources=sources,
-                    index_buffers=self.index_buffers,
+                    palletjack_index_buffers=self.palletjack_index_buffers,
                     column_sets=column_sets,
                     source_column_set=source_column_set,
                     tasks=tasks,
@@ -549,7 +551,7 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                 )
                 kwargs.update(overrides)
                 with self.assertRaises(ValueError) as context:
-                    jj.read_into_numpy_batch(**kwargs)
+                    jj.read_into_numpy_batch_palletjack(**kwargs)
 
                 self.assertTrue(error in str(context.exception), context.exception)
                 if overrides.get("np_array") is None:
@@ -579,10 +581,10 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         for task_count in [len(tasks), 0]:
             with self.subTest(task_count=task_count):
                 with self.assertRaises(ValueError) as context:
-                    jj.read_into_numpy_batch(
+                    jj.read_into_numpy_batch_palletjack(
                         np_array=np_array,
                         sources=sources,
-                        index_buffers=self.index_buffers,
+                        palletjack_index_buffers=self.palletjack_index_buffers,
                         column_sets=column_sets,
                         source_column_set=source_column_set,
                         tasks=tasks[:task_count],
@@ -609,10 +611,10 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         table = (ctypes.c_void_p * 4)()  # version 0, no members
         capsule = capsule_new(ctypes.addressof(table), name, None)
         with self.assertRaises(ValueError) as context:
-            jj.read_into_numpy_batch(
+            jj.read_into_numpy_batch_palletjack(
                 np_array=np_array,
                 sources=sources,
-                index_buffers=self.index_buffers,
+                palletjack_index_buffers=self.palletjack_index_buffers,
                 column_sets=column_sets,
                 source_column_set=source_column_set,
                 tasks=tasks,
