@@ -36,17 +36,13 @@ public:
     PARQUET_ASSIGN_OR_THROW(decompressor_, codec_->MakeDecompressor());
   }
 
-  const uint8_t *Decompress(const uint8_t *src, int64_t src_size, int64_t uncompressed_size, int64_t uncompressed_prefix)
+  const uint8_t *Decompress(const uint8_t *src, int64_t src_size, int64_t uncompressed_size)
   {
     if (buffer_.size() < (size_t)uncompressed_size)
       buffer_.resize(uncompressed_size);
 
-    memcpy(buffer_.data(), src, uncompressed_prefix);
-    src += uncompressed_prefix;
-    src_size -= uncompressed_prefix;
-
     PARQUET_THROW_NOT_OK(decompressor_->Reset());
-    int64_t read = 0, written = uncompressed_prefix;
+    int64_t read = 0, written = 0;
     while (read < src_size || !decompressor_->IsFinished())
     {
       auto result = decompressor_->Decompress(src_size - read, src + read, uncompressed_size - written,
@@ -72,6 +68,174 @@ private:
 };
 
 thread_local ZstdPageDecoder zstd_page_decoder;
+
+void CopyValues(uint8_t *dst, const uint8_t *src, size_t n)
+{
+#if defined(__x86_64__)
+  if (n >= 4096)
+  {
+    const size_t head = (64 - ((uintptr_t)dst & 63)) & 63;
+    memcpy(dst, src, head);
+    dst += head, src += head, n -= head;
+    for (; n >= 64; n -= 64, src += 64, dst += 64)
+    {
+      __m128i a = _mm_loadu_si128((const __m128i *)src), b = _mm_loadu_si128((const __m128i *)(src + 16));
+      __m128i c = _mm_loadu_si128((const __m128i *)(src + 32)), d = _mm_loadu_si128((const __m128i *)(src + 48));
+      _mm_stream_si128((__m128i *)dst, a);
+      _mm_stream_si128((__m128i *)(dst + 16), b);
+      _mm_stream_si128((__m128i *)(dst + 32), c);
+      _mm_stream_si128((__m128i *)(dst + 48), d);
+    }
+    memcpy(dst, src, n);
+    _mm_sfence();
+    return;
+  }
+#endif
+  memcpy(dst, src, n);
+}
+
+struct PageHeaderLite
+{
+  int32_t type = -1, uncompressed_size = -1, compressed_size = -1;
+  int32_t num_values = -1, encoding = -1, def_level_encoding = -1, num_nulls = 0;
+  int32_t def_levels_bytes = 0, rep_levels_bytes = 0;
+  bool is_compressed = true;
+};
+
+class CompactReader
+{
+public:
+  CompactReader(const uint8_t *p, const uint8_t *end) : p_(p), end_(end) {}
+  const uint8_t *pos() const { return p_; }
+
+  uint8_t Byte()
+  {
+    if (p_ >= end_)
+      throw parquet::ParquetException("Truncated page header");
+    return *p_++;
+  }
+
+  uint64_t Varint()
+  {
+    uint64_t r = 0;
+    for (int shift = 0; shift < 64; shift += 7)
+    {
+      const uint8_t b = Byte();
+      r |= uint64_t(b & 0x7f) << shift;
+      if (!(b & 0x80))
+        return r;
+    }
+    throw parquet::ParquetException("Corrupt varint in page header");
+  }
+
+  int32_t I32() { const uint64_t v = Varint(); return int32_t((v >> 1) ^ -(v & 1)); }
+
+  void Skip(int type)
+  {
+    switch (type)
+    {
+      case 1: case 2: return;
+      case 3: Byte(); return;
+      case 4: case 5: case 6: Varint(); return;
+      case 7: Advance(8); return;
+      case 8: Advance(Varint()); return;
+      case 9: case 10:
+      {
+        const uint8_t h = Byte();
+        uint64_t n = h >> 4;
+        if (n == 15)
+          n = Varint();
+        for (uint64_t i = 0; i < n; i++)
+          SkipElement(h & 0x0f);
+        return;
+      }
+      case 11:
+      {
+        const uint64_t n = Varint();
+        if (n == 0)
+          return;
+        const uint8_t kv = Byte();
+        for (uint64_t i = 0; i < n; i++)
+        {
+          SkipElement(kv >> 4);
+          SkipElement(kv & 0x0f);
+        }
+        return;
+      }
+      case 12: SkipStruct(); return;
+      default: throw parquet::ParquetException("Unexpected thrift type in page header");
+    }
+  }
+
+  template <typename F>
+  void Struct(F &&field)
+  {
+    int16_t id = 0;
+    while (true)
+    {
+      const uint8_t h = Byte();
+      if (h == 0)
+        return;
+      const int type = h & 0x0f;
+      if (h >> 4)
+        id += h >> 4;
+      else
+        id = int16_t(I32());
+      field(id, type);
+    }
+  }
+
+  void SkipStruct() { Struct([&](int16_t, int type) { Skip(type); }); }
+
+private:
+  void SkipElement(int type)
+  {
+    if (type == 1 || type == 2)
+      Byte();  // bools in containers take a byte each
+    else
+      Skip(type);
+  }
+
+  void Advance(uint64_t n)
+  {
+    if (n > uint64_t(end_ - p_))
+      throw parquet::ParquetException("Truncated page header");
+    p_ += n;
+  }
+
+  const uint8_t *p_, *end_;
+};
+
+const uint8_t *ParsePageHeader(const uint8_t *p, const uint8_t *end, PageHeaderLite *h)
+{
+  CompactReader r(p, end);
+  r.Struct([&](int16_t id, int type) {
+    if (type == 5 && id >= 1 && id <= 3)
+      (id == 1 ? h->type : id == 2 ? h->uncompressed_size : h->compressed_size) = r.I32();
+    else if (type == 12 && id == 5)
+      r.Struct([&](int16_t id5, int type5) {
+        if (type5 == 5 && id5 == 1) h->num_values = r.I32();
+        else if (type5 == 5 && id5 == 2) h->encoding = r.I32();
+        else if (type5 == 5 && id5 == 3) h->def_level_encoding = r.I32();
+        else r.Skip(type5);
+      });
+    else if (type == 12 && id == 8)
+      r.Struct([&](int16_t id8, int type8) {
+        if (type8 == 5 && id8 == 1) h->num_values = r.I32();
+        else if (type8 == 5 && id8 == 2) h->num_nulls = r.I32();
+        else if (type8 == 5 && id8 == 4) h->encoding = r.I32();
+        else if (type8 == 5 && id8 == 5) h->def_levels_bytes = r.I32();
+        else if (type8 == 5 && id8 == 6) h->rep_levels_bytes = r.I32();
+        else if ((type8 == 1 || type8 == 2) && id8 == 7) h->is_compressed = type8 == 1;
+        else r.Skip(type8);
+      });
+    else
+      r.Skip(type);
+  });
+  if (h->uncompressed_size < 0 || h->compressed_size < 0 || h->compressed_size > end - r.pos())
+    throw parquet::ParquetException("Corrupt page header");
+  return r.pos();
+}
 
 }  // namespace
 
@@ -100,8 +264,9 @@ public:
 
     if (fast_path && descr->max_repetition_level() == 0)
     {
-      if (source != nullptr && column_chunk_metadata->compression() == arrow::Compression::ZSTD)
-        page_reader_ = OpenCompressedPageReader(source, descr, column_chunk_metadata);
+      if (source != nullptr && (column_chunk_metadata->compression() == arrow::Compression::ZSTD
+          || column_chunk_metadata->compression() == arrow::Compression::UNCOMPRESSED))
+        OpenChunk(source, column_chunk_metadata);
       else
         page_reader_ = row_group_reader->GetColumnPageReader(column_index);
     }
@@ -141,7 +306,7 @@ public:
     }
 
     const int64_t n = std::min<int64_t>(batch_size, page_values_ - page_pos_);
-    memcpy(dst, page_values_ptr_ + page_pos_ * type_length_, n * type_length_);
+    CopyValues(dst, page_values_ptr_ + page_pos_ * type_length_, n * type_length_);
     page_pos_ += n;
     *values_read = n;
     return n;
@@ -174,9 +339,7 @@ protected:
 
 private:
 
-  std::unique_ptr<parquet::PageReader> OpenCompressedPageReader(
-      const std::shared_ptr<arrow::io::RandomAccessFile> &source,
-      const parquet::ColumnDescriptor *descr,
+  void OpenChunk(const std::shared_ptr<arrow::io::RandomAccessFile> &source,
       const parquet::ColumnChunkMetaData *column_chunk_metadata)
   {
     int64_t chunk_start = column_chunk_metadata->data_page_offset();
@@ -184,17 +347,94 @@ private:
         && chunk_start > column_chunk_metadata->dictionary_page_offset())
       chunk_start = column_chunk_metadata->dictionary_page_offset();
 
-    PARQUET_ASSIGN_OR_THROW(auto chunk, source->ReadAt(chunk_start, column_chunk_metadata->total_compressed_size()));
-    own_zstd_ = true;
-    return parquet::PageReader::Open(std::make_shared<arrow::io::BufferReader>(std::move(chunk)),
-        column_chunk_metadata->num_values(), arrow::Compression::UNCOMPRESSED,
-        parquet::default_reader_properties(), *descr);
+    PARQUET_ASSIGN_OR_THROW(chunk_, source->ReadAt(chunk_start, column_chunk_metadata->total_compressed_size()));
+    chunk_pos_ = chunk_->data();
+    chunk_end_ = chunk_pos_ + chunk_->size();
+    remaining_values_ = column_chunk_metadata->num_values();
+    compressed_ = column_chunk_metadata->compression() == arrow::Compression::ZSTD;
+    fast_pages_ = true;
+  }
+
+  bool NextFastDataPage()
+  {
+    while (chunk_pos_ < chunk_end_ && remaining_values_ > 0)
+    {
+      PageHeaderLite h;
+      const uint8_t *payload = ParsePageHeader(chunk_pos_, chunk_end_, &h);
+      chunk_pos_ = payload + h.compressed_size;
+      if (h.type != 0 && h.type != 3)
+        continue;
+      if (h.encoding != 0)
+        throw parquet::ParquetException(std::string("Unexpected data page encoding ")
+            + parquet::EncodingToString(static_cast<parquet::Encoding::type>(h.encoding))
+            + " on the FIXED_LEN_BYTE_ARRAY fast path");
+      if (h.num_values < 0)
+        throw parquet::ParquetException("Corrupt page header");
+      remaining_values_ -= h.num_values;
+
+      if (h.type == 3)
+      {
+        if (h.num_nulls != 0)
+          throw parquet::ParquetException("Column contains null values");
+        const int64_t levels = int64_t(h.def_levels_bytes) + h.rep_levels_bytes;
+        if (h.def_levels_bytes < 0 || h.rep_levels_bytes < 0 || levels > h.compressed_size || levels > h.uncompressed_size)
+          throw parquet::ParquetException("Corrupt page header");
+        const int64_t values_size = h.uncompressed_size - levels;
+        const uint8_t *values_ptr = payload + levels;
+        if (compressed_ && h.is_compressed)
+          values_ptr = zstd_page_decoder.Decompress(values_ptr, h.compressed_size - levels, values_size);
+        else if (h.compressed_size != h.uncompressed_size)
+          throw parquet::ParquetException("Corrupt page header");
+        if (int64_t(h.num_values) * type_length_ > values_size)
+          throw parquet::ParquetException("Column contains null values");
+        if (h.num_values == 0)
+          continue;
+        page_values_ptr_ = values_ptr;
+        page_values_ = h.num_values;
+        page_pos_ = 0;
+        return true;
+      }
+
+      if (!compressed_ && h.compressed_size != h.uncompressed_size)
+        throw parquet::ParquetException("Corrupt page header");
+      const uint8_t *page_data = compressed_ ? zstd_page_decoder.Decompress(payload, h.compressed_size, h.uncompressed_size) : payload;
+      const uint8_t *page_end = page_data + h.uncompressed_size;
+      const uint8_t *values_ptr = page_data;
+      if (max_def_level_ > 0)
+      {
+        if (h.def_level_encoding != 3)
+          throw parquet::ParquetException(std::string("Unsupported definition-level encoding ")
+              + parquet::EncodingToString(static_cast<parquet::Encoding::type>(h.def_level_encoding))
+              + " on the FIXED_LEN_BYTE_ARRAY fast path");
+        if (values_ptr + 4 > page_end)
+          throw parquet::ParquetException("Corrupt definition-level section");
+        int32_t def_len = 0;
+        memcpy(&def_len, values_ptr, sizeof(int32_t));  // little-endian length prefix
+        if (def_len < 0)
+          throw parquet::ParquetException("Invalid definition-level length");
+        values_ptr += 4 + def_len;
+      }
+
+      if (values_ptr < page_data || values_ptr + int64_t(h.num_values) * type_length_ > page_end)
+        throw parquet::ParquetException("Column contains null values");
+
+      if (h.num_values == 0)
+        continue;
+
+      page_values_ptr_ = values_ptr;
+      page_values_ = h.num_values;
+      page_pos_ = 0;
+      return true;
+    }
+    return false;
   }
 
   // Advance to the next data page and locate its contiguous value region.
   // Returns false at end of column. Throws on unexpected encodings/nulls.
   bool NextDataPage()
   {
+    if (fast_pages_)
+      return NextFastDataPage();
     while (true)
     {
       current_page_ = page_reader_->NextPage();
@@ -213,26 +453,7 @@ private:
             + " on the FIXED_LEN_BYTE_ARRAY fast path");
 
       const uint8_t *page_data = data_page->data();
-      int64_t page_size = data_page->size();
-
-      if (own_zstd_)
-      {
-        int64_t levels_size = 0;
-        bool compressed = true;
-        if (page_type == parquet::PageType::DATA_PAGE_V2)
-        {
-          auto data_page_v2 = std::static_pointer_cast<parquet::DataPageV2>(current_page_);
-          levels_size = data_page_v2->repetition_levels_byte_length() + data_page_v2->definition_levels_byte_length();
-          compressed = data_page_v2->is_compressed();
-        }
-
-        if (compressed)
-        {
-          page_size = data_page->uncompressed_size();
-          page_data = zstd_page_decoder.Decompress(page_data, data_page->size(), page_size, levels_size);
-        }
-      }
-
+      const int64_t page_size = data_page->size();
       const uint8_t *page_end = page_data + page_size;
       const uint8_t *values_ptr = page_data;
       const int64_t page_values = data_page->num_values();
@@ -293,7 +514,12 @@ private:
   std::shared_ptr<parquet::ColumnReader> fallback_reader_;
 
   bool eof_ = false;
-  bool own_zstd_ = false;
+  bool fast_pages_ = false;
+  bool compressed_ = false;
+  std::shared_ptr<arrow::Buffer> chunk_;
+  const uint8_t *chunk_pos_ = nullptr;
+  const uint8_t *chunk_end_ = nullptr;
+  int64_t remaining_values_ = 0;
   std::shared_ptr<parquet::Page> current_page_;  // keeps the current page buffer alive
   const uint8_t *page_values_ptr_ = nullptr;
   int64_t page_values_ = 0;
