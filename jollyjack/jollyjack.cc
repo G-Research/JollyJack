@@ -1272,7 +1272,7 @@ static void ReadTaskIntoMemory (const int64_t *task
   auto file_metadata = read_metadata(index_data[source], index_data_lengths[source], {row_group}, {}, names, false);
 
   void* sub_buffer = static_cast<uint8_t*>(buffer) + row_start * stride0_size;
-  const size_t buffer_size = rows * stride0_size + (columns - 1) * stride1_size;
+  const size_t buffer_size = columns == 0 ? 0 : rows * stride0_size + (columns - 1) * stride1_size;
 
   if (backend == kJollyJackDefaultReader)
   {
