@@ -75,7 +75,9 @@ def read_with_pyarrow(np_array, sources, column_sets, source_column_set, tasks):
 class TestReadIntoNumpyBatch(unittest.TestCase):
 
     def setUp(self):
-        self.tmpdirname = self.enterContext(tempfile.TemporaryDirectory())
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        self.tmpdirname = tmpdir.name
         self.palletjack_index_buffers = []
         # A mapped index cannot be deleted on every file system, so unmap before the directory is removed
         self.addCleanup(
