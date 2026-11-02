@@ -2380,5 +2380,5 @@ class TestJollyJackBatch(TestJollyJack):
 
 
 if __name__ == "__main__":
-    # unittest.main()
-    unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJackBatch.test_read_invalid_row_group'])
+    unittest.main()
+    # unittest.main(argv=['first-arg-is-ignored', '-k', 'TestJollyJack.test_read_unsupported_encoding_delta_byte_array'])
