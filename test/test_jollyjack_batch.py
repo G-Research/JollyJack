@@ -435,6 +435,101 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
         )
         self.assertTrue("not_a_column" in str(context.exception), context.exception)
 
+    def test_column_positions(self):
+        column_names = [f"column_{i}" for i in range(5)]
+        sources, _, source_column_set, _ = self.write_sources(
+            [(column_names, [0, 1, 2, 3, 4])],
+            source_column_set=[0, 0, 0],
+            n_row_groups=3,
+        )
+        tasks = np.array(
+            [
+                (source, rg, (source * 3 + rg) * chunk_size, chunk_size)
+                for source in range(len(sources))
+                for rg in range(3)
+            ],
+            dtype=np.int64,
+        )
+        by_name = [(["column_3", "column_0", "column_4"], [0, 1, 2])]
+        by_position = [(*by_name[0], [3, 0, 4])]
+        expected = np.zeros((9 * chunk_size, 3), dtype="f", order="F")
+        read_with_pyarrow(expected, sources, by_name, source_column_set, tasks)
+        self.assertTrue(expected.all())
+        for pre_buffer, use_threads in itertools.product([False, True], [False, True]):
+            with self.subTest(pre_buffer=pre_buffer, use_threads=use_threads):
+                arrays = []
+                for column_sets in [by_name, by_position]:
+                    np_array = np.zeros_like(expected, order="F")
+                    self.read_batch(
+                        np_array,
+                        sources,
+                        column_sets,
+                        source_column_set,
+                        tasks,
+                        pre_buffer=pre_buffer,
+                        use_threads=use_threads,
+                    )
+                    arrays.append(np_array.tobytes())
+                self.assertEqual(arrays[0], expected.tobytes())
+                self.assertEqual(arrays[1], expected.tobytes())
+
+    def test_mixed_column_positions(self):
+        column_sets = [
+            ([f"column_{i}" for i in range(4)], [0, 1, 2, 3]),
+            ([f"other_{i}" for i in range(3)], [4, 5, 6]),
+        ]
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
+        by_name = [(["column_2", "column_0"], [0, 1]), (["other_1"], [2])]
+        expected = np.zeros((n_rows, 3), dtype="f", order="F")
+        read_with_pyarrow(expected, sources, by_name, source_column_set, tasks)
+        np_array = np.zeros((n_rows, 3), dtype="f", order="F")
+        self.read_batch(
+            np_array,
+            sources,
+            [(*by_name[0], [2, 0]), by_name[1]],
+            source_column_set,
+            tasks,
+        )
+        self.assertEqual(np_array.tobytes(), expected.tobytes())
+        self.assertTrue(np_array.all())
+
+    def test_column_positions_disagree_with_names(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
+        np_array = np.zeros((n_rows, 2), dtype="f", order="F")
+        with self.assertRaises(RuntimeError) as context:
+            self.read_batch(
+                np_array,
+                sources,
+                [(["column_3", "column_0"], [0, 1], [1, 0])],
+                source_column_set,
+                tasks,
+            )
+
+        self.assertTrue(
+            "Failed to read row group" in str(context.exception), context.exception
+        )
+        self.assertTrue("column_3" in str(context.exception), context.exception)
+
+    def test_column_positions_out_of_range(self):
+        column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
+        sources, _, source_column_set, tasks = self.write_sources(column_sets)
+        np_array = np.zeros((n_rows, 1), dtype="f", order="F")
+        with self.assertRaises(RuntimeError) as context:
+            self.read_batch(
+                np_array, sources, [(["column_0"], [0], [4])], source_column_set, tasks
+            )
+
+        self.assertTrue(
+            "Requested column=4, but only 0-3 are available" in str(context.exception),
+            context.exception,
+        )
+        with self.assertRaises(OverflowError):
+            self.read_batch(
+                np_array, sources, [(["column_0"], [0], [-1])], source_column_set, tasks
+            )
+        self.assertFalse(np_array.any())
+
     def test_no_tasks(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
         sources, _, source_column_set, _ = self.write_sources(column_sets)
@@ -509,6 +604,10 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
             (
                 dict(column_sets=[(column_names, [0, 1, 2])]),
                 "Got 4 column names and 3 target indices",
+            ),
+            (
+                dict(column_sets=[(column_names, [0, 1, 2, 3], [0, 1, 2])]),
+                "Got 4 column names and 3 column positions",
             ),
             (
                 dict(source_column_set=[1]),
