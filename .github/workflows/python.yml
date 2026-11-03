@@ -152,7 +152,8 @@ jobs:
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all:
         # So now ensure that the local version is installed 
         python3 -m pip install JollyJack --pre --find-links ./dist --break-system-packages --only-binary=:all: --force-reinstall --no-index --no-deps
-        python3 test/test_jollyjack.py
+        # importlib mode keeps the repository root off sys.path, so the tests import the installed wheel, not ./jollyjack
+        pytest --import-mode=importlib test
 
   test-binary-manylinux:
     needs: build-wheels

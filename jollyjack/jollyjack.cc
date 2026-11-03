@@ -1,3 +1,4 @@
+#include "arrow/io/file.h"
 #include "arrow/io/memory.h"
 #include "arrow/status.h"
 #include "arrow/util/parallel.h"
@@ -7,11 +8,15 @@
 #include "parquet/types.h"
 
 #include "jollyjack.h"
+#include "read_into_memory_io_uring.h"
 
+#include <atomic>
 #include "arrow/util/compression.h"
 
 #include <iostream>
+#include <mutex>
 #include <stdlib.h>
+#include <thread>
 
 #if defined(__x86_64__)
   #include <immintrin.h>
@@ -1271,3 +1276,132 @@ void ReadIntoMemoryIOUring (const std::string& path
 }
 
 #endif
+
+// One row of the tasks array passed to ReadIntoMemoryBatchPalletJack
+struct BatchTask
+{
+  int64_t source;
+  int64_t row_group;
+  int64_t row_start;
+  int64_t rows;
+};
+
+static_assert(sizeof(BatchTask) == 4 * sizeof(int64_t), "BatchTask must match a row of four int64 values");
+
+static void ReadTaskIntoMemory (const BatchTask &task
+    , const std::vector<std::string> &paths
+    , const std::vector<const unsigned char*> &index_data
+    , const std::vector<size_t> &index_data_lengths
+    , const std::vector<int> &source_column_set
+    , const std::vector<std::vector<std::string>> &column_names
+    , const std::vector<std::vector<int>> &target_column_indices
+    , PalletJackReadMetadataFromBufferV1Func read_metadata
+    , void* buffer
+    , size_t stride0_size
+    , size_t stride1_size
+    , int64_t columns
+    , bool pre_buffer
+    , bool use_threads
+    , JollyJackReaderBackend backend
+    , arrow::io::CacheOptions cache_options)
+{
+  const size_t source = task.source;
+  const uint32_t row_group = task.row_group;
+  const int64_t row_start = task.row_start;
+  const int64_t rows = task.rows;
+
+  if (source >= paths.size())
+  {
+    auto msg = std::string("Source index ") + std::to_string(task.source) + " is out of range, " + std::to_string(paths.size()) + " sources were given";
+    throw std::logic_error(msg);
+  }
+
+  const auto &names = column_names[source_column_set[source]];
+  const auto &targets = target_column_indices[source_column_set[source]];
+  auto file_metadata = read_metadata(index_data[source], index_data_lengths[source], {row_group}, {}, names, false);
+
+  void* sub_buffer = static_cast<uint8_t*>(buffer) + row_start * stride0_size;
+  const size_t buffer_size = columns == 0 ? 0 : rows * stride0_size + (columns - 1) * stride1_size;
+
+  if (backend == kJollyJackDefaultReader)
+  {
+    auto source_file = arrow::io::ReadableFile::Open(paths[source]);
+    if (!source_file.ok())
+    {
+      throw std::runtime_error(source_file.status().ToString());
+    }
+
+    ReadIntoMemory (*source_file, file_metadata, sub_buffer, buffer_size, stride0_size, stride1_size, {}, {0}, {},
+        names, targets, pre_buffer, false, use_threads, rows, cache_options);
+    return;
+  }
+
+  ReadIntoMemoryIOUring (paths[source], file_metadata, sub_buffer, buffer_size, stride0_size, stride1_size, {}, {0}, {},
+      names, targets, pre_buffer, use_threads, backend == kJollyJackIOUringODirectReader, rows, cache_options);
+}
+
+void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
+    , const std::vector<const unsigned char*> &index_data
+    , const std::vector<size_t> &index_data_lengths
+    , const std::vector<int> &source_column_set
+    , const std::vector<std::vector<std::string>> &column_names
+    , const std::vector<std::vector<int>> &target_column_indices
+    , const int64_t *tasks
+    , int64_t task_count
+    , PalletJackReadMetadataFromBufferV1Func read_metadata
+    , void* buffer
+    , size_t stride0_size
+    , size_t stride1_size
+    , int64_t columns
+    , int n_threads
+    , bool pre_buffer
+    , bool use_threads
+    , JollyJackReaderBackend backend
+    , arrow::io::CacheOptions cache_options)
+{
+  const BatchTask *batch_tasks = reinterpret_cast<const BatchTask *>(tasks);
+  std::atomic<int64_t> next_task(0);
+  std::atomic<bool> failed(false);
+  std::mutex error_mutex;
+  std::string error;
+
+  auto read_tasks = [&] ()
+  {
+    while (!failed)
+    {
+      const int64_t i = next_task.fetch_add(1);
+      if (i >= task_count)
+        return;
+
+      const BatchTask &task = batch_tasks[i];
+      try
+      {
+        ReadTaskIntoMemory (task, paths, index_data, index_data_lengths, source_column_set, column_names,
+            target_column_indices, read_metadata, buffer, stride0_size, stride1_size, columns, pre_buffer, use_threads,
+            backend, cache_options);
+      }
+      catch (const std::exception& e)
+      {
+        auto source = static_cast<size_t>(task.source);
+        auto msg = std::string("Failed to read row group ") + std::to_string(task.row_group) + " of '"
+            + (source < paths.size() ? paths[source] : std::string("?")) + "': " + e.what();
+        std::lock_guard<std::mutex> guard(error_mutex);
+        if (error.empty())
+          error = msg;
+        failed = true;
+        return;
+      }
+    }
+  };
+
+  std::vector<std::thread> threads;
+  for (int i = 1; i < std::min<int64_t>(n_threads, task_count); i++)
+    threads.emplace_back(read_tasks);
+
+  read_tasks();
+  for (auto &thread : threads)
+    thread.join();
+
+  if (!error.empty())
+    throw std::runtime_error(error);
+}

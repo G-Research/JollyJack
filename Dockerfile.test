@@ -14,7 +14,7 @@ ENV PYTHON_VERSION=${PYTHON_VERSION}
 RUN ldd --version && \
 
 # Install and test with Python ${PYTHON_VERSION}
-   /opt/python/${PYTHON_VERSION}/bin/pip install -r ./requirements.txt && \
+   /opt/python/${PYTHON_VERSION}/bin/pip install -r ./requirements.txt pytest && \
 
 # Setup torch
   /opt/python/${PYTHON_VERSION}/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu && \
@@ -26,4 +26,5 @@ RUN ldd --version && \
    /opt/python/${PYTHON_VERSION}/bin/pip install JollyJack --pre --find-links ./dist --only-binary=:all: --force-reinstall --no-index --no-deps
 
 # Define the command to run tests
-CMD "/opt/python/${PYTHON_VERSION}/bin/python" "test/test_jollyjack.py"
+# importlib mode keeps /app off sys.path, so the tests import the installed wheel, not ./jollyjack
+CMD "/opt/python/${PYTHON_VERSION}/bin/pytest" "--import-mode=importlib" "test"
