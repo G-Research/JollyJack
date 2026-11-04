@@ -4,7 +4,7 @@ FROM quay.io/pypa/manylinux_2_28
 WORKDIR /app
 COPY . .
 
-ARG PYTHON_VERSION="cp39-cp39"
+ARG PYTHON_VERSION="cp311-cp311"
 
 # Set PYTHON_VERSION as an environment variable.
 # See https://stackoverflow.com/questions/35560894/is-docker-arg-allowed-within-cmd-instruction (Environment variables are accessible within the CMD instruction at runtime.)
