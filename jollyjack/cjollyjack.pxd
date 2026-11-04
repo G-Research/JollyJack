@@ -29,6 +29,7 @@ cdef extern from "jollyjack.h":
         , const vector[size_t] &index_data_lengths
         , const vector[int] &source_column_set
         , const vector[vector[string]] &column_names
+        , const vector[vector[uint32_t]] &column_positions
         , const vector[vector[int]] &target_column_indices
         , const int64_t *tasks
         , int64_t task_count

@@ -1294,6 +1294,7 @@ static void ReadTaskIntoMemory (const BatchTask &task
     , const std::vector<size_t> &index_data_lengths
     , const std::vector<int> &source_column_set
     , const std::vector<std::vector<std::string>> &column_names
+    , const std::vector<std::vector<uint32_t>> &column_positions
     , const std::vector<std::vector<int>> &target_column_indices
     , PalletJackReadMetadataFromBufferV1Func read_metadata
     , void* buffer
@@ -1318,7 +1319,10 @@ static void ReadTaskIntoMemory (const BatchTask &task
 
   const auto &names = column_names[source_column_set[source]];
   const auto &targets = target_column_indices[source_column_set[source]];
-  auto file_metadata = read_metadata(index_data[source], index_data_lengths[source], {row_group}, {}, names, false);
+  const auto &positions = column_positions[source_column_set[source]];
+  auto file_metadata = positions.empty()
+      ? read_metadata(index_data[source], index_data_lengths[source], {row_group}, {}, names, false)
+      : read_metadata(index_data[source], index_data_lengths[source], {row_group}, positions, {}, false);
 
   void* sub_buffer = static_cast<uint8_t*>(buffer) + row_start * stride0_size;
   const size_t buffer_size = columns == 0 ? 0 : rows * stride0_size + (columns - 1) * stride1_size;
@@ -1345,6 +1349,7 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
     , const std::vector<size_t> &index_data_lengths
     , const std::vector<int> &source_column_set
     , const std::vector<std::vector<std::string>> &column_names
+    , const std::vector<std::vector<uint32_t>> &column_positions
     , const std::vector<std::vector<int>> &target_column_indices
     , const int64_t *tasks
     , int64_t task_count
@@ -1377,7 +1382,7 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
       try
       {
         ReadTaskIntoMemory (task, paths, index_data, index_data_lengths, source_column_set, column_names,
-            target_column_indices, read_metadata, buffer, stride0_size, stride1_size, columns, pre_buffer, use_threads,
+            column_positions, target_column_indices, read_metadata, buffer, stride0_size, stride1_size, columns, pre_buffer, use_threads,
             backend, cache_options);
       }
       catch (const std::exception& e)

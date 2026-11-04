@@ -177,8 +177,12 @@ def read_into_numpy_batch_palletjack(
     palletjack_index_buffers : list[buffer]
         Palletjack index of each source, as a buffer (e.g. an mmap of the index
         file). Kept exported for the duration of the call.
-    column_sets : list[tuple[list[str], list[int]]]
+    column_sets : list[tuple[list[str], list[int]] | tuple[list[str], list[int], list[int]]]
         Column names to read, and the columns of np_array to write them to.
+        An optional third element gives the positions of the columns in the
+        files, which palletjack then decodes the metadata by instead of by
+        name. The columns are still looked up by name, so a position that
+        does not hold the named column fails the read.
     source_column_set : list[int]
         The column set to read from each source.
     tasks : numpy.ndarray

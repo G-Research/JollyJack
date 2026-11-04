@@ -162,8 +162,9 @@ cpdef void read_into_numpy_batch_palletjack (cnp.ndarray np_array, sources, pall
     """Read a batch of (source, row group) pairs into one array, on a native thread pool, without holding the GIL.
 
     `sources` are parquet paths and `palletjack_index_buffers` the matching palletjack indexes, as buffers (an mmap of each
-    index file). `column_sets` are `(column_names, target_column_indices)` pairs and `source_column_set[i]` says
-    which of them to read from source `i`. Each row of `tasks` is `(source index, row group, row_start, rows)`,
+    index file). `column_sets` are `(column_names, target_column_indices)` pairs, or triples that add the columns'
+    positions in the files for palletjack to decode the metadata by, and `source_column_set[i]` says which of them to
+    read from source `i`. Each row of `tasks` is `(source index, row group, row_start, rows)`,
     and fills rows `[row_start, row_start + rows)` of `np_array`. `palletjack_capi` is the
     `palletjack.palletjack_capi` capsule. The reader backend is taken from the JJ_READER_BACKEND environment variable,
     as in `read_into_numpy`.
@@ -188,18 +189,24 @@ cpdef void read_into_numpy_batch_palletjack (cnp.ndarray np_array, sources, pall
     cdef vector[size_t] cindex_data_lengths
     cdef vector[int] csource_column_set = source_column_set
     cdef vector[vector[string]] ccolumn_names
+    cdef vector[vector[uint32_t]] ccolumn_positions
     cdef vector[vector[int]] ctarget_column_indices
     cdef vector[string] cnames
+    cdef vector[uint32_t] cpositions
     cdef vector[int] ctargets
     cdef const unsigned char[::1] index_view
     cdef list index_views = []
 
-    for column_names, target_column_indices in column_sets:
-        cnames = [c.encode('utf8') for c in column_names]
-        ctargets = target_column_indices
+    for column_set in column_sets:
+        cnames = [c.encode('utf8') for c in column_set[0]]
+        ctargets = column_set[1]
+        cpositions = column_set[2] if len(column_set) > 2 else []
         if cnames.size() != ctargets.size():
             raise ValueError(f"Got {cnames.size()} column names and {ctargets.size()} target indices")
+        if len(column_set) > 2 and cpositions.size() != cnames.size():
+            raise ValueError(f"Got {cnames.size()} column names and {cpositions.size()} column positions")
         ccolumn_names.push_back(cnames)
+        ccolumn_positions.push_back(cpositions)
         ctarget_column_indices.push_back(ctargets)
 
     for source in sources:
@@ -270,6 +277,7 @@ cpdef void read_into_numpy_batch_palletjack (cnp.ndarray np_array, sources, pall
             , cindex_data_lengths
             , csource_column_set
             , ccolumn_names
+            , ccolumn_positions
             , ctarget_column_indices
             , ctasks
             , ctask_count

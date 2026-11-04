@@ -52,6 +52,7 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
     , const std::vector<size_t> &index_data_lengths
     , const std::vector<int> &source_column_set
     , const std::vector<std::vector<std::string>> &column_names
+    , const std::vector<std::vector<uint32_t>> &column_positions
     , const std::vector<std::vector<int>> &target_column_indices
     , const int64_t *tasks
     , int64_t task_count
