@@ -1,4 +1,4 @@
-pyarrow~=25.0.0
+pyarrow~=26.0.0
 numpy>=1.16.6
 palletjack
 parameterized
