@@ -2318,7 +2318,9 @@ class TestJollyJack(unittest.TestCase):
             unreadable = os.path.join(tmpdirname, "unreadable")
             os.mkdir(unreadable)
             while os.stat(unreadable).st_size < os.path.getsize(path):
-                open(os.path.join(unreadable, f"{len(os.listdir(unreadable))}"), "w").close()
+                open(
+                    os.path.join(unreadable, f"{len(os.listdir(unreadable))}"), "w"
+                ).close()
 
             for _ in range(20):
                 np_array = np.zeros((rows, columns), dtype="f", order="F")
