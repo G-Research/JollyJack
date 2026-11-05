@@ -426,12 +426,13 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
 ) {
   size_t min_completed_requests = use_threads ? 128 : 1;
   completed_requests->clear();
+  arrow::Status status = arrow::Status::OK();
 
   // Wait for all I/O operations to complete
   while (*requests_to_complete > 0) {
     struct io_uring_cqe* completion_entry;
 
-    if (completed_requests->size() < min_completed_requests)
+    if (!status.ok() || completed_requests->size() < min_completed_requests)
     {
       int wait_result;
       do {
@@ -453,18 +454,24 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
 
     // Validate the completion
     size_t request_index = reinterpret_cast<size_t>(io_uring_cqe_get_data(completion_entry));
-    CoalescedIORequest& completed_request = io_requests[request_index];
-    completed_requests->push_back(request_index);
+    int result = completion_entry->res;
+    io_uring_cqe_seen(&ring, completion_entry);
 
-    if (completion_entry->res < 0) {
-      auto msg = std::string("I/O operation failed: ") + std::string(strerror(-completion_entry->res));
-      return arrow::Status::UnknownError(msg);
+    if (!status.ok())
+      continue;
+
+    CoalescedIORequest& completed_request = io_requests[request_index];
+    if (result < 0) {
+      auto msg = std::string("I/O operation failed: ") + std::string(strerror(-result));
+      status = arrow::Status::UnknownError(msg);
+      continue;
     }
 
-    if (completion_entry->res < completed_request.read_length) {
+    if (result < completed_request.read_length) {
       auto msg = std::string("Incomplete read: expected ") + std::to_string(completed_request.read_length) + 
-        " bytes, got " + std::to_string(completion_entry->res);
-      return arrow::Status::UnknownError(msg);
+        " bytes, got " + std::to_string(result);
+      status = arrow::Status::UnknownError(msg);
+      continue;
     }
 
     bool shrink_to_fit = false;
@@ -481,10 +488,10 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
         column_operation.column_reader = row_group_reader->Column(column_operation.parquet_column_index);
     }
 
-    io_uring_cqe_seen(&ring, completion_entry);
+    completed_requests->push_back(request_index);
   }
 
-  return arrow::Status::OK();
+  return status;
 }
 
 // Process all completed I/O requests, optionally in parallel
