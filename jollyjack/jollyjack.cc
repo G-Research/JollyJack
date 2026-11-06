@@ -273,10 +273,12 @@ const uint8_t *ParsePageHeader(const uint8_t *p, const uint8_t *end, PageHeaderL
 
 }  // namespace
 
-// Reader for flat, null-free FLBA columns. PLAIN pages are copied directly from
-// decompressed page buffers into the caller's output. Other encodings are decoded
-// with the dense parquet::FLBADecoder::Decode(uint8_t*, int) API, which writes
-// packed values with no per-value pointers.
+// Reader for flat, null-free FLBA columns. ZSTD, SNAPPY and uncompressed chunks
+// are read whole and walked page by page here; other codecs use Arrow's PageReader.
+// PLAIN pages are copied directly from decompressed page buffers into the caller's
+// output. Other encodings are decoded with the dense
+// parquet::FLBADecoder::Decode(uint8_t*, int) API, which writes packed values with
+// no per-value pointers.
 class ContiguousFLBAReader : public parquet::ColumnReader
 {
 public:
@@ -292,15 +294,7 @@ public:
     if (descr->max_repetition_level() > 0)
       throw parquet::ParquetException("Repeated FIXED_LEN_BYTE_ARRAY columns are not supported");
 
-    // The fast path only handles PLAIN-encoded columns read as a whole chunk.
-    bool fast_path = true;
-    for (const auto encoding : column_chunk_metadata->encodings())
-    {
-      if (encoding != parquet::Encoding::PLAIN && encoding != parquet::Encoding::RLE)
-        fast_path = false;
-    }
-
-    if (fast_path && source != nullptr && (column_chunk_metadata->compression() == arrow::Compression::ZSTD
+    if (source != nullptr && (column_chunk_metadata->compression() == arrow::Compression::ZSTD
         || column_chunk_metadata->compression() == arrow::Compression::SNAPPY
         || column_chunk_metadata->compression() == arrow::Compression::UNCOMPRESSED))
       OpenChunk(source, column_chunk_metadata);
@@ -321,10 +315,15 @@ public:
     }
 
     const int64_t n = std::min<int64_t>(batch_size, page_values_ - page_pos_);
-    if (current_decoder_)
+    if (use_decoder_)
     {
-      if (current_decoder_->Decode(dst, static_cast<int>(n)) != n)
+      if (decoder_->Decode(dst, static_cast<int>(n)) != n)
+      {
+        // A DELTA_BYTE_ARRAY V1 page holds fewer encoded values than num_values when it has nulls.
+        if (max_def_level_ > 0)
+          throw parquet::ParquetException("Column contains null values");
         throw parquet::ParquetException("Unexpected end of FIXED_LEN_BYTE_ARRAY data page");
+      }
     }
     else
       CopyValues(dst, page_values_ptr_ + page_pos_ * type_length_, n * type_length_);
@@ -391,10 +390,7 @@ private:
       chunk_pos_ = payload + h.compressed_size;
       if (h.type != 0 && h.type != 3)
         continue;
-      if (h.encoding != 0)
-        throw parquet::ParquetException(std::string("Unexpected data page encoding ")
-            + parquet::EncodingToString(static_cast<parquet::Encoding::type>(h.encoding))
-            + " on the FIXED_LEN_BYTE_ARRAY fast path");
+      const auto encoding = static_cast<parquet::Encoding::type>(h.encoding);
       if (h.num_values < 0)
         throw parquet::ParquetException("Corrupt page header");
       remaining_values_ -= h.num_values;
@@ -412,14 +408,9 @@ private:
           values_ptr = Decompress(values_ptr, h.compressed_size - levels, values_size);
         else if (h.compressed_size != h.uncompressed_size)
           throw parquet::ParquetException("Corrupt page header");
-        if (int64_t(h.num_values) * type_length_ > values_size)
-          throw parquet::ParquetException("Column contains null values");
-        if (h.num_values == 0)
-          continue;
-        page_values_ptr_ = values_ptr;
-        page_values_ = h.num_values;
-        page_pos_ = 0;
-        return true;
+        if (StartPage(encoding, values_ptr, values_ptr, values_ptr + values_size, h.num_values))
+          return true;
+        continue;
       }
 
       if (!compressed_ && h.compressed_size != h.uncompressed_size)
@@ -428,48 +419,72 @@ private:
       const uint8_t *page_end = page_data + h.uncompressed_size;
       const uint8_t *values_ptr = page_data;
       if (max_def_level_ > 0)
-      {
-        if (h.def_level_encoding != 3)
-          throw parquet::ParquetException(std::string("Unsupported definition-level encoding ")
-              + parquet::EncodingToString(static_cast<parquet::Encoding::type>(h.def_level_encoding))
-              + " on the FIXED_LEN_BYTE_ARRAY fast path");
-        if (values_ptr + 4 > page_end)
-          throw parquet::ParquetException("Corrupt definition-level section");
-        int32_t def_len = 0;
-        memcpy(&def_len, values_ptr, sizeof(int32_t));  // little-endian length prefix
-        if (def_len < 0)
-          throw parquet::ParquetException("Invalid definition-level length");
-        values_ptr += 4 + def_len;
-      }
-
-      if (values_ptr < page_data || values_ptr + int64_t(h.num_values) * type_length_ > page_end)
-        throw parquet::ParquetException("Column contains null values");
-
-      if (h.num_values == 0)
-        continue;
-
-      page_values_ptr_ = values_ptr;
-      page_values_ = h.num_values;
-      page_pos_ = 0;
-      return true;
+        values_ptr = SkipV1DefLevels(static_cast<parquet::Encoding::type>(h.def_level_encoding), page_data, page_end);
+      if (StartPage(encoding, page_data, values_ptr, page_end, h.num_values))
+        return true;
     }
     return false;
   }
 
-  // Return a decoder for the given non-PLAIN encoding, creating and caching it on first use.
+  // Skip the V1 definition-level section: an RLE run with a 4-byte little-endian
+  // length prefix. The column is flat, so there are no repetition levels.
+  static const uint8_t *SkipV1DefLevels(parquet::Encoding::type def_encoding, const uint8_t *p, const uint8_t *end)
+  {
+    if (def_encoding != parquet::Encoding::RLE)
+      throw parquet::ParquetException(std::string("Unsupported definition-level encoding ")
+          + parquet::EncodingToString(def_encoding)
+          + " on the FIXED_LEN_BYTE_ARRAY path");
+    if (p + 4 > end)
+      throw parquet::ParquetException("Corrupt definition-level section");
+    int32_t def_len = 0;
+    memcpy(&def_len, p, sizeof(int32_t));
+    if (def_len < 0)
+      throw parquet::ParquetException("Invalid definition-level length");
+    return p + 4 + def_len;
+  }
+
+  // Make [values_ptr, page_end) the current page's value region. Returns false for
+  // an empty page. Throws if the page holds nulls.
+  bool StartPage(parquet::Encoding::type encoding, const uint8_t *page_data,
+                 const uint8_t *values_ptr, const uint8_t *page_end, int64_t num_values)
+  {
+    if (values_ptr < page_data || values_ptr > page_end)
+      throw parquet::ParquetException("Corrupt data page");
+
+    // PLAIN and BYTE_STREAM_SPLIT pages hold exactly num_values * type_length bytes,
+    // so a shorter value region means nulls. DELTA_BYTE_ARRAY pages have no fixed
+    // size; nulls are detected in ReadBatch when the decoder returns too few values.
+    if (encoding != parquet::Encoding::DELTA_BYTE_ARRAY
+        && num_values * type_length_ > page_end - values_ptr)
+      throw parquet::ParquetException("Column contains null values");
+
+    if (num_values == 0)
+      return false;  // skip empty pages so page_values_ > 0 always holds after a page starts
+
+    use_decoder_ = encoding != parquet::Encoding::PLAIN;
+    if (use_decoder_)
+      GetDecoder(encoding)->SetData(static_cast<int>(num_values), values_ptr,
+                                    static_cast<int>(page_end - values_ptr));
+    page_values_ptr_ = values_ptr;
+    page_values_ = num_values;
+    page_pos_ = 0;
+    return true;
+  }
+
+  // Return a decoder for the given non-PLAIN encoding. The decoder is cached and
+  // recreated only when the page encoding changes.
   parquet::FLBADecoder *GetDecoder(parquet::Encoding::type encoding)
   {
-    if (encoding != parquet::Encoding::BYTE_STREAM_SPLIT)
-      throw parquet::ParquetException(std::string("Unsupported data page encoding ")
-          + parquet::EncodingToString(encoding)
-          + " on the FIXED_LEN_BYTE_ARRAY path");
-    if (!bss_decoder_)
-      bss_decoder_ = parquet::MakeTypedDecoder<parquet::FLBAType>(encoding, descr_);
-    return bss_decoder_.get();
+    if (!decoder_ || decoder_encoding_ != encoding)
+    {
+      decoder_ = parquet::MakeTypedDecoder<parquet::FLBAType>(encoding, descr_);
+      decoder_encoding_ = encoding;
+    }
+    return decoder_.get();
   }
 
   // Advance to the next data page and locate its value region. PLAIN values are
-  // copied from page_values_ptr_; other encodings go through current_decoder_.
+  // copied from page_values_ptr_; other encodings go through decoder_.
   // Returns false at end of column. Throws on unexpected encodings/nulls.
   bool NextDataPage()
   {
@@ -508,46 +523,13 @@ private:
       }
       else if (max_def_level_ > 0)
       {
-        // V1: skip the definition-level section (no repetition levels, since the
-        // column is flat). num_values includes the (zero) nulls.
+        // V1: num_values includes the (zero) nulls.
         const auto def_encoding = std::static_pointer_cast<parquet::DataPageV1>(current_page_)->definition_level_encoding();
-        if (def_encoding == parquet::Encoding::RLE)
-        {
-          if (values_ptr + 4 > page_end)
-            throw parquet::ParquetException("Corrupt definition-level section");
-          int32_t def_len = 0;
-          memcpy(&def_len, values_ptr, sizeof(int32_t));  // little-endian length prefix
-          if (def_len < 0)
-            throw parquet::ParquetException("Invalid definition-level length");
-          values_ptr += 4 + def_len;
-        }
-        else
-        {
-          throw parquet::ParquetException(std::string("Unsupported definition-level encoding ")
-              + parquet::EncodingToString(def_encoding)
-              + " on the FIXED_LEN_BYTE_ARRAY path");
-        }
+        values_ptr = SkipV1DefLevels(def_encoding, values_ptr, page_end);
       }
 
-      if (values_ptr < page_data || values_ptr + page_values * type_length_ > page_end)
-        throw parquet::ParquetException("Column contains null values");
-
-      if (page_values == 0)
-        continue;  // skip empty pages so page_values_ > 0 always holds after return
-
-      // BYTE_STREAM_SPLIT pages hold exactly page_values * type_length bytes, like
-      // PLAIN, so the size check above also detects nulls for them.
-      current_decoder_ = nullptr;
-      if (encoding != parquet::Encoding::PLAIN)
-      {
-        current_decoder_ = GetDecoder(encoding);
-        current_decoder_->SetData(static_cast<int>(page_values), values_ptr,
-                                  static_cast<int>(page_end - values_ptr));
-      }
-      page_values_ptr_ = values_ptr;
-      page_values_ = page_values;
-      page_pos_ = 0;
-      return true;
+      if (StartPage(encoding, page_data, values_ptr, page_end, page_values))
+        return true;
     }
   }
 
@@ -557,8 +539,11 @@ private:
 
   // Set when the fast path does not apply.
   std::unique_ptr<parquet::PageReader> page_reader_;
-  std::unique_ptr<parquet::FLBADecoder> bss_decoder_;
-  parquet::FLBADecoder *current_decoder_ = nullptr;  // null for PLAIN pages
+
+  // Decoder for non-PLAIN pages, created for decoder_encoding_.
+  std::unique_ptr<parquet::FLBADecoder> decoder_;
+  parquet::Encoding::type decoder_encoding_ = parquet::Encoding::UNKNOWN;
+  bool use_decoder_ = false;  // false for PLAIN pages
 
   bool eof_ = false;
   bool fast_pages_ = false;
@@ -613,15 +598,8 @@ arrow::Status ReadColumn (int column_index
     {
       bool unsupported_encoding = false;
 
-      // 1. Dictionary encoding is not supported for float16 values because FLBA pointers point to non-contiguous memory.
-      // 2. Dictionary encoding prevents proper null value detection across all data types, so we disable it entirely.
+      // Dictionary encoding prevents proper null value detection across all data types, so we disable it entirely.
       if (encoding == parquet::Encoding::RLE_DICTIONARY || encoding == parquet::Encoding::PLAIN_DICTIONARY)
-      {
-        unsupported_encoding = true;
-      }
-
-      // DELTA_BYTE_ARRAY encoding is not supported for float16 values because FLBA pointers reference non-contiguous memory.
-      if (encoding == parquet::Encoding::DELTA_BYTE_ARRAY)
       {
         unsupported_encoding = true;
       }
