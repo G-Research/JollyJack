@@ -27,6 +27,7 @@ current_dir = os.path.dirname(os.path.realpath(__file__))
 supported_dtype_encodings = [
     (pa.float16(), "PLAIN"),
     (pa.float16(), "BYTE_STREAM_SPLIT"),
+    (pa.float16(), "DELTA_BYTE_ARRAY"),
     (pa.float32(), "PLAIN"),
     (pa.float32(), "BYTE_STREAM_SPLIT"),
     (pa.float64(), "PLAIN"),
@@ -348,41 +349,6 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(
                 f"due to unsupported_encoding=RLE_DICTIONARY!"
-                in str(context.exception),
-                context.exception,
-            )
-
-    def test_read_unsupported_encoding_delta_byte_array(self):
-
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            path = os.path.join(tmpdirname, "my.parquet")
-            table = get_table(
-                n_rows=chunk_size, n_columns=n_columns, data_type=pa.float16()
-            )
-            pq.write_table(
-                table,
-                path,
-                row_group_size=chunk_size,
-                use_dictionary=False,
-                column_encoding="DELTA_BYTE_ARRAY",
-            )
-
-            # Create an array of zerosx
-            np_array = np.zeros(
-                (chunk_size, n_columns), dtype=pa.float16().to_pandas_dtype(), order="F"
-            )
-
-            with self.assertRaises(RuntimeError) as context:
-                jj.read_into_numpy(
-                    source=path,
-                    metadata=None,
-                    np_array=np_array,
-                    row_group_indices=[0],
-                    column_indices=range(n_columns),
-                )
-
-            self.assertTrue(
-                f"due to unsupported_encoding=DELTA_BYTE_ARRAY!"
                 in str(context.exception),
                 context.exception,
             )
