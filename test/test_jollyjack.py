@@ -2325,6 +2325,67 @@ class TestJollyJack(unittest.TestCase):
             self.assertEqual(len(os.listdir("/proc/self/fd")), open_fds)
             pr.close()
 
+    @parameterized.expand(itertools.product([False, True], [False, True]))
+    def test_read_io_uring_read_error(self, pre_buffer, use_threads):
+
+        if os.environ.get("JJ_READER_BACKEND") != "io_uring":
+            self.skipTest("This test requires the io_uring reader backend")
+
+        rows = 60
+        row_group_size = 20
+        columns = 20
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(rows, columns)
+            pq.write_table(
+                table,
+                path,
+                row_group_size=row_group_size,
+                use_dictionary=False,
+                write_statistics=False,
+                store_schema=False,
+            )
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected_data = pr.read_all()
+
+            # A directory opens and has a size, but reading it fails with EISDIR
+            unreadable = os.path.join(tmpdirname, "unreadable")
+            os.mkdir(unreadable)
+            while os.stat(unreadable).st_size < os.path.getsize(path):
+                open(
+                    os.path.join(unreadable, f"{len(os.listdir(unreadable))}"), "w"
+                ).close()
+
+            for _ in range(20):
+                np_array = np.zeros((rows, columns), dtype="f", order="F")
+                with self.assertRaises(RuntimeError) as context:
+                    jj.read_into_numpy(
+                        source=unreadable,
+                        metadata=pr.metadata,
+                        np_array=np_array,
+                        row_group_indices=range(pr.metadata.num_row_groups),
+                        column_indices=range(pr.metadata.num_columns),
+                        pre_buffer=pre_buffer,
+                        use_threads=use_threads,
+                    )
+                self.assertIn("I/O operation failed", str(context.exception))
+
+                jj.read_into_numpy(
+                    source=path,
+                    metadata=pr.metadata,
+                    np_array=np_array,
+                    row_group_indices=range(pr.metadata.num_row_groups),
+                    column_indices=range(pr.metadata.num_columns),
+                    pre_buffer=pre_buffer,
+                    use_threads=use_threads,
+                )
+                self.assertTrue(np.array_equal(np_array, expected_data))
+
+            pr.close()
+
 
 if __name__ == "__main__":
     unittest.main()
