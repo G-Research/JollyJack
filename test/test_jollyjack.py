@@ -857,7 +857,7 @@ class TestJollyJack(unittest.TestCase):
             [False, True],
             [False, True],
             supported_dtype_encodings,
-            [None, "snappy"],
+            [None, "snappy", "zstd"],
             ["1.0", "2.0"],
         )
     )

@@ -273,10 +273,12 @@ const uint8_t *ParsePageHeader(const uint8_t *p, const uint8_t *end, PageHeaderL
 
 }  // namespace
 
-// Reader for flat, null-free FLBA columns. PLAIN pages are copied directly from
-// decompressed page buffers into the caller's output. Other encodings are decoded
-// with the dense parquet::FLBADecoder::Decode(uint8_t*, int) API, which writes
-// packed values with no per-value pointers.
+// Reader for flat, null-free FLBA columns. ZSTD, SNAPPY and uncompressed chunks
+// are read whole and walked page by page here; other codecs use Arrow's PageReader.
+// PLAIN pages are copied directly from decompressed page buffers into the caller's
+// output. Other encodings are decoded with the dense
+// parquet::FLBADecoder::Decode(uint8_t*, int) API, which writes packed values with
+// no per-value pointers.
 class ContiguousFLBAReader : public parquet::ColumnReader
 {
 public:
@@ -292,15 +294,7 @@ public:
     if (descr->max_repetition_level() > 0)
       throw parquet::ParquetException("Repeated FIXED_LEN_BYTE_ARRAY columns are not supported");
 
-    // The fast path only handles PLAIN-encoded columns read as a whole chunk.
-    bool fast_path = true;
-    for (const auto encoding : column_chunk_metadata->encodings())
-    {
-      if (encoding != parquet::Encoding::PLAIN && encoding != parquet::Encoding::RLE)
-        fast_path = false;
-    }
-
-    if (fast_path && source != nullptr && (column_chunk_metadata->compression() == arrow::Compression::ZSTD
+    if (source != nullptr && (column_chunk_metadata->compression() == arrow::Compression::ZSTD
         || column_chunk_metadata->compression() == arrow::Compression::SNAPPY
         || column_chunk_metadata->compression() == arrow::Compression::UNCOMPRESSED))
       OpenChunk(source, column_chunk_metadata);
@@ -396,10 +390,7 @@ private:
       chunk_pos_ = payload + h.compressed_size;
       if (h.type != 0 && h.type != 3)
         continue;
-      if (h.encoding != 0)
-        throw parquet::ParquetException(std::string("Unexpected data page encoding ")
-            + parquet::EncodingToString(static_cast<parquet::Encoding::type>(h.encoding))
-            + " on the FIXED_LEN_BYTE_ARRAY fast path");
+      const auto encoding = static_cast<parquet::Encoding::type>(h.encoding);
       if (h.num_values < 0)
         throw parquet::ParquetException("Corrupt page header");
       remaining_values_ -= h.num_values;
@@ -417,7 +408,7 @@ private:
           values_ptr = Decompress(values_ptr, h.compressed_size - levels, values_size);
         else if (h.compressed_size != h.uncompressed_size)
           throw parquet::ParquetException("Corrupt page header");
-        if (StartPage(parquet::Encoding::PLAIN, values_ptr, values_ptr, values_ptr + values_size, h.num_values))
+        if (StartPage(encoding, values_ptr, values_ptr, values_ptr + values_size, h.num_values))
           return true;
         continue;
       }
@@ -429,7 +420,7 @@ private:
       const uint8_t *values_ptr = page_data;
       if (max_def_level_ > 0)
         values_ptr = SkipV1DefLevels(static_cast<parquet::Encoding::type>(h.def_level_encoding), page_data, page_end);
-      if (StartPage(parquet::Encoding::PLAIN, page_data, values_ptr, page_end, h.num_values))
+      if (StartPage(encoding, page_data, values_ptr, page_end, h.num_values))
         return true;
     }
     return false;
