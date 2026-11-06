@@ -48,6 +48,7 @@ class BenchmarkSettings(BaseSettings):
     reader_backends: list[str] | None = None
     dtypes: list[str] = ["float32", "float16"]
     compressions: list[str] = ["none"]
+    encodings: list[str] = ["PLAIN"]
     pre_buffer: list[bool] = [False, True]
     prefetch_page_cache: list[bool] = [False, True]
     use_threads: list[bool] = [False, True]
@@ -123,10 +124,11 @@ def generate_random_parquet(
     chunk_size: int,
     dtype=pa.float32(),
     compression=None,
+    encoding="PLAIN",
 ):
     print(".")
     print(
-        f"Generating a Parquet file: {filename}, cols: {n_columns}, row_groups:{n_row_groups}, chunk_size:{chunk_size}, compression={compression}, dtype={dtype}"
+        f"Generating a Parquet file: {filename}, cols: {n_columns}, row_groups:{n_row_groups}, chunk_size:{chunk_size}, compression={compression}, encoding={encoding}, dtype={dtype}"
     )
 
     writer = None
@@ -148,6 +150,7 @@ def generate_random_parquet(
                     schema,
                     use_dictionary=False,
                     compression=compression,
+                    column_encoding=encoding,
                     write_statistics=False,
                     store_schema=False,
                     max_rows_per_page=cfg.max_rows_per_page,
@@ -163,7 +166,9 @@ def generate_random_parquet(
             writer.close()
 
 
-def parquet_matches(path, n_columns, n_row_groups, chunk_size, compression, dtype):
+def parquet_matches(
+    path, n_columns, n_row_groups, chunk_size, compression, encoding, dtype
+):
     if not os.path.exists(path):
         return False
     try:
@@ -179,14 +184,15 @@ def parquet_matches(path, n_columns, n_row_groups, chunk_size, compression, dtyp
         and meta.num_row_groups == n_row_groups
         and meta.row_group(0).num_rows == chunk_size
         and meta.row_group(0).column(0).compression == expected_compression
+        and encoding in meta.row_group(0).column(0).encodings
         and schema[0].type == dtype
     )
 
 
-def generate_data(n_columns, n_row_groups, path, compression, dtype):
+def generate_data(n_columns, n_row_groups, path, compression, encoding, dtype):
 
     if parquet_matches(
-        path, n_columns, n_row_groups, cfg.chunk_size, compression, dtype
+        path, n_columns, n_row_groups, cfg.chunk_size, compression, encoding, dtype
     ):
         return
 
@@ -197,6 +203,7 @@ def generate_data(n_columns, n_row_groups, path, compression, dtype):
         n_row_groups=n_row_groups,
         chunk_size=cfg.chunk_size,
         compression=compression,
+        encoding=encoding,
         dtype=dtype,
     )
     parquet_size = os.stat(path).st_size
@@ -552,7 +559,7 @@ for name, value in cfg.model_dump().items():
 print(f".")
 
 for dtype_key in cfg.dtypes:
-    for comp_key in cfg.compressions:
+    for comp_key, encoding in itertools.product(cfg.compressions, cfg.encodings):
         dtype = pa.from_numpy_dtype(dtype_key)
         compression = None if comp_key == "none" else comp_key
 
@@ -563,11 +570,12 @@ for dtype_key in cfg.dtypes:
                 n_row_groups=cfg.row_groups,
                 n_columns=cfg.n_columns,
                 compression=compression,
+                encoding=encoding,
                 dtype=dtype,
             )
 
         print(f"....................................")
-        print(f"dtype:{dtype}, compression={compression}:")
+        print(f"dtype:{dtype}, compression={compression}, encoding={encoding}:")
         print(f".")
 
         if {"all", "raw_bytes"} & cfg.benchmarks_to_run and not sys.platform.startswith(
