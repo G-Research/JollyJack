@@ -2288,6 +2288,43 @@ class TestJollyJack(unittest.TestCase):
             # Without delivered signals the test would pass for the wrong reason
             self.assertGreater(handled_signals, 0)
 
+    def test_read_io_uring_does_not_leak_file_descriptors(self):
+
+        backend = os.environ.get("JJ_READER_BACKEND")
+        if backend not in ("io_uring", "io_uring_odirect"):
+            self.skipTest("This test requires an io_uring reader backend")
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows, n_columns)
+            pq.write_table(
+                table,
+                path,
+                row_group_size=chunk_size,
+                use_dictionary=False,
+                write_statistics=False,
+                store_schema=False,
+            )
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            np_array = np.zeros((n_rows, 1), dtype="f", order="F")
+            open_fds = len(os.listdir("/proc/self/fd"))
+
+            for _ in range(100):
+                with self.assertRaises(RuntimeError) as context:
+                    jj.read_into_numpy(
+                        source=path,
+                        metadata=pr.metadata,
+                        np_array=np_array,
+                        row_group_indices=range(pr.metadata.num_row_groups),
+                        column_names=["nonexistent_column"],
+                    )
+                self.assertIn("was not found", str(context.exception))
+
+            self.assertEqual(len(os.listdir("/proc/self/fd")), open_fds)
+            pr.close()
+
 
 if __name__ == "__main__":
     unittest.main()
