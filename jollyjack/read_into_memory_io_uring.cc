@@ -61,6 +61,7 @@ FantomReader::FantomReader(int fd, int block_size)
     : fd_(fd), pos_(0), file_size_(0) {
   struct stat file_stats;
   if (fstat(fd_, &file_stats) < 0) {
+    close(fd_);
     throw std::runtime_error("Failed to get file statistics with fstat");
   }
 
@@ -73,11 +74,15 @@ FantomReader::~FantomReader() {
 }
 
 arrow::Status FantomReader::Close() {
+  if (fd_ >= 0) {
+    close(fd_);
+    fd_ = -1;
+  }
   return arrow::Status::OK();
 }
 
 bool FantomReader::closed() const {
-  return false;
+  return fd_ < 0;
 }
 
 arrow::Result<int64_t> FantomReader::GetSize() {
@@ -680,10 +685,8 @@ void ReadIntoMemoryIOUring(
     }
   } catch (...) {
     io_uring_queue_exit(&ring);
-    close(fd);
     throw;
   }
 
   io_uring_queue_exit(&ring);
-  close(fd);
 }
