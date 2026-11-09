@@ -299,9 +299,10 @@ public:
     if (descr->max_repetition_level() > 0)
       throw parquet::ParquetException("Repeated FIXED_LEN_BYTE_ARRAY columns are not supported");
 
-    if (source != nullptr && (column_chunk_metadata->compression() == arrow::Compression::ZSTD
-        || column_chunk_metadata->compression() == arrow::Compression::SNAPPY
-        || column_chunk_metadata->compression() == arrow::Compression::UNCOMPRESSED))
+    const auto codec = column_chunk_metadata->compression();
+    if (source != nullptr && (codec == arrow::Compression::ZSTD
+        || codec == arrow::Compression::SNAPPY
+        || codec == arrow::Compression::UNCOMPRESSED))
       OpenChunk(source, column_chunk_metadata);
     else
       page_reader_ = row_group_reader->GetColumnPageReader(column_index);
@@ -400,6 +401,9 @@ private:
         throw parquet::ParquetException("Corrupt page header");
       remaining_values_ -= h.num_values;
 
+      const uint8_t *page_data;
+      const uint8_t *page_end;
+      const uint8_t *values_ptr;
       if (h.type == 3)
       {
         if (h.num_nulls != 0)
@@ -408,23 +412,25 @@ private:
         if (h.def_levels_bytes < 0 || h.rep_levels_bytes < 0 || levels > h.compressed_size || levels > h.uncompressed_size)
           throw parquet::ParquetException("Corrupt page header");
         const int64_t values_size = h.uncompressed_size - levels;
-        const uint8_t *values_ptr = payload + levels;
+        values_ptr = payload + levels;
         if (compressed_ && h.is_compressed)
           values_ptr = Decompress(values_ptr, h.compressed_size - levels, values_size);
         else if (h.compressed_size != h.uncompressed_size)
           throw parquet::ParquetException("Corrupt page header");
-        if (StartPage(encoding, values_ptr, values_ptr, values_ptr + values_size, h.num_values))
-          return true;
-        continue;
+        page_data = values_ptr;
+        page_end = values_ptr + values_size;
+      }
+      else
+      {
+        if (!compressed_ && h.compressed_size != h.uncompressed_size)
+          throw parquet::ParquetException("Corrupt page header");
+        page_data = compressed_ ? Decompress(payload, h.compressed_size, h.uncompressed_size) : payload;
+        page_end = page_data + h.uncompressed_size;
+        values_ptr = page_data;
+        if (max_def_level_ > 0)
+          values_ptr = SkipV1DefLevels(static_cast<parquet::Encoding::type>(h.def_level_encoding), page_data, page_end);
       }
 
-      if (!compressed_ && h.compressed_size != h.uncompressed_size)
-        throw parquet::ParquetException("Corrupt page header");
-      const uint8_t *page_data = compressed_ ? Decompress(payload, h.compressed_size, h.uncompressed_size) : payload;
-      const uint8_t *page_end = page_data + h.uncompressed_size;
-      const uint8_t *values_ptr = page_data;
-      if (max_def_level_ > 0)
-        values_ptr = SkipV1DefLevels(static_cast<parquet::Encoding::type>(h.def_level_encoding), page_data, page_end);
       if (StartPage(encoding, page_data, values_ptr, page_end, h.num_values))
         return true;
     }
@@ -468,24 +474,20 @@ private:
 
     use_decoder_ = encoding != parquet::Encoding::PLAIN;
     if (use_decoder_)
-      GetDecoder(encoding)->SetData(static_cast<int>(num_values), values_ptr,
-                                    static_cast<int>(page_end - values_ptr));
+    {
+      // The decoder is cached and recreated only when the page encoding changes.
+      if (!decoder_ || decoder_encoding_ != encoding)
+      {
+        decoder_ = parquet::MakeTypedDecoder<parquet::FLBAType>(encoding, descr_);
+        decoder_encoding_ = encoding;
+      }
+      decoder_->SetData(static_cast<int>(num_values), values_ptr,
+                        static_cast<int>(page_end - values_ptr));
+    }
     page_values_ptr_ = values_ptr;
     page_values_ = num_values;
     page_pos_ = 0;
     return true;
-  }
-
-  // Return a decoder for the given non-PLAIN encoding. The decoder is cached and
-  // recreated only when the page encoding changes.
-  parquet::FLBADecoder *GetDecoder(parquet::Encoding::type encoding)
-  {
-    if (!decoder_ || decoder_encoding_ != encoding)
-    {
-      decoder_ = parquet::MakeTypedDecoder<parquet::FLBAType>(encoding, descr_);
-      decoder_encoding_ = encoding;
-    }
-    return decoder_.get();
   }
 
   // Advance to the next data page and locate its value region.
@@ -540,7 +542,7 @@ private:
   const int type_length_;
   const int16_t max_def_level_;
 
-  // Set when the fast path does not apply.
+  // Set when chunk_ is not used.
   std::unique_ptr<parquet::PageReader> page_reader_;
 
   // Decoder for non-PLAIN pages, created for decoder_encoding_.
@@ -598,15 +600,8 @@ arrow::Status ReadColumn (int column_index
 
     for (const auto encoding : column_chunk_metadata->encodings())
     {
-      bool unsupported_encoding = false;
-
       // Dictionary encoding prevents proper null value detection across all data types, so we disable it entirely.
       if (encoding == parquet::Encoding::RLE_DICTIONARY || encoding == parquet::Encoding::PLAIN_DICTIONARY)
-      {
-        unsupported_encoding = true;
-      }
-
-      if (unsupported_encoding)
       {
         auto msg = std::string("Cannot read column=") + std::to_string(parquet_column) + " due to unsupported_encoding=" + parquet::EncodingToString(encoding) + "!";
         return arrow::Status::UnknownError(msg);
