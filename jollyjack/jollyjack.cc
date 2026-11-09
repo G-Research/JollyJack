@@ -136,10 +136,15 @@ struct PageHeaderLite
   bool is_compressed = true;
 };
 
+// Minimal reader for the Thrift compact protocol, used by ParsePageHeader to
+// decode Parquet page headers. Reads varints, zigzag-encoded i32 values and
+// struct fields, and can skip a field of any type.
 class CompactReader
 {
 public:
+  // p: first byte to read. end: one past the last readable byte.
   CompactReader(const uint8_t *p, const uint8_t *end) : p_(p), end_(end) {}
+  // Position of the next unread byte.
   const uint8_t *pos() const { return p_; }
 
   uint8_t Byte()
@@ -371,7 +376,6 @@ private:
     remaining_values_ = column_chunk_metadata->num_values();
     codec_ = column_chunk_metadata->compression();
     compressed_ = codec_ != arrow::Compression::UNCOMPRESSED;
-    fast_pages_ = true;
   }
 
   const uint8_t *Decompress(const uint8_t *src, int64_t src_size, int64_t uncompressed_size)
@@ -381,7 +385,8 @@ private:
     return zstd_page_decoder.Decompress(src, src_size, uncompressed_size);
   }
 
-  bool NextFastDataPage()
+  // Advance to the next data page in chunk_
+  bool NextDataPageFromChunk()
   {
     while (chunk_pos_ < chunk_end_ && remaining_values_ > 0)
     {
@@ -483,13 +488,11 @@ private:
     return decoder_.get();
   }
 
-  // Advance to the next data page and locate its value region. PLAIN values are
-  // copied from page_values_ptr_; other encodings go through decoder_.
-  // Returns false at end of column. Throws on unexpected encodings/nulls.
+  // Advance to the next data page and locate its value region.
   bool NextDataPage()
   {
-    if (fast_pages_)
-      return NextFastDataPage();
+    if (chunk_)
+      return NextDataPageFromChunk();
     while (true)
     {
       current_page_ = page_reader_->NextPage();
@@ -546,10 +549,9 @@ private:
   bool use_decoder_ = false;  // false for PLAIN pages
 
   bool eof_ = false;
-  bool fast_pages_ = false;
   bool compressed_ = false;
   arrow::Compression::type codec_ = arrow::Compression::UNCOMPRESSED;
-  std::shared_ptr<arrow::Buffer> chunk_;
+  std::shared_ptr<arrow::Buffer> chunk_;  // set by OpenChunk; null when pages come from page_reader_
   const uint8_t *chunk_pos_ = nullptr;
   const uint8_t *chunk_end_ = nullptr;
   int64_t remaining_values_ = 0;
