@@ -315,10 +315,7 @@ public:
   {
     uint8_t *dst = static_cast<uint8_t *>(dst_raw);
 
-    if (page_pos_ >= page_values_)
-    {
-      if (eof_ || !NextDataPage()) { eof_ = true; *values_read = 0; return 0; }
-    }
+    if (!HasNext()) { *values_read = 0; return 0; }
 
     const int64_t n = std::min<int64_t>(batch_size, page_values_ - page_pos_);
     if (use_decoder_)
@@ -376,7 +373,6 @@ private:
     chunk_end_ = chunk_pos_ + chunk_->size();
     remaining_values_ = column_chunk_metadata->num_values();
     codec_ = column_chunk_metadata->compression();
-    compressed_ = codec_ != arrow::Compression::UNCOMPRESSED;
   }
 
   const uint8_t *Decompress(const uint8_t *src, int64_t src_size, int64_t uncompressed_size)
@@ -413,7 +409,7 @@ private:
           throw parquet::ParquetException("Corrupt page header");
         const int64_t values_size = h.uncompressed_size - levels;
         values_ptr = payload + levels;
-        if (compressed_ && h.is_compressed)
+        if (codec_ != arrow::Compression::UNCOMPRESSED && h.is_compressed)
           values_ptr = Decompress(values_ptr, h.compressed_size - levels, values_size);
         else if (h.compressed_size != h.uncompressed_size)
           throw parquet::ParquetException("Corrupt page header");
@@ -422,9 +418,10 @@ private:
       }
       else
       {
-        if (!compressed_ && h.compressed_size != h.uncompressed_size)
+        const bool compressed = codec_ != arrow::Compression::UNCOMPRESSED;
+        if (!compressed && h.compressed_size != h.uncompressed_size)
           throw parquet::ParquetException("Corrupt page header");
-        page_data = compressed_ ? Decompress(payload, h.compressed_size, h.uncompressed_size) : payload;
+        page_data = compressed ? Decompress(payload, h.compressed_size, h.uncompressed_size) : payload;
         page_end = page_data + h.uncompressed_size;
         values_ptr = page_data;
         if (max_def_level_ > 0)
@@ -551,7 +548,6 @@ private:
   bool use_decoder_ = false;  // false for PLAIN pages
 
   bool eof_ = false;
-  bool compressed_ = false;
   arrow::Compression::type codec_ = arrow::Compression::UNCOMPRESSED;
   std::shared_ptr<arrow::Buffer> chunk_;  // set by OpenChunk; null when pages come from page_reader_
   const uint8_t *chunk_pos_ = nullptr;
