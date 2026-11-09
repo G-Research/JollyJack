@@ -196,7 +196,7 @@ def generate_data(n_columns, n_row_groups, path, compression, encoding, dtype):
     ):
         return
 
-    t = time.time()
+    t = time.perf_counter()
     generate_random_parquet(
         filename=path,
         n_columns=n_columns,
@@ -208,7 +208,7 @@ def generate_data(n_columns, n_row_groups, path, compression, encoding, dtype):
     )
     parquet_size = os.stat(path).st_size
 
-    dt = time.time() - t
+    dt = time.perf_counter() - t
     print(
         f"finished writing parquet file in {dt:.2f} seconds, size={humanize.naturalsize(parquet_size)}"
     )
@@ -524,7 +524,7 @@ def measure_reading(max_workers, worker, batch=False):
                 purge_file_from_cache(path=f"{cfg.parquet_path}{i}")
 
         # Submit the work
-        t = time.time()
+        t = time.perf_counter()
         paths = [
             f"{cfg.parquet_path}{i}"
             for _ in range(cfg.n_repeats)
@@ -538,7 +538,7 @@ def measure_reading(max_workers, worker, batch=False):
             for work_result in work_results:
                 work_result.result()
 
-        tt.append(time.time() - t)
+        tt.append(time.perf_counter() - t)
         data_set_bytes = len(paths) * calculate_data_size(dtype=dtype)
 
     pool.shutdown(wait=True)
