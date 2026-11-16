@@ -6,6 +6,7 @@
 #include "parquet/column_page.h"
 #include "parquet/encoding.h"
 #include "parquet/file_reader.h"
+#include "parquet/statistics.h"
 #include "parquet/types.h"
 
 #include "jollyjack.h"
@@ -567,6 +568,15 @@ std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *r
   return std::make_shared<ContiguousFLBAReader>(row_group_reader, column_index, descr, column_chunk_metadata, source);
 }
 
+static bool IsAllNaNFloat16Chunk(const parquet::ColumnDescriptor *descr, const parquet::ColumnChunkMetaData *column_chunk_metadata, int64_t num_rows)
+{
+  if (!descr->logical_type()->is_float16() || column_chunk_metadata->num_values() != num_rows || !column_chunk_metadata->is_stats_set())
+    return false;
+
+  const auto statistics = column_chunk_metadata->statistics();
+  return statistics && !statistics->HasMinMax() && statistics->HasNullCount() && statistics->null_count() == 0;
+}
+
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
     , parquet::ColumnReader *column_reader
@@ -580,6 +590,7 @@ arrow::Status ReadColumn (int column_index
     , const std::vector<int> &target_column_indices
     , const std::vector<int64_t> &target_row_ranges
     , size_t target_row_ranges_idx
+    , bool float16_nan_fast_path
     )
 {
   std::string column_name;
@@ -613,6 +624,7 @@ arrow::Status ReadColumn (int column_index
             << std::endl;
     #endif
 
+    const bool all_nan_float16 = float16_nan_fast_path && IsAllNaNFloat16Chunk(column_reader->descr(), column_chunk_metadata, num_rows);
     int64_t values_read = 0;
     char *base_ptr = (char *)buffer;
     
@@ -713,6 +725,12 @@ arrow::Status ReadColumn (int column_index
             auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(flba_reader->type_length()) +
               ", but the target value size is " + std::to_string(stride0_size) + "!");
             return arrow::Status::UnknownError(msg);
+          }
+          if (all_nan_float16)
+          {
+            std::fill_n(reinterpret_cast<uint16_t *>(&base_ptr[target_offset]), rows_to_read, 0x7E00);
+            values_read += rows_to_read;
+            break;
           }
           while (rows_to_read > 0)
           {
@@ -817,6 +835,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , bool pre_buffer
     , bool prefetch_page_cache
     , bool use_threads
+    , bool float16_nan_fast_path
     , int64_t expected_rows
     , arrow::io::CacheOptions cache_options)
 {
@@ -928,7 +947,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                   , column_indices
                   , target_column_indices
                   , target_row_ranges
-                  , target_row_ranges_idx);
+                  , target_row_ranges_idx
+                  , float16_nan_fast_path);
               }
               catch(const parquet::ParquetException& e)
               {
@@ -1245,6 +1265,7 @@ void ReadIntoMemoryIOUring (const std::string& path
     , bool pre_buffer
     , bool use_threads
     , bool use_o_direct
+    , bool float16_nan_fast_path
     , int64_t expected_rows
     , arrow::io::CacheOptions cache_options)
 {
@@ -1279,6 +1300,7 @@ static void ReadTaskIntoMemory (const BatchTask &task
     , int64_t columns
     , bool pre_buffer
     , bool use_threads
+    , bool float16_nan_fast_path
     , JollyJackReaderBackend backend
     , arrow::io::CacheOptions cache_options)
 {
@@ -1312,12 +1334,12 @@ static void ReadTaskIntoMemory (const BatchTask &task
     }
 
     ReadIntoMemory (*source_file, file_metadata, sub_buffer, buffer_size, stride0_size, stride1_size, {}, {0}, {},
-        names, targets, pre_buffer, false, use_threads, rows, cache_options);
+        names, targets, pre_buffer, false, use_threads, float16_nan_fast_path, rows, cache_options);
     return;
   }
 
   ReadIntoMemoryIOUring (paths[source], file_metadata, sub_buffer, buffer_size, stride0_size, stride1_size, {}, {0}, {},
-      names, targets, pre_buffer, use_threads, backend == kJollyJackIOUringODirectReader, rows, cache_options);
+      names, targets, pre_buffer, use_threads, backend == kJollyJackIOUringODirectReader, float16_nan_fast_path, rows, cache_options);
 }
 
 void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
@@ -1337,6 +1359,7 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
     , int n_threads
     , bool pre_buffer
     , bool use_threads
+    , bool float16_nan_fast_path
     , JollyJackReaderBackend backend
     , arrow::io::CacheOptions cache_options)
 {
@@ -1359,7 +1382,7 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
       {
         ReadTaskIntoMemory (task, paths, index_data, index_data_lengths, source_column_set, column_names,
             column_positions, target_column_indices, read_metadata, buffer, stride0_size, stride1_size, columns, pre_buffer, use_threads,
-            backend, cache_options);
+            float16_nan_fast_path, backend, cache_options);
       }
       catch (const std::exception& e)
       {

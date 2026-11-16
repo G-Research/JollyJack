@@ -41,6 +41,7 @@ cdef extern from "jollyjack.h":
         , int n_threads
         , bool pre_buffer
         , bool use_threads
+        , bool float16_nan_fast_path
         , JollyJackReaderBackend backend
         , CCacheOptions cache_options
         ) except + nogil
@@ -59,6 +60,7 @@ cdef extern from "jollyjack.h":
         , bool pre_buffer
         , bool prefetch_page_cache
         , bool use_threads
+        , bool float16_nan_fast_path
         , int64_t expected_rows
         , CCacheOptions cache_options
         ) except + nogil
@@ -97,6 +99,7 @@ cdef extern from "read_into_memory_io_uring.h":
         , bool pre_buffer
         , bool use_threads
         , bool use_o_direct
+        , bool float16_nan_fast_path
         , int64_t expected_rows        
         , CCacheOptions cache_options
         ) except + nogil

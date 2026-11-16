@@ -20,7 +20,7 @@ from collections.abc import Iterable
 def is_iterable_of_iterables(obj):
     return isinstance(obj, Iterable) and isinstance(obj[0], Iterable) and not isinstance(obj[0], str)
 
-cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None, prefetch_page_cache = False):
+cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None, prefetch_page_cache = False, float16_nan_fast_path = False):
 
     import torch
 
@@ -36,11 +36,12 @@ cpdef void read_into_torch (object source, FileMetaData metadata, tensor, row_gr
         , use_memory_map = use_memory_map
         , cache_options = cache_options
         , prefetch_page_cache = prefetch_page_cache
+        , float16_nan_fast_path = float16_nan_fast_path
     )
 
     return
 
-cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None, prefetch_page_cache = False):
+cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np_array, row_group_indices, row_ranges = [], column_indices = [], column_names = [], pre_buffer = False, use_threads = True, use_memory_map = False, CacheOptions cache_options = None, prefetch_page_cache = False, float16_nan_fast_path = False):
 
     cdef vector[int] crow_group_indices = row_group_indices
     cdef vector[int] ccolumn_indices
@@ -112,6 +113,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
     cdef c_string pathstr
     cdef bool cuse_o_direct
     cdef bool cprefetch_page_cache = prefetch_page_cache
+    cdef bool cfloat16_nan_fast_path = float16_nan_fast_path
     jj_reader_backend = os.environ.get("JJ_READER_BACKEND")
     if jj_reader_backend is None:
         get_reader(source, use_memory_map, &rd_handle)
@@ -133,6 +135,7 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
                 , cpre_buffer
                 , cuse_threads
                 , cuse_o_direct
+                , cfloat16_nan_fast_path
                 , cexpected_rows
                 , c_cache_options)
             return
@@ -154,11 +157,12 @@ cpdef void read_into_numpy (object source, FileMetaData metadata, cnp.ndarray np
             , cpre_buffer
             , cprefetch_page_cache
             , cuse_threads
+            , cfloat16_nan_fast_path
             , cexpected_rows
             , c_cache_options)
         return
 
-cpdef void read_into_numpy_batch_palletjack (cnp.ndarray np_array, sources, palletjack_index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object palletjack_capi, int n_threads, pre_buffer = True, use_threads = False, CacheOptions cache_options = None):
+cpdef void read_into_numpy_batch_palletjack (cnp.ndarray np_array, sources, palletjack_index_buffers, column_sets, source_column_set, const int64_t[:, ::1] tasks, object palletjack_capi, int n_threads, pre_buffer = True, use_threads = False, CacheOptions cache_options = None, float16_nan_fast_path = False):
     """Read a batch of (source, row group) pairs into one array, on a native thread pool, without holding the GIL.
 
     `sources` are parquet paths and `palletjack_index_buffers` the matching palletjack indexes, as buffers (an mmap of each
@@ -270,6 +274,7 @@ cpdef void read_into_numpy_batch_palletjack (cnp.ndarray np_array, sources, pall
     cdef int cn_threads = n_threads
     cdef bool cpre_buffer = pre_buffer
     cdef bool cuse_threads = use_threads
+    cdef bool cfloat16_nan_fast_path = float16_nan_fast_path
 
     with nogil:
         cjollyjack.ReadIntoMemoryBatchPalletJack (cpaths
@@ -289,6 +294,7 @@ cpdef void read_into_numpy_batch_palletjack (cnp.ndarray np_array, sources, pall
             , cn_threads
             , cpre_buffer
             , cuse_threads
+            , cfloat16_nan_fast_path
             , cbackend
             , c_cache_options)
         return

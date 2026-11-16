@@ -393,7 +393,8 @@ void ProcessSingleIOCompletion(
   size_t buffer_size,
   size_t stride0_size,
   size_t stride1_size,
-  size_t target_row_ranges_index
+  size_t target_row_ranges_index,
+  bool float16_nan_fast_path
 ) {    
   // Process each column covered by this coalesced read
   for (const auto& column_operation : completed_request.column_operations) {
@@ -410,7 +411,8 @@ void ProcessSingleIOCompletion(
       column_indices,
       target_column_indices,
       target_row_ranges,
-      target_row_ranges_index
+      target_row_ranges_index,
+      float16_nan_fast_path
     );
 
     if (!read_status.ok()) {
@@ -515,7 +517,8 @@ void ProcessAllCompletedRequests(
   size_t stride0_size,
   size_t stride1_size,
   bool use_threads,
-  size_t target_row_ranges_index
+  size_t target_row_ranges_index,
+  bool float16_nan_fast_path
 ) {
   std::vector<size_t> completed_requests;
   size_t requests_to_complete = io_requests.size();
@@ -539,7 +542,7 @@ void ProcessAllCompletedRequests(
           ProcessSingleIOCompletion(
             current_target_row, io_requests[request_index], fantom_reader, row_group_metadata,
             column_indices, target_row_ranges, target_column_indices,
-            out, buffer_size, stride0_size, stride1_size, target_row_ranges_index
+            out, buffer_size, stride0_size, stride1_size, target_row_ranges_index, float16_nan_fast_path
           );
           return Status::OK();
         } catch (const std::exception& error) {
@@ -573,6 +576,7 @@ void ReadIntoMemoryIOUring(
   bool pre_buffer,
   bool use_threads,
   bool use_o_direct,
+  bool float16_nan_fast_path,
   int64_t expected_total_rows, 
   arrow::io::CacheOptions cache_options)
 {
@@ -655,7 +659,7 @@ void ReadIntoMemoryIOUring(
         ring, coalesced_requests, fantom_reader, current_target_row, 
         row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
         target_column_indices, out, buffer_size,
-        stride0_size, stride1_size, use_threads, target_row_ranges_index
+        stride0_size, stride1_size, use_threads, target_row_ranges_index, float16_nan_fast_path
       );
 
       current_target_row += rows_in_group;

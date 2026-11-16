@@ -12,6 +12,7 @@ def read_into_torch(
     use_memory_map=False,
     cache_options=None,
     prefetch_page_cache=False,
+    float16_nan_fast_path=False,
 ):
     """
     Read parquet data directly into a tensor.
@@ -49,6 +50,11 @@ def read_into_torch(
         IO thread pool allocating buffers on cores different from the worker threads.
         Only useful for local or network-mounted file systems that have a page cache.
         Remote file systems such as S3 will not benefit from this.
+    float16_nan_fast_path : bool, default False
+        When True, a float16 column chunk whose statistics have a null count of 0
+        and no min or max is taken to be all NaN, and is filled with NaN (0x7E00)
+        without being decompressed or decoded. The values are NaN but their bit
+        patterns may differ from the ones in the file.
 
     Notes:
     -----
@@ -69,6 +75,7 @@ def read_into_torch(
         use_threads,
         use_memory_map,
         prefetch_page_cache=prefetch_page_cache,
+        float16_nan_fast_path=float16_nan_fast_path,
     )
     return
 
@@ -85,6 +92,7 @@ def read_into_numpy(
     use_memory_map=False,
     cache_options=None,
     prefetch_page_cache=False,
+    float16_nan_fast_path=False,
 ):
     """
     Read parquet data directly into a numpy array.
@@ -123,6 +131,11 @@ def read_into_numpy(
         IO thread pool allocating buffers on cores different from the worker threads.
         Only useful for local or network-mounted file systems that have a page cache.
         Remote file systems such as S3 will not benefit from this.
+    float16_nan_fast_path : bool, default False
+        When True, a float16 column chunk whose statistics have a null count of 0
+        and no min or max is taken to be all NaN, and is filled with NaN (0x7E00)
+        without being decompressed or decoded. The values are NaN but their bit
+        patterns may differ from the ones in the file.
 
     Notes:
     -----
@@ -144,6 +157,7 @@ def read_into_numpy(
         use_memory_map,
         cache_options,
         prefetch_page_cache=prefetch_page_cache,
+        float16_nan_fast_path=float16_nan_fast_path,
     )
     return
 
@@ -159,6 +173,7 @@ def read_into_numpy_batch_palletjack(
     pre_buffer=True,
     use_threads=False,
     cache_options=None,
+    float16_nan_fast_path=False,
 ) -> None:
     """
     Read a batch of (source, row group) pairs into one array, on a native thread
@@ -200,6 +215,9 @@ def read_into_numpy_batch_palletjack(
         Read the columns of a row group in parallel, as in read_into_numpy.
     cache_options : pyarrow.CacheOptions, optional
         Read coalescing options. Defaults to CacheOptions.LazyDefaults().
+    float16_nan_fast_path : bool, optional
+        Fill all-NaN float16 column chunks without decoding them, as in
+        read_into_numpy.
 
     Raises
     ------

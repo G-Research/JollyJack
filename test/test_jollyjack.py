@@ -2352,6 +2352,68 @@ class TestJollyJack(unittest.TestCase):
 
             pr.close()
 
+    @parameterized.expand(
+        itertools.product(
+            [False, True],
+            [False, True],
+            [None, "snappy", "zstd"],
+            ["PLAIN", "BYTE_STREAM_SPLIT", "DELTA_BYTE_ARRAY"],
+        )
+    )
+    def test_read_float16_nan_fast_path(
+        self, pre_buffer, use_threads, compression, encoding
+    ):
+
+        negative_nan = np.full(n_rows, 0xFE00, dtype=np.uint16).view(np.float16)
+        mixed = np.random.uniform(-100, 100, size=n_rows).astype(np.float16)
+        mixed[::2] = negative_nan[::2]
+        columns = {
+            "nan": negative_nan,
+            "mixed": mixed,
+            "nan_without_statistics": negative_nan,
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            pq.write_table(
+                pa.table(columns),
+                path,
+                row_group_size=chunk_size,
+                use_dictionary=False,
+                compression=compression,
+                column_encoding=encoding,
+                write_statistics=["nan", "mixed"],
+            )
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected = np.stack(list(columns.values()), axis=1).view(np.uint16)
+
+            for float16_nan_fast_path, row_ranges in itertools.product(
+                [False, True], [[], [slice(0, 2), slice(2, 3), slice(3, n_rows)]]
+            ):
+                np_array = np.zeros((n_rows, len(columns)), dtype=np.float16, order="F")
+                jj.read_into_numpy(
+                    source=path,
+                    metadata=pr.metadata,
+                    np_array=np_array,
+                    row_group_indices=range(pr.metadata.num_row_groups),
+                    row_ranges=row_ranges,
+                    column_names=list(columns),
+                    pre_buffer=pre_buffer,
+                    use_threads=use_threads,
+                    float16_nan_fast_path=float16_nan_fast_path,
+                )
+
+                values = np_array.view(np.uint16)
+                if float16_nan_fast_path:
+                    self.assertTrue((values[:, 0] == 0x7E00).all())
+                    self.assertTrue(np.array_equal(values[:, 1:], expected[:, 1:]))
+                else:
+                    self.assertTrue(np.array_equal(values, expected))
+
+            pr.close()
+
 
 if __name__ == "__main__":
     unittest.main()

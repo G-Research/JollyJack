@@ -266,6 +266,43 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                 )
                 self.assertTrue(np.array_equal(np_array, expected))
 
+    def test_float16_nan_fast_path(self):
+        path = os.path.join(self.tmpdirname, "my.parquet")
+        pq.write_table(
+            pa.table(
+                {"nan": np.full(n_rows, 0xFE00, dtype=np.uint16).view(np.float16)}
+            ),
+            path,
+            row_group_size=chunk_size,
+            use_dictionary=False,
+            store_schema=False,
+        )
+        index_path = path + ".index"
+        pj.generate_metadata_index(path, index_path)
+        with open(index_path, "rb") as f:
+            self.palletjack_index_buffers.append(
+                mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+            )
+        tasks = np.array(
+            [(0, rg, rg * chunk_size, chunk_size) for rg in range(n_row_groups)],
+            dtype=np.int64,
+        )
+
+        for float16_nan_fast_path, expected in [(False, 0xFE00), (True, 0x7E00)]:
+            np_array = np.zeros((n_rows, 1), dtype=np.float16, order="F")
+            jj.read_into_numpy_batch_palletjack(
+                np_array=np_array,
+                sources=[path],
+                palletjack_index_buffers=self.palletjack_index_buffers,
+                column_sets=[(["nan"], [0])],
+                source_column_set=[0],
+                tasks=tasks,
+                palletjack_capi=pj.palletjack_capi,
+                n_threads=2,
+                float16_nan_fast_path=float16_nan_fast_path,
+            )
+            self.assertTrue((np_array.view(np.uint16) == expected).all())
+
     def test_strided_view(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
         sources, _, source_column_set, tasks = self.write_sources(column_sets)
