@@ -42,6 +42,7 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     , bool pre_buffer
     , bool prefetch_page_cache
     , bool use_threads
+    , bool nan_fast_path
     , int64_t expected_rows
     , arrow::io::CacheOptions cache_options);
 
@@ -64,6 +65,7 @@ void ReadIntoMemoryBatchPalletJack (const std::vector<std::string> &paths
     , int n_threads
     , bool pre_buffer
     , bool use_threads
+    , bool nan_fast_path
     , JollyJackReaderBackend backend
     , arrow::io::CacheOptions cache_options);
 
@@ -106,4 +108,5 @@ arrow::Status ReadColumn (int column_index
     , const std::vector<int> &target_column_indices
     , const std::vector<int64_t> &target_row_ranges
     , size_t target_row_ranges_idx
+    , bool nan_fast_path
     );
