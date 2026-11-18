@@ -14,6 +14,7 @@ void ReadIntoMemoryIOUring (const std::string& path
     , bool pre_buffer
     , bool use_threads
     , bool use_o_direct
+    , bool nan_fast_path
     , int64_t expected_rows
     , arrow::io::CacheOptions cache_options);
 

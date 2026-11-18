@@ -11,6 +11,7 @@ import numpy as np
 import palletjack as pj
 import pyarrow as pa
 import pyarrow.parquet as pq
+from parameterized import parameterized
 
 chunk_size = 3
 n_row_groups = 2
@@ -265,6 +266,52 @@ class TestReadIntoNumpyBatch(unittest.TestCase):
                     cache_options=cache_options,
                 )
                 self.assertTrue(np.array_equal(np_array, expected))
+
+    @parameterized.expand(
+        [
+            (np.float16, np.uint16, 0x7E00),
+            (np.float32, np.uint32, 0x7FC00000),
+            (np.float64, np.uint64, 0x7FF8000000000000),
+        ]
+    )
+    def test_nan_fast_path(self, dtype, uint, canonical_nan):
+        path = os.path.join(self.tmpdirname, "my.parquet")
+        negative_nan = -np.full(n_rows, np.nan, dtype=dtype)
+        pq.write_table(
+            pa.table({"nan": negative_nan}),
+            path,
+            row_group_size=chunk_size,
+            use_dictionary=False,
+            store_schema=False,
+        )
+        index_path = path + ".index"
+        pj.generate_metadata_index(path, index_path)
+        with open(index_path, "rb") as f:
+            self.palletjack_index_buffers.append(
+                mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+            )
+        tasks = np.array(
+            [(0, rg, rg * chunk_size, chunk_size) for rg in range(n_row_groups)],
+            dtype=np.int64,
+        )
+
+        for nan_fast_path, expected in [
+            (False, negative_nan.view(uint)[0]),
+            (True, canonical_nan),
+        ]:
+            np_array = np.zeros((n_rows, 1), dtype=dtype, order="F")
+            jj.read_into_numpy_batch_palletjack(
+                np_array=np_array,
+                sources=[path],
+                palletjack_index_buffers=self.palletjack_index_buffers,
+                column_sets=[(["nan"], [0])],
+                source_column_set=[0],
+                tasks=tasks,
+                palletjack_capi=pj.palletjack_capi,
+                n_threads=2,
+                nan_fast_path=nan_fast_path,
+            )
+            self.assertTrue((np_array.view(uint) == expected).all())
 
     def test_strided_view(self):
         column_sets = [([f"column_{i}" for i in range(4)], [0, 1, 2, 3])]
