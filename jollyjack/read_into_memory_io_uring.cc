@@ -7,6 +7,7 @@
 #include "jollyjack.h"
 
 #include <liburing.h>
+#include <algorithm>
 #include <iostream>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -649,6 +650,27 @@ void ReadIntoMemoryIOUring(
       // Get individual column ranges sorted by file offset
       PARQUET_ASSIGN_OR_THROW(auto source_size, fantom_reader->GetSize());
       auto sorted_column_ranges = GetSortedColumnRanges(file_metadata.get(), source_size, row_group_index, column_indices);
+
+      if (nan_fast_path) {
+        // All-NaN chunks are filled here, before any I/O is submitted, and left out of the reads below.
+        auto all_nan_begin = std::stable_partition(sorted_column_ranges.begin(), sorted_column_ranges.end(),
+          [&](const ColumnFileRange& range) {
+            const auto* descr = file_metadata->schema()->Column(column_indices[range.column_array_index]);
+            return !IsAllNaNChunk(descr, range.metadata.get(), rows_in_group);
+          });
+
+        for (auto it = all_nan_begin; it != sorted_column_ranges.end(); ++it) {
+          auto read_status = ReadColumn(
+            it->column_array_index, current_target_row, nullptr, row_group_metadata.get(), it->metadata.get(),
+            out, buffer_size, stride0_size, stride1_size, column_indices, target_column_indices,
+            target_row_ranges, target_row_ranges_index, nan_fast_path);
+          if (!read_status.ok()) {
+            throw std::logic_error("Column read failed: " + read_status.message());
+          }
+        }
+
+        sorted_column_ranges.erase(all_nan_begin, sorted_column_ranges.end());
+      }
 
       std::vector<::arrow::io::ReadRange> maybe_coalesced_ranges;
 

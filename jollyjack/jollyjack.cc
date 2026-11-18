@@ -569,7 +569,7 @@ std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *r
   return std::make_shared<ContiguousFLBAReader>(row_group_reader, column_index, descr, column_chunk_metadata, source);
 }
 
-static bool IsAllNaNChunk(const parquet::ColumnDescriptor *descr, const parquet::ColumnChunkMetaData *column_chunk_metadata, int64_t num_rows)
+bool IsAllNaNChunk(const parquet::ColumnDescriptor *descr, const parquet::ColumnChunkMetaData *column_chunk_metadata, int64_t num_rows)
 {
   const auto type = descr->physical_type();
   const bool is_float = type == parquet::Type::FLOAT || type == parquet::Type::DOUBLE || descr->logical_type()->is_float16();
@@ -599,10 +599,11 @@ arrow::Status ReadColumn (int column_index
   std::string column_name;
   const auto num_rows = row_group_metadata->num_rows();
   const auto parquet_column = column_indices[column_index];
+  const auto *descr = row_group_metadata->schema()->Column(parquet_column);
 
   try
   {
-    column_name = column_reader->descr()->name();
+    column_name = descr->name();
 
     int target_column = column_index;
     if (target_column_indices.size() > 0)
@@ -627,7 +628,10 @@ arrow::Status ReadColumn (int column_index
             << std::endl;
     #endif
 
-    const bool all_nan = nan_fast_path && IsAllNaNChunk(column_reader->descr(), column_chunk_metadata, num_rows);
+    // Callers skip creating the reader (and its I/O) for all-NaN chunks, so column_reader may be null here.
+    const bool all_nan = nan_fast_path && IsAllNaNChunk(descr, column_chunk_metadata, num_rows);
+    if (!all_nan && column_reader == nullptr)
+      return arrow::Status::UnknownError(std::string("Column[") + std::to_string(parquet_column) + "] ('" + column_name + "') has no column reader!");
     int64_t values_read = 0;
     char *base_ptr = (char *)buffer;
     
@@ -688,13 +692,14 @@ arrow::Status ReadColumn (int column_index
             return arrow::Status::UnknownError(msg);
           }
 
-          auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader);
           if (all_nan)
           {
             std::fill_n((double *)&base_ptr[target_offset], rows_to_read, std::numeric_limits<double>::quiet_NaN());
             values_read += rows_to_read;
             break;
           }
+
+          auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -714,13 +719,14 @@ arrow::Status ReadColumn (int column_index
             return arrow::Status::UnknownError(msg);
           }
 
-          auto typed_reader = static_cast<parquet::FloatReader *>(column_reader);
           if (all_nan)
           {
             std::fill_n((float *)&base_ptr[target_offset], rows_to_read, std::numeric_limits<float>::quiet_NaN());
             values_read += rows_to_read;
             break;
           }
+
+          auto typed_reader = static_cast<parquet::FloatReader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -734,19 +740,21 @@ arrow::Status ReadColumn (int column_index
 
         case parquet::Type::FIXED_LEN_BYTE_ARRAY:
         {
-          auto flba_reader = static_cast<ContiguousFLBAReader *>(column_reader);
-          if ((int32_t)stride0_size != flba_reader->type_length())
+          if ((int32_t)stride0_size != descr->type_length())
           {
-            auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(flba_reader->type_length()) +
+            auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(descr->type_length()) +
               ", but the target value size is " + std::to_string(stride0_size) + "!");
             return arrow::Status::UnknownError(msg);
           }
+
           if (all_nan)
           {
             std::fill_n(reinterpret_cast<uint16_t *>(&base_ptr[target_offset]), rows_to_read, 0x7E00);
             values_read += rows_to_read;
             break;
           }
+
+          auto flba_reader = static_cast<ContiguousFLBAReader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -945,7 +953,11 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                 const auto column_chunk_metadata = row_group_metadata->ColumnChunk(parquet_column);
                 const auto *descr = row_group_metadata->schema()->Column(parquet_column);
                 std::shared_ptr<parquet::ColumnReader> column_reader;
-                if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
+                // Creating a reader reads the whole chunk, so all-NaN chunks get none.
+                const bool all_nan = nan_fast_path && IsAllNaNChunk(descr, column_chunk_metadata.get(), num_rows);
+                if (all_nan)
+                  column_reader = nullptr;
+                else if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
                   column_reader = MakeFLBAReader(row_group_reader.get(), parquet_column, descr, column_chunk_metadata.get(),
                       pre_buffer ? nullptr : source);
                 else
