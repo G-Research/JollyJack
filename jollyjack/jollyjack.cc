@@ -569,7 +569,7 @@ std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *r
   return std::make_shared<ContiguousFLBAReader>(row_group_reader, column_index, descr, column_chunk_metadata, source);
 }
 
-static bool IsAllNaNChunk(const parquet::ColumnDescriptor *descr, const parquet::ColumnChunkMetaData *column_chunk_metadata, int64_t num_rows)
+bool IsAllNaNChunk(const parquet::ColumnDescriptor *descr, const parquet::ColumnChunkMetaData *column_chunk_metadata, int64_t num_rows)
 {
   const auto type = descr->physical_type();
   const bool is_float = type == parquet::Type::FLOAT || type == parquet::Type::DOUBLE || descr->logical_type()->is_float16();
@@ -599,10 +599,11 @@ arrow::Status ReadColumn (int column_index
   std::string column_name;
   const auto num_rows = row_group_metadata->num_rows();
   const auto parquet_column = column_indices[column_index];
+  const auto *descr = row_group_metadata->schema()->Column(parquet_column);
 
   try
   {
-    column_name = column_reader->descr()->name();
+    column_name = descr->name();
 
     int target_column = column_index;
     if (target_column_indices.size() > 0)
@@ -627,7 +628,10 @@ arrow::Status ReadColumn (int column_index
             << std::endl;
     #endif
 
-    const bool all_nan = nan_fast_path && IsAllNaNChunk(column_reader->descr(), column_chunk_metadata, num_rows);
+    // Callers skip creating the reader (and its I/O) for all-NaN chunks, so column_reader may be null here.
+    const bool all_nan = nan_fast_path && IsAllNaNChunk(descr, column_chunk_metadata, num_rows);
+    if (!all_nan && column_reader == nullptr)
+      return arrow::Status::UnknownError(std::string("Column[") + std::to_string(parquet_column) + "] ('" + column_name + "') has no column reader!");
     int64_t values_read = 0;
     char *base_ptr = (char *)buffer;
     
@@ -735,9 +739,9 @@ arrow::Status ReadColumn (int column_index
         case parquet::Type::FIXED_LEN_BYTE_ARRAY:
         {
           auto flba_reader = static_cast<ContiguousFLBAReader *>(column_reader);
-          if ((int32_t)stride0_size != flba_reader->type_length())
+          if ((int32_t)stride0_size != descr->type_length())
           {
-            auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(flba_reader->type_length()) +
+            auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(descr->type_length()) +
               ", but the target value size is " + std::to_string(stride0_size) + "!");
             return arrow::Status::UnknownError(msg);
           }
@@ -884,10 +888,35 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
       }
   }
 
-  if (prefetch_page_cache)
+  // nan_fast_path: columns that are all-NaN in every requested row group are not prefetched or pre-buffered.
+  // ponytail: GetReadRanges and PreBuffer take one column list for all row groups, so a column that is
+  // all-NaN in only some of them is still read in full. Per-row-group ranges would need our own ReadRangeCache.
+  std::vector<int> io_column_indices;
+  if (nan_fast_path && (prefetch_page_cache || pre_buffer))
+  {
+    std::vector<bool> needs_io(column_indices.size(), false);
+    for (int row_group : row_groups)
+    {
+      const auto row_group_metadata = file_metadata->RowGroup(row_group);
+      for (size_t i = 0; i < column_indices.size(); i++)
+      {
+        const int c = column_indices[i];
+        needs_io[i] = needs_io[i] || !IsAllNaNChunk(row_group_metadata->schema()->Column(c), row_group_metadata->ColumnChunk(c).get(), row_group_metadata->num_rows());
+      }
+    }
+    for (size_t i = 0; i < column_indices.size(); i++)
+      if (needs_io[i])
+        io_column_indices.push_back(column_indices[i]);
+  }
+  else
+  {
+    io_column_indices = column_indices;
+  }
+
+  if (prefetch_page_cache && !io_column_indices.empty())
   {
     PARQUET_ASSIGN_OR_THROW(auto read_ranges, parquet_reader->GetReadRanges(row_groups,
-                              column_indices,
+                              io_column_indices,
                               cache_options.hole_size_limit,
                               cache_options.range_size_limit
                             ));
@@ -897,9 +926,9 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     }
   }
 
-  if (pre_buffer)
+  if (pre_buffer && !io_column_indices.empty())
   {
-    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), cache_options);
+    parquet_reader->PreBuffer(row_groups, io_column_indices, arrowReaderProperties.io_context(), cache_options);
   }
 
   int64_t target_row = 0;
@@ -933,6 +962,8 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
   {
     for (auto c_idx: column_indices)
     {
+      if (nan_fast_path && IsAllNaNChunk(row_group_metadata->schema()->Column(c_idx), row_group_metadata->ColumnChunk(c_idx).get(), num_rows))
+        continue;
       std::ignore = row_group_reader->Column(c_idx);
     }
   }
@@ -945,7 +976,11 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
                 const auto column_chunk_metadata = row_group_metadata->ColumnChunk(parquet_column);
                 const auto *descr = row_group_metadata->schema()->Column(parquet_column);
                 std::shared_ptr<parquet::ColumnReader> column_reader;
-                if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
+                // Creating a reader reads the whole chunk, so all-NaN chunks get none.
+                const bool all_nan = nan_fast_path && IsAllNaNChunk(descr, column_chunk_metadata.get(), num_rows);
+                if (all_nan)
+                  column_reader = nullptr;
+                else if (descr->physical_type() == parquet::Type::FIXED_LEN_BYTE_ARRAY)
                   column_reader = MakeFLBAReader(row_group_reader.get(), parquet_column, descr, column_chunk_metadata.get(),
                       pre_buffer ? nullptr : source);
                 else

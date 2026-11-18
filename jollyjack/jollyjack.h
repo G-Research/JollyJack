@@ -95,6 +95,9 @@ std::shared_ptr<parquet::ColumnReader> MakeFLBAReader(parquet::RowGroupReader *r
     const parquet::ColumnChunkMetaData *column_chunk_metadata,
     const std::shared_ptr<arrow::io::RandomAccessFile> &source = nullptr);
 
+// True when the chunk statistics say every value is NaN (no min/max, no nulls). Callers must gate on the writer.
+bool IsAllNaNChunk(const parquet::ColumnDescriptor *descr, const parquet::ColumnChunkMetaData *column_chunk_metadata, int64_t num_rows);
+
 arrow::Status ReadColumn (int column_index
     , int64_t target_row
     , parquet::ColumnReader* column_reader
