@@ -692,13 +692,14 @@ arrow::Status ReadColumn (int column_index
             return arrow::Status::UnknownError(msg);
           }
 
-          auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader);
           if (all_nan)
           {
             std::fill_n((double *)&base_ptr[target_offset], rows_to_read, std::numeric_limits<double>::quiet_NaN());
             values_read += rows_to_read;
             break;
           }
+
+          auto typed_reader = static_cast<parquet::DoubleReader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -718,13 +719,14 @@ arrow::Status ReadColumn (int column_index
             return arrow::Status::UnknownError(msg);
           }
 
-          auto typed_reader = static_cast<parquet::FloatReader *>(column_reader);
           if (all_nan)
           {
             std::fill_n((float *)&base_ptr[target_offset], rows_to_read, std::numeric_limits<float>::quiet_NaN());
             values_read += rows_to_read;
             break;
           }
+
+          auto typed_reader = static_cast<parquet::FloatReader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
@@ -738,19 +740,21 @@ arrow::Status ReadColumn (int column_index
 
         case parquet::Type::FIXED_LEN_BYTE_ARRAY:
         {
-          auto flba_reader = static_cast<ContiguousFLBAReader *>(column_reader);
           if ((int32_t)stride0_size != descr->type_length())
           {
             auto msg = std::string("Column[" + std::to_string(parquet_column) + "] ('"  + column_name + "') has FIXED_LEN_BYTE_ARRAY data type with size " + std::to_string(descr->type_length()) +
               ", but the target value size is " + std::to_string(stride0_size) + "!");
             return arrow::Status::UnknownError(msg);
           }
+
           if (all_nan)
           {
             std::fill_n(reinterpret_cast<uint16_t *>(&base_ptr[target_offset]), rows_to_read, 0x7E00);
             values_read += rows_to_read;
             break;
           }
+
+          auto flba_reader = static_cast<ContiguousFLBAReader *>(column_reader);
           while (rows_to_read > 0)
           {
             int64_t tmp_values_read = 0;
