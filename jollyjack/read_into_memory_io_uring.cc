@@ -7,6 +7,8 @@
 #include "jollyjack.h"
 
 #include <liburing.h>
+#include <atomic>
+#include <limits>
 #include <iostream>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -57,6 +59,16 @@ class ThreadRing {
 };
 
 static thread_local ThreadRing thread_ring;
+
+// Bytes in flight, shared by all concurrent ReadIntoMemoryIOUring calls. Keeping it small lets
+// read buffers be decoded and freed while still in CPU cache, so the allocator reuses warm memory.
+// ponytail: fixed value tuned on a CPU with 1.25 MB L2 per core and 25 MB L3; derive it from the cache sizes if other machines need a different value.
+constexpr int64_t kInFlightBytesBudget = 4 * 1024 * 1024;
+
+// With use_threads, completions are decoded in parallel batches of at least this many requests
+constexpr size_t kMinCompletedRequestsWithThreads = 128;
+
+static std::atomic<int64_t> active_readers{0};
 
 
 /**
@@ -373,14 +385,16 @@ std::vector<CoalescedIORequest> MatchColumnsToCoalescedRanges(
   return coalesced_requests;
 }
 
-// Submit all coalesced I/O requests to io_uring for parallel execution
+// Submit coalesced I/O requests [begin, end) to io_uring for parallel execution
 void SubmitIORequests(
   struct io_uring& ring,
   std::vector<CoalescedIORequest>& io_requests,
+  size_t begin,
+  size_t end,
   int fd,
   int64_t block_size
 ) {
-  for (size_t request_index = 0; request_index < io_requests.size(); request_index++) {
+  for (size_t request_index = begin; request_index < end; request_index++) {
     auto& request = io_requests[request_index];
     
     struct io_uring_sqe* sqe = io_uring_get_sqe(&ring);
@@ -467,9 +481,10 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
   parquet::RowGroupReader* row_group_reader,
   std::vector<size_t>* completed_requests,
   size_t* const requests_to_complete,
+  int64_t* const in_flight_bytes,
   bool use_threads
 ) {
-  size_t min_completed_requests = use_threads ? 128 : 1;
+  size_t min_completed_requests = use_threads ? kMinCompletedRequestsWithThreads : 1;
   completed_requests->clear();
   arrow::Status status = arrow::Status::OK();
 
@@ -501,6 +516,7 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
     size_t request_index = reinterpret_cast<size_t>(io_uring_cqe_get_data(completion_entry));
     int result = completion_entry->res;
     io_uring_cqe_seen(&ring, completion_entry);
+    *in_flight_bytes -= io_requests[request_index].read_length;
 
     if (!status.ok())
       continue;
@@ -539,7 +555,23 @@ arrow::Status WaitForIOCompletionsAndSetupReaders(
   return status;
 }
 
-// Process all completed I/O requests, optionally in parallel
+// Wait for submitted requests, so the kernel stops writing into buffers that are about to be freed
+void DrainInFlightRequests(struct io_uring& ring, size_t in_flight) {
+  for (; in_flight > 0; in_flight--) {
+    struct io_uring_cqe* completion_entry;
+    int wait_result;
+    do {
+      wait_result = io_uring_wait_cqe(&ring, &completion_entry);
+    } while (wait_result == -EINTR);
+
+    if (wait_result < 0)
+      return;
+
+    io_uring_cqe_seen(&ring, completion_entry);
+  }
+}
+
+// Submit I/O requests through a sliding window of at most max_in_flight_bytes and process completions, optionally in parallel
 void ProcessAllCompletedRequests(
   struct io_uring& ring,
   std::vector<CoalescedIORequest>& io_requests,
@@ -556,17 +588,52 @@ void ProcessAllCompletedRequests(
   size_t stride1_size,
   bool use_threads,
   size_t target_row_ranges_index,
-  bool nan_fast_path
+  bool nan_fast_path,
+  int fd,
+  int64_t block_size,
+  int64_t max_in_flight_bytes
 ) {
   std::vector<size_t> completed_requests;
-  size_t requests_to_complete = io_requests.size();
   completed_requests.reserve(io_requests.size());
+  size_t next_request = 0;
+  size_t in_flight = 0;
+  int64_t in_flight_bytes = 0;
+  const size_t min_in_flight = use_threads ? kMinCompletedRequestsWithThreads : 1;
 
   arrow::Status final_status = arrow::Status::OK();
-  while (requests_to_complete > 0)
+  while (true)
   {
-    // Wait for all I/O operations and setup readers
-    auto waiting_status = WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader, &completed_requests, &requests_to_complete, use_threads);
+    // Top up the window; keep at least min_in_flight requests in flight and stop submitting after a failure
+    size_t submit_end = next_request;
+    int64_t planned_bytes = in_flight_bytes;
+    while (final_status.ok() && submit_end < io_requests.size() &&
+           (in_flight + (submit_end - next_request) < min_in_flight ||
+            planned_bytes + io_requests[submit_end].read_length <= max_in_flight_bytes)) {
+      planned_bytes += io_requests[submit_end].read_length;
+      submit_end++;
+    }
+
+    if (submit_end > next_request) {
+      try {
+        SubmitIORequests(ring, io_requests, next_request, submit_end, fd, block_size);
+      } catch (...) {
+        DrainInFlightRequests(ring, in_flight);
+        throw;
+      }
+
+      // SubmitIORequests aligns read_length; account the value that completions subtract
+      for (size_t i = next_request; i < submit_end; i++)
+        in_flight_bytes += io_requests[i].read_length;
+
+      in_flight += submit_end - next_request;
+      next_request = submit_end;
+    }
+
+    if (in_flight == 0)
+      break;
+
+    // Wait for in-flight I/O operations and setup readers
+    auto waiting_status = WaitForIOCompletionsAndSetupReaders(ring, io_requests, fantom_reader, row_group_reader, &completed_requests, &in_flight, &in_flight_bytes, use_threads);
     if (!waiting_status.ok())
       final_status = waiting_status;
 
@@ -582,6 +649,12 @@ void ProcessAllCompletedRequests(
             column_indices, target_row_ranges, target_column_indices,
             out, buffer_size, stride0_size, stride1_size, target_row_ranges_index, nan_fast_path
           );
+
+          // Free the read buffer now, so the next request gets cache-warm memory from the allocator
+          auto& request = io_requests[request_index];
+          for (auto& column_operation : request.column_operations)
+            column_operation.column_reader.reset();
+          request.read_buffer.reset();
           return Status::OK();
         } catch (const std::exception& error) {
           return Status::UnknownError("Request processing failed: " + std::string(error.what()));
@@ -636,6 +709,11 @@ void ReadIntoMemoryIOUring(
 
   struct io_uring& ring = thread_ring.Get(column_indices.size());
 
+  struct ActiveReader {
+    ActiveReader() { active_readers++; }
+    ~ActiveReader() { active_readers--; }
+  } active_reader;
+
   try {
     int64_t current_target_row = 0;
     size_t target_row_ranges_index = 0;
@@ -679,15 +757,19 @@ void ReadIntoMemoryIOUring(
       // Create coalesced I/O requests to minimize file operations
       auto coalesced_requests = MatchColumnsToCoalescedRanges(sorted_column_ranges, maybe_coalesced_ranges, column_indices);
 
-      // Submit all I/O requests asynchronously
-      SubmitIORequests(ring, coalesced_requests, fd, fantom_reader->GetBlockSize());
+      // Split the in-flight budget between concurrent readers.
+      // O_DIRECT reads bypass the page cache and keep the full queue depth; the window was not measured on fast disks.
+      int64_t max_in_flight_bytes = use_o_direct
+        ? std::numeric_limits<int64_t>::max()
+        : kInFlightBytesBudget / std::max<int64_t>(1, active_readers.load());
 
-      // Wait for completions and process all columns
+      // Submit I/O requests, wait for completions and process all columns
       ProcessAllCompletedRequests(
         ring, coalesced_requests, fantom_reader, current_target_row, 
         row_group_reader.get(), row_group_metadata.get(), column_indices, target_row_ranges,
         target_column_indices, out, buffer_size,
-        stride0_size, stride1_size, use_threads, target_row_ranges_index, nan_fast_path
+        stride0_size, stride1_size, use_threads, target_row_ranges_index, nan_fast_path,
+        fd, fantom_reader->GetBlockSize(), max_in_flight_bytes
       );
 
       current_target_row += rows_in_group;
