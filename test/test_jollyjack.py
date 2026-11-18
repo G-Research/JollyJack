@@ -2497,16 +2497,9 @@ class TestJollyJack(unittest.TestCase):
             self.assertTrue(np.array_equal(read(foreign_path, True), expected))
 
     @parameterized.expand(
-        itertools.product(
-            [np.float16, np.float32, np.float64],
-            [False, True],
-            [False, True],
-            [False, True],
-        )
+        itertools.product([np.float16, np.float32, np.float64], [False, True])
     )
-    def test_read_nan_fast_path_skips_io(
-        self, dtype, pre_buffer, prefetch_page_cache, use_threads
-    ):
+    def test_read_nan_fast_path_skips_io(self, dtype, use_threads):
         if os.environ.get("JJ_READER_BACKEND") is not None:
             self.skipTest("Reads are recorded through a Python file object")
 
@@ -2547,12 +2540,9 @@ class TestJollyJack(unittest.TestCase):
                         np_array=np_array,
                         row_group_indices=range(metadata.num_row_groups),
                         column_indices=[0, 1],
-                        pre_buffer=pre_buffer,
-                        prefetch_page_cache=prefetch_page_cache,
+                        pre_buffer=False,
                         use_threads=use_threads,
                         nan_fast_path=nan_fast_path,
-                        # The small "nan" chunks sit between "mixed" chunks; without this, coalescing reads them.
-                        cache_options=pa.CacheOptions(hole_size_limit=0, lazy=True),
                     )
                 self.assertTrue(np.array_equal(np_array[:, 1], mixed, equal_nan=True))
                 self.assertTrue(np.isnan(np_array[:, 0]).all())
@@ -2564,89 +2554,6 @@ class TestJollyJack(unittest.TestCase):
 
             self.assertTrue(read(nan_fast_path=False))
             self.assertFalse(read(nan_fast_path=True))
-
-    @parameterized.expand(
-        [
-            (dtype, encoding, pre_buffer, use_threads, compression)
-            for dtype, encodings in [
-                (np.float16, ["PLAIN", "BYTE_STREAM_SPLIT", "DELTA_BYTE_ARRAY"]),
-                (np.float32, ["PLAIN", "BYTE_STREAM_SPLIT"]),
-                (np.float64, ["PLAIN", "BYTE_STREAM_SPLIT"]),
-            ]
-            for encoding in encodings
-            for pre_buffer, use_threads, compression in itertools.product(
-                [False, True], [False, True], [None, "snappy", "zstd"]
-            )
-        ]
-    )
-    def test_read_nan_fast_path(
-        self, dtype, encoding, pre_buffer, use_threads, compression
-    ):
-        uint, canonical_nan, int_dtype = {
-            np.float16: (np.uint16, 0x7E00, None),
-            np.float32: (np.uint32, 0x7FC00000, np.int32),
-            np.float64: (np.uint64, 0x7FF8000000000000, np.int64),
-        }[dtype]
-        negative_nan = -np.full(n_rows, np.nan, dtype=dtype)
-        mixed = np.random.uniform(-100, 100, size=n_rows).astype(dtype)
-        mixed[::2] = negative_nan[::2]
-        columns = {
-            "nan": negative_nan,
-            "mixed": mixed,
-            "nan_without_statistics": negative_nan,
-        }
-        if int_dtype is not None:
-            columns["int"] = np.arange(n_rows, dtype=int_dtype)
-
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            path = os.path.join(tmpdirname, "my.parquet")
-            pq.write_table(
-                pa.table(columns),
-                path,
-                row_group_size=chunk_size,
-                use_dictionary=False,
-                compression=compression,
-                column_encoding=encoding,
-                write_statistics=["nan", "mixed", "int"],
-            )
-            expected = np.stack([c.view(uint) for c in columns.values()], axis=1)
-
-            def read(path, nan_fast_path, row_ranges=[]):
-                metadata = pq.read_metadata(path)
-                np_array = np.zeros((n_rows, len(columns)), dtype=dtype, order="F")
-                jj.read_into_numpy(
-                    source=path,
-                    metadata=metadata,
-                    np_array=np_array,
-                    row_group_indices=range(metadata.num_row_groups),
-                    row_ranges=row_ranges,
-                    column_names=list(columns),
-                    pre_buffer=pre_buffer,
-                    use_threads=use_threads,
-                    nan_fast_path=nan_fast_path,
-                )
-                return np_array.view(uint)
-
-            for nan_fast_path, row_ranges in itertools.product(
-                [False, True], [[], [slice(0, 2), slice(2, 3), slice(3, n_rows)]]
-            ):
-                values = read(path, nan_fast_path, row_ranges)
-                if nan_fast_path:
-                    self.assertTrue((values[:, 0] == canonical_nan).all())
-                    self.assertTrue(np.array_equal(values[:, 1:], expected[:, 1:]))
-                else:
-                    self.assertTrue(np.array_equal(values, expected))
-
-            with open(path, "rb") as f:
-                data = f.read()
-            writer = pq.read_metadata(path).created_by.encode()
-            foreign_path = os.path.join(tmpdirname, "foreign.parquet")
-            with open(foreign_path, "wb") as f:
-                f.write(data.replace(writer, b"x" * len("parquet") + writer[7:]))
-            self.assertFalse(
-                pq.read_metadata(foreign_path).created_by.startswith("parquet-cpp")
-            )
-            self.assertTrue(np.array_equal(read(foreign_path, True), expected))
 
 
 if __name__ == "__main__":

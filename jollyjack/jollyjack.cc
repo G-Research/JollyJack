@@ -888,35 +888,10 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
       }
   }
 
-  // nan_fast_path: columns that are all-NaN in every requested row group are not prefetched or pre-buffered.
-  // ponytail: GetReadRanges and PreBuffer take one column list for all row groups, so a column that is
-  // all-NaN in only some of them is still read in full. Per-row-group ranges would need our own ReadRangeCache.
-  std::vector<int> io_column_indices;
-  if (nan_fast_path && (prefetch_page_cache || pre_buffer))
-  {
-    std::vector<bool> needs_io(column_indices.size(), false);
-    for (int row_group : row_groups)
-    {
-      const auto row_group_metadata = file_metadata->RowGroup(row_group);
-      for (size_t i = 0; i < column_indices.size(); i++)
-      {
-        const int c = column_indices[i];
-        needs_io[i] = needs_io[i] || !IsAllNaNChunk(row_group_metadata->schema()->Column(c), row_group_metadata->ColumnChunk(c).get(), row_group_metadata->num_rows());
-      }
-    }
-    for (size_t i = 0; i < column_indices.size(); i++)
-      if (needs_io[i])
-        io_column_indices.push_back(column_indices[i]);
-  }
-  else
-  {
-    io_column_indices = column_indices;
-  }
-
-  if (prefetch_page_cache && !io_column_indices.empty())
+  if (prefetch_page_cache)
   {
     PARQUET_ASSIGN_OR_THROW(auto read_ranges, parquet_reader->GetReadRanges(row_groups,
-                              io_column_indices,
+                              column_indices,
                               cache_options.hole_size_limit,
                               cache_options.range_size_limit
                             ));
@@ -926,9 +901,9 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
     }
   }
 
-  if (pre_buffer && !io_column_indices.empty())
+  if (pre_buffer)
   {
-    parquet_reader->PreBuffer(row_groups, io_column_indices, arrowReaderProperties.io_context(), cache_options);
+    parquet_reader->PreBuffer(row_groups, column_indices, arrowReaderProperties.io_context(), cache_options);
   }
 
   int64_t target_row = 0;
@@ -962,8 +937,6 @@ void ReadIntoMemory (std::shared_ptr<arrow::io::RandomAccessFile> source
   {
     for (auto c_idx: column_indices)
     {
-      if (nan_fast_path && IsAllNaNChunk(row_group_metadata->schema()->Column(c_idx), row_group_metadata->ColumnChunk(c_idx).get(), num_rows))
-        continue;
       std::ignore = row_group_reader->Column(c_idx);
     }
   }
