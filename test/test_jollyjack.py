@@ -2352,6 +2352,66 @@ class TestJollyJack(unittest.TestCase):
 
             pr.close()
 
+    def test_read_io_uring_reuses_ring(self):
+
+        backend = os.environ.get("JJ_READER_BACKEND")
+        if backend not in ("io_uring", "io_uring_odirect"):
+            self.skipTest("This test requires an io_uring reader backend")
+
+        def count_rings():
+            rings = 0
+            for fd in os.listdir("/proc/self/fd"):
+                try:
+                    rings += (
+                        os.readlink(f"/proc/self/fd/{fd}") == "anon_inode:[io_uring]"
+                    )
+                except OSError:
+                    pass
+            return rings
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            table = get_table(n_rows, n_columns)
+            pq.write_table(
+                table,
+                path,
+                row_group_size=chunk_size,
+                use_dictionary=False,
+                write_statistics=False,
+                store_schema=False,
+            )
+
+            pr = pq.ParquetReader()
+            pr.open(path)
+            expected_data = pr.read_all().to_pandas().to_numpy()
+
+            def read(columns):
+                np_array = np.zeros((n_rows, columns), dtype="f", order="F")
+                jj.read_into_numpy(
+                    source=path,
+                    metadata=pr.metadata,
+                    np_array=np_array,
+                    row_group_indices=range(pr.metadata.num_row_groups),
+                    column_indices=range(columns),
+                )
+                return np.array_equal(np_array, expected_data[:, :columns])
+
+            for columns in [1, n_columns, 1, n_columns]:
+                self.assertTrue(read(columns))
+                self.assertEqual(count_rings(), 1)
+
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    os._exit(0 if read(n_columns) else 1)
+                finally:
+                    os._exit(2)
+            _, status = os.waitpid(pid, 0)
+            self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+            self.assertTrue(read(n_columns))
+
+            pr.close()
+
 
 if __name__ == "__main__":
     unittest.main()

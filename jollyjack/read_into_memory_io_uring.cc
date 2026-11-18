@@ -20,6 +20,44 @@
 
 using arrow::Status;
 
+#define IORING_SETUP_COOP_TASKRUN 256
+#define IORING_SETUP_SINGLE_ISSUER 4096
+#define IORING_SETUP_DEFER_TASKRUN 8192
+
+class ThreadRing {
+ public:
+  struct io_uring& Get(size_t entries) {
+    if (entries_ == 0 || entries > entries_ || pid_ != getpid()) {
+      Reset();
+      int ret = io_uring_queue_init(entries, &ring_, IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_DEFER_TASKRUN);
+      if (ret < 0) {
+        throw std::logic_error(
+          "Failed to initialize io_uring: " + std::string(strerror(-ret))
+        );
+      }
+      entries_ = entries;
+      pid_ = getpid();
+    }
+    return ring_;
+  }
+
+  void Reset() {
+    if (entries_ > 0)
+      io_uring_queue_exit(&ring_);
+    ring_ = {};
+    entries_ = 0;
+  }
+
+  ~ThreadRing() { Reset(); }
+
+ private:
+  struct io_uring ring_ = {};
+  size_t entries_ = 0;
+  pid_t pid_ = 0;
+};
+
+static thread_local ThreadRing thread_ring;
+
 
 /**
  * Custom RandomAccessFile implementation that supports buffered reads
@@ -591,18 +629,7 @@ void ReadIntoMemoryIOUring(
 
   ResolveColumnNameToIndices(column_indices, column_names, file_metadata);
 
-  #define IORING_SETUP_COOP_TASKRUN 256
-  #define IORING_SETUP_SINGLE_ISSUER 4096
-  #define IORING_SETUP_DEFER_TASKRUN 8192
-
-  // Initialize io_uring with enough capacity for all columns
-  struct io_uring ring = {};
-  int ret = io_uring_queue_init(column_indices.size(), &ring, IORING_SETUP_COOP_TASKRUN | IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_DEFER_TASKRUN);
-  if (ret < 0) {
-    throw std::logic_error(
-      "Failed to initialize io_uring: " + std::string(strerror(-ret))
-    );
-  }
+  struct io_uring& ring = thread_ring.Get(column_indices.size());
 
   try {
     int64_t current_target_row = 0;
@@ -691,9 +718,7 @@ void ReadIntoMemoryIOUring(
       }
     }
   } catch (...) {
-    io_uring_queue_exit(&ring);
+    thread_ring.Reset();
     throw;
   }
-
-  io_uring_queue_exit(&ring);
 }
