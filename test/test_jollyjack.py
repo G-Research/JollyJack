@@ -1,3 +1,4 @@
+import io
 import pandas as pd
 import unittest
 import tempfile
@@ -2494,6 +2495,65 @@ class TestJollyJack(unittest.TestCase):
                 pq.read_metadata(foreign_path).created_by.startswith("parquet-cpp")
             )
             self.assertTrue(np.array_equal(read(foreign_path, True), expected))
+
+    @parameterized.expand(
+        itertools.product([np.float16, np.float32, np.float64], [False, True])
+    )
+    def test_read_nan_fast_path_skips_io(self, dtype, use_threads):
+        if os.environ.get("JJ_READER_BACKEND") is not None:
+            self.skipTest("Reads are recorded through a Python file object")
+
+        class RecordingFile(io.FileIO):
+            def __init__(self, path):
+                super().__init__(path, "rb")
+                self.reads = []
+
+            def read(self, size=-1):
+                self.reads.append((self.tell(), size))
+                return super().read(size)
+
+        nan = np.full(n_rows, np.nan, dtype=dtype)
+        mixed = np.random.uniform(-100, 100, size=n_rows).astype(dtype)
+        mixed[::2] = np.nan
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            path = os.path.join(tmpdirname, "my.parquet")
+            pq.write_table(
+                pa.table({"nan": nan, "mixed": mixed}),
+                path,
+                row_group_size=chunk_size,
+                use_dictionary=False,
+            )
+            metadata = pq.read_metadata(path)
+            nan_ranges = []
+            for rg in range(metadata.num_row_groups):
+                column = metadata.row_group(rg).column(0)
+                start = column.dictionary_page_offset or column.data_page_offset
+                nan_ranges.append((start, start + column.total_compressed_size))
+
+            def read(nan_fast_path):
+                np_array = np.zeros((n_rows, 2), dtype=dtype, order="F")
+                with RecordingFile(path) as f:
+                    jj.read_into_numpy(
+                        source=pa.PythonFile(f, mode="r"),
+                        metadata=metadata,
+                        np_array=np_array,
+                        row_group_indices=range(metadata.num_row_groups),
+                        column_indices=[0, 1],
+                        pre_buffer=False,
+                        use_threads=use_threads,
+                        nan_fast_path=nan_fast_path,
+                    )
+                self.assertTrue(np.array_equal(np_array[:, 1], mixed, equal_nan=True))
+                self.assertTrue(np.isnan(np_array[:, 0]).all())
+                return any(
+                    offset < end and start < offset + size
+                    for offset, size in f.reads
+                    for start, end in nan_ranges
+                )
+
+            self.assertTrue(read(nan_fast_path=False))
+            self.assertFalse(read(nan_fast_path=True))
 
 
 if __name__ == "__main__":
